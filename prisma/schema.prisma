@@ -20,6 +20,7 @@ model Contact {
   deals      Deal[]
   tasks      Task[]
   activities Activity[]
+  invoices   Invoice[]
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 }
@@ -31,8 +32,12 @@ model Company {
   website   String?
   phone     String?
   address   String?
+  city      String?
+  country   String?   @default("DE")
+  vatId     String?
   contacts  Contact[]
   deals     Deal[]
+  invoices  Invoice[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }
@@ -79,4 +84,83 @@ model Activity {
   dealId      String?
   deal        Deal?    @relation(fields: [dealId], references: [id])
   createdAt   DateTime @default(now())
+}
+
+model Product {
+  id          String          @id @default(cuid())
+  name        String
+  sku         String          @unique
+  description String?
+  material    String?
+  productType String?
+  site        String?
+  city        String?
+  costPrice   Float           @default(0)
+  salesPrice  Float           @default(0)
+  stock       Int             @default(0)
+  minStock    Int             @default(10)
+  unit        String          @default("db")
+  vatRate     Float           @default(19)
+  active      Boolean         @default(true)
+  movements   StockMovement[]
+  invoiceItems InvoiceItem[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model StockMovement {
+  id        String   @id @default(cuid())
+  type      String
+  quantity  Int
+  note      String?
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Invoice {
+  id        String        @id @default(cuid())
+  number    String        @unique
+  date      DateTime      @default(now())
+  dueDate   DateTime
+  status    String        @default("open")
+  notes     String?
+  contactId String?
+  contact   Contact?      @relation(fields: [contactId], references: [id])
+  companyId String?
+  company   Company?      @relation(fields: [companyId], references: [id])
+  items     InvoiceItem[]
+  subtotal  Float         @default(0)
+  vatAmount Float         @default(0)
+  total     Float         @default(0)
+  currency  String        @default("EUR")
+  paidAt    DateTime?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  description String
+  quantity    Float
+  unitPrice   Float
+  vatRate     Float    @default(19)
+  total       Float
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id])
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  type        String
+  amount      Float
+  currency    String   @default("EUR")
+  date        DateTime
+  description String
+  category    String?
+  reference   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

@@ -3,366 +3,592 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
 async function main() {
-  console.log('Seeding database...')
+  console.log('Seeding Memini Design database...')
 
+  // Companies (partner gift shops)
   const companies = await Promise.all([
     prisma.company.create({
       data: {
-        name: 'Magyar Telekom Zrt.',
-        industry: 'Telekommunikáció',
-        website: 'telekom.hu',
-        phone: '+36 1 458 0000',
-        address: '1013 Budapest, Krisztina krt. 55.',
+        name: 'Ulmer Münster Shop',
+        industry: 'Kirchlicher Souvenirladen',
+        website: 'ulmer-muenster.de',
+        phone: '+49 731 379 415',
+        address: 'Münsterplatz 1',
+        city: 'Ulm',
+        country: 'DE',
+        vatId: 'DE123456789',
       },
     }),
     prisma.company.create({
       data: {
-        name: 'OTP Bank Nyrt.',
-        industry: 'Pénzügyi szolgáltatások',
-        website: 'otpbank.hu',
-        phone: '+36 1 366 6611',
-        address: '1051 Budapest, Nádor u. 16.',
+        name: 'Schloss Heidelberg Gift Shop',
+        industry: 'Museum & Schloss Souvenirladen',
+        website: 'schloss-heidelberg.de',
+        phone: '+49 6221 658880',
+        address: 'Schlosshof 1',
+        city: 'Heidelberg',
+        country: 'DE',
+        vatId: 'DE234567890',
       },
     }),
     prisma.company.create({
       data: {
-        name: 'Richter Gedeon Nyrt.',
-        industry: 'Gyógyszeripar',
-        website: 'richter.hu',
-        phone: '+36 1 431 4000',
-        address: '1103 Budapest, Gyömrői út 19-21.',
+        name: 'Neuschwanstein Souvenir GmbH',
+        industry: 'Touristische Attraktionen',
+        website: 'neuschwanstein.de',
+        phone: '+49 8362 939880',
+        address: 'Neuschwansteinstraße 20',
+        city: 'Schwangau',
+        country: 'DE',
+        vatId: 'DE345678901',
       },
     }),
     prisma.company.create({
       data: {
-        name: 'MOL Magyar Olaj- és Gázipari Nyrt.',
-        industry: 'Energetika',
-        website: 'mol.hu',
-        phone: '+36 1 209 0000',
-        address: '1117 Budapest, Október huszonharmadika u. 18.',
+        name: 'Kölner Dom Shop',
+        industry: 'Kirchlicher Souvenirladen',
+        website: 'koelner-dom.de',
+        phone: '+49 221 9258473',
+        address: 'Domkloster 3',
+        city: 'Köln',
+        country: 'DE',
+        vatId: 'DE456789012',
       },
     }),
     prisma.company.create({
       data: {
-        name: 'Wizz Air Hungary Kft.',
-        industry: 'Légitársaság',
-        website: 'wizzair.com',
-        phone: '+36 1 777 9996',
-        address: '1185 Budapest, Budapest Liszt Ferenc Repülőtér',
+        name: 'Rothenburg Tourist Center',
+        industry: 'Tourismus',
+        website: 'rothenburg.de',
+        phone: '+49 9861 404800',
+        address: 'Marktplatz 2',
+        city: 'Rothenburg ob der Tauber',
+        country: 'DE',
+        vatId: 'DE567890123',
       },
     }),
   ])
 
+  // Contacts (shop managers, buyers)
   const contacts = await Promise.all([
     prisma.contact.create({
       data: {
-        firstName: 'András',
-        lastName: 'Kovács',
-        email: 'kovacs.andras@telekom.hu',
-        phone: '+36 20 123 4567',
+        firstName: 'Klaus',
+        lastName: 'Müller',
+        email: 'k.mueller@ulmer-muenster.de',
+        phone: '+49 731 379416',
         status: 'active',
         companyId: companies[0].id,
-        notes: 'IT vezető, döntéshozó',
+        notes: 'Boltvezető, havonta rendel, nagy mennyiségek',
       },
     }),
     prisma.contact.create({
       data: {
-        firstName: 'Éva',
-        lastName: 'Nagy',
-        email: 'nagy.eva@otpbank.hu',
-        phone: '+36 30 234 5678',
+        firstName: 'Sabine',
+        lastName: 'Wagner',
+        email: 's.wagner@schloss-heidelberg.de',
+        phone: '+49 6221 658881',
         status: 'active',
         companyId: companies[1].id,
-        notes: 'Digitális transzformáció vezető',
+        notes: 'Beszerző, minőségtudatos',
       },
     }),
     prisma.contact.create({
       data: {
-        firstName: 'Péter',
-        lastName: 'Szabó',
-        email: 'szabo.peter@richter.hu',
-        phone: '+36 70 345 6789',
-        status: 'lead',
+        firstName: 'Thomas',
+        lastName: 'Bauer',
+        email: 't.bauer@neuschwanstein.de',
+        phone: '+49 8362 939881',
+        status: 'active',
         companyId: companies[2].id,
+        notes: 'Marketing vezető, nagy forgalom nyáron',
       },
     }),
     prisma.contact.create({
       data: {
-        firstName: 'Katalin',
-        lastName: 'Horváth',
-        email: 'horvath.katalin@mol.hu',
-        phone: '+36 20 456 7890',
-        status: 'active',
+        firstName: 'Anna',
+        lastName: 'Schmidt',
+        email: 'a.schmidt@koelner-dom.de',
+        phone: '+49 221 9258474',
+        status: 'lead',
         companyId: companies[3].id,
-        notes: 'Projekt menedzser, közvetlen kapcsolattartó',
+        notes: 'Intézményvezető, döntéshozó',
       },
     }),
     prisma.contact.create({
       data: {
-        firstName: 'Gábor',
-        lastName: 'Tóth',
-        email: 'toth.gabor@example.hu',
-        phone: '+36 30 567 8901',
-        status: 'lead',
-      },
-    }),
-    prisma.contact.create({
-      data: {
-        firstName: 'Mária',
-        lastName: 'Kiss',
-        email: 'kiss.maria@wizzair.com',
-        phone: '+36 70 678 9012',
-        status: 'inactive',
-        companyId: companies[4].id,
-      },
-    }),
-    prisma.contact.create({
-      data: {
-        firstName: 'László',
-        lastName: 'Varga',
-        email: 'varga.laszlo@example.hu',
-        phone: '+36 20 789 0123',
+        firstName: 'Michael',
+        lastName: 'Braun',
+        email: 'm.braun@rothenburg.de',
+        phone: '+49 9861 404801',
         status: 'active',
-      },
-    }),
-    prisma.contact.create({
-      data: {
-        firstName: 'Zsuzsanna',
-        lastName: 'Molnár',
-        email: 'molnar.zsuzsanna@telekom.hu',
-        phone: '+36 30 890 1234',
-        status: 'lead',
-        companyId: companies[0].id,
+        companyId: companies[4].id,
       },
     }),
   ])
 
+  // Deals
   const now = new Date()
   const future30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
   const future60 = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000)
-  const future90 = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
   const past30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
 
   const deals = await Promise.all([
     prisma.deal.create({
       data: {
-        title: 'Telekom ERP rendszer implementáció',
-        value: 8500000,
+        title: 'Ulmer Münster – Kő mágnes kollekció 200 db',
+        value: 1800,
         stage: 'proposal',
-        probability: 60,
+        probability: 70,
         contactId: contacts[0].id,
         companyId: companies[0].id,
         closeDate: future30,
-        notes: 'Komplex ERP bevezetés, 6 hónapos projekt',
+        notes: 'Ajánlat elküldve, várjuk a visszajelzést',
       },
     }),
     prisma.deal.create({
       data: {
-        title: 'OTP banki digitális platform',
-        value: 15000000,
+        title: 'Heidelberg Schloss – Fa mágnes 150 db + képeslapok',
+        value: 2100,
         stage: 'negotiation',
-        probability: 75,
+        probability: 80,
         contactId: contacts[1].id,
         companyId: companies[1].id,
         closeDate: future30,
-        notes: 'Mobilbanki alkalmazás fejlesztése',
       },
     }),
     prisma.deal.create({
       data: {
-        title: 'Richter CRM implementáció',
-        value: 5200000,
-        stage: 'qualified',
-        probability: 40,
-        contactId: contacts[2].id,
-        companyId: companies[2].id,
-        closeDate: future60,
-      },
-    }),
-    prisma.deal.create({
-      data: {
-        title: 'MOL adatelemző platform',
-        value: 22000000,
+        title: 'Neuschwanstein – Nyári kollekcó 500 db',
+        value: 4500,
         stage: 'closed_won',
         probability: 100,
-        contactId: contacts[3].id,
-        companyId: companies[3].id,
+        contactId: contacts[2].id,
+        companyId: companies[2].id,
         closeDate: past30,
-        notes: 'Sikeres projekt, referencia ügyfél',
+        notes: 'Leszállítva, elégedett ügyfél',
       },
     }),
     prisma.deal.create({
       data: {
-        title: 'Wizz Air jegyrendszer integráció',
-        value: 12500000,
-        stage: 'prospect',
-        probability: 20,
-        contactId: contacts[5].id,
-        companyId: companies[4].id,
-        closeDate: future90,
-      },
-    }),
-    prisma.deal.create({
-      data: {
-        title: 'Telefonos értékesítési modul',
-        value: 3800000,
-        stage: 'closed_lost',
-        probability: 0,
-        contactId: contacts[7].id,
-        companyId: companies[0].id,
-        closeDate: past30,
-        notes: 'Elveszett - versenytárs olcsóbb ajánlata',
-      },
-    }),
-    prisma.deal.create({
-      data: {
-        title: 'Webshop integráció és automatizálás',
-        value: 2100000,
-        stage: 'proposal',
-        probability: 55,
-        contactId: contacts[4].id,
-        closeDate: future30,
-      },
-    }),
-    prisma.deal.create({
-      data: {
-        title: 'HR szoftver implementáció',
-        value: 6700000,
+        title: 'Kölner Dom – Próbarendelés 50 db',
+        value: 650,
         stage: 'qualified',
         probability: 45,
-        contactId: contacts[6].id,
+        contactId: contacts[3].id,
+        companyId: companies[3].id,
+        closeDate: future60,
+        notes: 'Mintákat kértek, döntés folyamatban',
+      },
+    }),
+    prisma.deal.create({
+      data: {
+        title: 'Rothenburg – Fa kollekció 100 db',
+        value: 1200,
+        stage: 'prospect',
+        probability: 25,
+        contactId: contacts[4].id,
+        companyId: companies[4].id,
         closeDate: future60,
       },
     }),
   ])
 
+  // Products (Memini Design SKUs)
+  const products = await Promise.all([
+    prisma.product.create({
+      data: {
+        name: 'Ulmer Münster – Kő hűtőmágnes',
+        sku: 'MM-ULM-001-KO',
+        material: 'stone',
+        productType: 'magnet',
+        site: 'Ulmer Münster',
+        city: 'Ulm',
+        costPrice: 3.2,
+        salesPrice: 7.5,
+        stock: 245,
+        minStock: 50,
+        vatRate: 19,
+        description: 'Természetes kőből készült hűtőmágnes UV nyomtatással',
+      },
+    }),
+    prisma.product.create({
+      data: {
+        name: 'Ulmer Münster – Fa hűtőmágnes',
+        sku: 'MM-ULM-002-FA',
+        material: 'wood',
+        productType: 'magnet',
+        site: 'Ulmer Münster',
+        city: 'Ulm',
+        costPrice: 2.8,
+        salesPrice: 6.5,
+        stock: 180,
+        minStock: 50,
+        vatRate: 19,
+        description: 'Lézervágott fa mágnes',
+      },
+    }),
+    prisma.product.create({
+      data: {
+        name: 'Heidelberg Schloss – Kő hűtőmágnes',
+        sku: 'MM-HEI-001-KO',
+        material: 'stone',
+        productType: 'magnet',
+        site: 'Heidelberg Schloss',
+        city: 'Heidelberg',
+        costPrice: 3.2,
+        salesPrice: 7.5,
+        stock: 320,
+        minStock: 60,
+        vatRate: 19,
+      },
+    }),
+    prisma.product.create({
+      data: {
+        name: 'Heidelberg Schloss – Fa képeslap',
+        sku: 'MM-HEI-002-FK',
+        material: 'wood',
+        productType: 'postcard',
+        site: 'Heidelberg Schloss',
+        city: 'Heidelberg',
+        costPrice: 1.5,
+        salesPrice: 3.9,
+        stock: 150,
+        minStock: 30,
+        vatRate: 7,
+        description: 'Lézervágott fa képeslap',
+      },
+    }),
+    prisma.product.create({
+      data: {
+        name: 'Neuschwanstein – Kő hűtőmágnes',
+        sku: 'MM-NEU-001-KO',
+        material: 'stone',
+        productType: 'magnet',
+        site: 'Schloss Neuschwanstein',
+        city: 'Schwangau',
+        costPrice: 3.2,
+        salesPrice: 7.9,
+        stock: 520,
+        minStock: 100,
+        vatRate: 19,
+      },
+    }),
+    prisma.product.create({
+      data: {
+        name: 'Neuschwanstein – PLA 3D mágnes',
+        sku: 'MM-NEU-002-PL',
+        material: 'pla',
+        productType: 'magnet',
+        site: 'Schloss Neuschwanstein',
+        city: 'Schwangau',
+        costPrice: 2.1,
+        salesPrice: 5.9,
+        stock: 8,
+        minStock: 50,
+        vatRate: 19,
+        description: '3D nyomtatott bioműanyag mágnes',
+      },
+    }),
+    prisma.product.create({
+      data: {
+        name: 'Kölner Dom – Hatszög kő mágnes',
+        sku: 'MM-KOE-001-KO',
+        material: 'stone',
+        productType: 'magnet',
+        site: 'Kölner Dom',
+        city: 'Köln',
+        costPrice: 3.5,
+        salesPrice: 8.5,
+        stock: 0,
+        minStock: 40,
+        vatRate: 19,
+        description: 'Hatszög formátumú prémium kő mágnes',
+      },
+    }),
+    prisma.product.create({
+      data: {
+        name: 'Rothenburg – Fa hűtőmágnes (többrétegű)',
+        sku: 'MM-ROT-001-FA',
+        material: 'wood',
+        productType: 'magnet',
+        site: 'Rothenburg ob der Tauber',
+        city: 'Rothenburg ob der Tauber',
+        costPrice: 4.1,
+        salesPrice: 9.5,
+        stock: 75,
+        minStock: 30,
+        vatRate: 19,
+        description: 'Többrétegű lézervágott fa mágnes',
+      },
+    }),
+  ])
+
+  // Stock movements
+  await Promise.all([
+    prisma.stockMovement.create({
+      data: { type: 'in', quantity: 300, note: 'Gyártótól bevételezve', productId: products[0].id },
+    }),
+    prisma.stockMovement.create({
+      data: { type: 'out', quantity: 55, note: 'Ulmer Münster szállítás', productId: products[0].id },
+    }),
+    prisma.stockMovement.create({
+      data: { type: 'in', quantity: 200, note: 'Gyártótól bevételezve', productId: products[1].id },
+    }),
+    prisma.stockMovement.create({
+      data: { type: 'out', quantity: 20, note: 'Mintaszállítás', productId: products[1].id },
+    }),
+    prisma.stockMovement.create({
+      data: { type: 'in', quantity: 500, note: 'Neuschwanstein nyári szezon', productId: products[4].id },
+    }),
+    prisma.stockMovement.create({
+      data: { type: 'in', quantity: 10, note: 'Tesztgyártás', productId: products[5].id },
+    }),
+    prisma.stockMovement.create({
+      data: { type: 'out', quantity: 2, note: 'Mintaküldés Kölnbe', productId: products[5].id },
+    }),
+  ])
+
+  // Invoices
+  const inv1Date = new Date(now.getTime() - 45 * 24 * 60 * 60 * 1000)
+  const inv2Date = new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000)
+  const inv3Date = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000)
+
+  const invoices = await Promise.all([
+    prisma.invoice.create({
+      data: {
+        number: 'RE-2026-001',
+        date: inv1Date,
+        dueDate: new Date(inv1Date.getTime() + 30 * 24 * 60 * 60 * 1000),
+        status: 'paid',
+        contactId: contacts[2].id,
+        companyId: companies[2].id,
+        currency: 'EUR',
+        subtotal: 3781,
+        vatAmount: 718.39,
+        total: 4499.39,
+        paidAt: new Date(inv1Date.getTime() + 15 * 24 * 60 * 60 * 1000),
+        items: {
+          create: [
+            {
+              description: 'Schloss Neuschwanstein – Kő hűtőmágnes (MM-NEU-001-KO)',
+              quantity: 500,
+              unitPrice: 7.9,
+              vatRate: 19,
+              total: 3950,
+              productId: products[4].id,
+            },
+          ],
+        },
+      },
+    }),
+    prisma.invoice.create({
+      data: {
+        number: 'RE-2026-002',
+        date: inv2Date,
+        dueDate: new Date(inv2Date.getTime() + 30 * 24 * 60 * 60 * 1000),
+        status: 'open',
+        contactId: contacts[1].id,
+        companyId: companies[1].id,
+        currency: 'EUR',
+        subtotal: 1470,
+        vatAmount: 279.3,
+        total: 1749.3,
+        items: {
+          create: [
+            {
+              description: 'Heidelberg Schloss – Kő hűtőmágnes (MM-HEI-001-KO)',
+              quantity: 120,
+              unitPrice: 7.5,
+              vatRate: 19,
+              total: 900,
+              productId: products[2].id,
+            },
+            {
+              description: 'Heidelberg Schloss – Fa képeslap (MM-HEI-002-FK)',
+              quantity: 150,
+              unitPrice: 3.9,
+              vatRate: 7,
+              total: 585,
+              productId: products[3].id,
+            },
+          ],
+        },
+      },
+    }),
+    prisma.invoice.create({
+      data: {
+        number: 'RE-2026-003',
+        date: inv3Date,
+        dueDate: new Date(inv3Date.getTime() + 30 * 24 * 60 * 60 * 1000),
+        status: 'open',
+        contactId: contacts[0].id,
+        companyId: companies[0].id,
+        currency: 'EUR',
+        subtotal: 1500,
+        vatAmount: 285,
+        total: 1785,
+        items: {
+          create: [
+            {
+              description: 'Ulmer Münster – Kő hűtőmágnes (MM-ULM-001-KO)',
+              quantity: 200,
+              unitPrice: 7.5,
+              vatRate: 19,
+              total: 1500,
+              productId: products[0].id,
+            },
+          ],
+        },
+      },
+    }),
+  ])
+
+  // Transactions
+  await Promise.all([
+    // Income
+    prisma.transaction.create({
+      data: {
+        type: 'income',
+        amount: 4499.39,
+        currency: 'EUR',
+        date: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
+        description: 'Neuschwanstein – RE-2026-001 kifizetés',
+        category: 'Értékesítés',
+        reference: 'RE-2026-001',
+      },
+    }),
+    prisma.transaction.create({
+      data: {
+        type: 'income',
+        amount: 950,
+        currency: 'EUR',
+        date: new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000),
+        description: 'Rothenburg – előző negyedév',
+        category: 'Értékesítés',
+      },
+    }),
+    // Expenses
+    prisma.transaction.create({
+      data: {
+        type: 'expense',
+        amount: 1200,
+        currency: 'EUR',
+        date: new Date(now.getTime() - 50 * 24 * 60 * 60 * 1000),
+        description: 'Gyártási költség – kő mágnesek (500 db)',
+        category: 'Gyártás',
+      },
+    }),
+    prisma.transaction.create({
+      data: {
+        type: 'expense',
+        amount: 340,
+        currency: 'EUR',
+        date: new Date(now.getTime() - 40 * 24 * 60 * 60 * 1000),
+        description: 'Szállítási költség – Neuschwanstein',
+        category: 'Szállítás',
+      },
+    }),
+    prisma.transaction.create({
+      data: {
+        type: 'expense',
+        amount: 89,
+        currency: 'EUR',
+        date: new Date(now.getTime() - 25 * 24 * 60 * 60 * 1000),
+        description: 'Figma előfizetés – Design szoftver',
+        category: 'Szoftver',
+      },
+    }),
+    prisma.transaction.create({
+      data: {
+        type: 'expense',
+        amount: 560,
+        currency: 'EUR',
+        date: new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000),
+        description: 'Fa alapanyag – következő gyártási batch',
+        category: 'Alapanyag',
+      },
+    }),
+    prisma.transaction.create({
+      data: {
+        type: 'expense',
+        amount: 210,
+        currency: 'EUR',
+        date: new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000),
+        description: 'Minta szállítás – Köln',
+        category: 'Szállítás',
+      },
+    }),
+    prisma.transaction.create({
+      data: {
+        type: 'income',
+        amount: 320,
+        currency: 'EUR',
+        date: new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000),
+        description: 'Mintarendelés – Heidelberg előleg',
+        category: 'Értékesítés',
+      },
+    }),
+  ])
+
+  // Tasks
   const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000)
   const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
 
   await Promise.all([
     prisma.task.create({
       data: {
-        title: 'Telefonhívás Kovács Andrással',
-        description: 'ERP ajánlat részleteinek egyeztetése, árról tárgyalás',
+        title: 'RE-2026-002 fizetési emlékeztető – Heidelberg',
+        description: 'A számla 10 napon belül lejár, küldj emlékeztetőt Sabine Wagnernek',
         dueDate: tomorrow,
         priority: 'high',
         status: 'pending',
-        contactId: contacts[0].id,
-        dealId: deals[0].id,
+        contactId: contacts[1].id,
       },
     }),
     prisma.task.create({
       data: {
-        title: 'Ajánlat elküldése Nagy Évának',
-        description: 'A digitális platform végső ajánlatának elkészítése és elküldése',
+        title: 'Kölner Dom mintacsomag összeállítása',
+        description: '3 db kő mágnes + 3 db fa mágnes küldése Anna Schmidtnek',
         dueDate: tomorrow,
         priority: 'high',
         status: 'in_progress',
-        contactId: contacts[1].id,
-        dealId: deals[1].id,
-      },
-    }),
-    prisma.task.create({
-      data: {
-        title: 'Demo prezentáció előkészítése',
-        description: 'Richter CRM demo anyagok és slideok összeállítása',
-        dueDate: nextWeek,
-        priority: 'medium',
-        status: 'pending',
-        contactId: contacts[2].id,
-        dealId: deals[2].id,
-      },
-    }),
-    prisma.task.create({
-      data: {
-        title: 'MOL szerződés aláírás',
-        description: 'Nyert deal - szerződéses dokumentumok aláíratása',
-        dueDate: yesterday,
-        priority: 'high',
-        status: 'completed',
         contactId: contacts[3].id,
         dealId: deals[3].id,
       },
     }),
     prisma.task.create({
       data: {
-        title: 'Wizz Air igényfelmérő meeting',
-        description: 'Jegyrendszer részletes igényeinek felmérése',
+        title: 'PLA mágnes készlethiány – gyártás indítása',
+        description: 'MM-NEU-002-PL csak 8 db van, minimum 50. Gyártóval egyeztetni.',
+        dueDate: tomorrow,
+        priority: 'high',
+        status: 'pending',
+      },
+    }),
+    prisma.task.create({
+      data: {
+        title: 'Rothenburg ajánlat összeállítása',
+        description: 'Fa mágnes kollekció 100 db – ajánlat elkészítése Michael Braunnak',
         dueDate: nextWeek,
         priority: 'medium',
         status: 'pending',
-        contactId: contacts[5].id,
+        contactId: contacts[4].id,
         dealId: deals[4].id,
       },
     }),
     prisma.task.create({
       data: {
-        title: 'Varga László követési hívás',
-        description: 'HR szoftver projekt státusz egyeztetése',
-        dueDate: tomorrow,
-        priority: 'low',
-        status: 'pending',
-        contactId: contacts[6].id,
-        dealId: deals[7].id,
-      },
-    }),
-    prisma.task.create({
-      data: {
-        title: 'Heti értékesítési riport összeállítása',
-        description: 'Sales riport a menedzsmentnek - pipeline és forecast',
+        title: 'Q2 termékfotók elkészítése',
+        description: 'Új kollekcióhoz termékfotók – Heidelberg és Ulm vonalak',
         dueDate: nextWeek,
         priority: 'medium',
         status: 'pending',
       },
     }),
-    prisma.task.create({
-      data: {
-        title: 'CRM adatbázis tisztítás',
-        description: 'Duplikált kapcsolatok és elavult adatok eltávolítása',
-        dueDate: nextWeek,
-        priority: 'low',
-        status: 'pending',
-      },
-    }),
   ])
 
-  await Promise.all([
-    prisma.activity.create({
-      data: {
-        type: 'call',
-        description: 'Bemutatkozó telefonhívás - érdeklődnek az ERP megoldás iránt',
-        contactId: contacts[0].id,
-        dealId: deals[0].id,
-      },
-    }),
-    prisma.activity.create({
-      data: {
-        type: 'meeting',
-        description: 'Személyes találkozó az OTP irodájában - igényfelmérés elvégezve',
-        contactId: contacts[1].id,
-        dealId: deals[1].id,
-      },
-    }),
-    prisma.activity.create({
-      data: {
-        type: 'email',
-        description: 'Ajánlat elküldve emailben - várakozunk a visszajelzésre',
-        contactId: contacts[2].id,
-        dealId: deals[2].id,
-      },
-    }),
-    prisma.activity.create({
-      data: {
-        type: 'meeting',
-        description: 'Szerződés sikeresen megkötve - projekt kick-off tervezés',
-        contactId: contacts[3].id,
-        dealId: deals[3].id,
-      },
-    }),
-  ])
-
-  console.log('✅ Seed data created successfully!')
+  console.log('✅ Memini Design seed data created successfully!')
 }
 
 main()
