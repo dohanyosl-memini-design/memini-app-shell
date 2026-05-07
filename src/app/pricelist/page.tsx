@@ -248,13 +248,11 @@ export default function PriceListPage() {
           <p className="text-gray-500 mt-1">Nettó mennyiségi árak · EUR</p>
         </div>
         <div className="flex items-center gap-2">
-          {entries.length === 0 && !loading && (
-            <button onClick={handleSeed} disabled={seeding}
-              className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50">
-              <Download size={15} />
-              {seeding ? 'Betöltés...' : 'Alapadatok betöltése'}
-            </button>
-          )}
+          <button onClick={handleSeed} disabled={seeding}
+            className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+            <Download size={15} />
+            {seeding ? 'Betöltés...' : 'Adatok szinkronizálása'}
+          </button>
           <button
             onClick={() => { setEditEntry(null); setShowModal(true) }}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
