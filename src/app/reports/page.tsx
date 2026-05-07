@@ -50,9 +50,9 @@ function formatCurrency(value: number) {
 }
 
 function formatCurrencyFull(value: number) {
-  if (value >= 1000000) return `${(value / 1000000).toFixed(1)} M Ft`
-  if (value >= 1000) return `${(value / 1000).toFixed(0)} e Ft`
-  return `${value} Ft`
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M €`
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}k €`
+  return `${value.toFixed(2)} €`
 }
 
 export default function ReportsPage() {

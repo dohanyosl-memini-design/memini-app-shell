@@ -85,7 +85,6 @@ export default function TransactionForm({ transaction, defaultType, onSave, onCa
               className="px-2 py-2 border border-r-0 border-gray-300 rounded-l-lg bg-gray-50 text-sm"
             >
               <option>EUR</option>
-              <option>HUF</option>
               <option>USD</option>
             </select>
             <input

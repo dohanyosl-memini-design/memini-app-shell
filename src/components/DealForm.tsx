@@ -99,7 +99,7 @@ export default function DealForm({ deal, initialStage, onSave, onCancel }: DealF
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Értéke (Ft)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Értéke (€)</label>
           <input
             type="number"
             value={form.value}
