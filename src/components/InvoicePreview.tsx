@@ -225,19 +225,19 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
         )}
 
         {/* ── Záró szöveg ── */}
-        <p style={{ fontStyle: 'italic', fontSize: '12px', lineHeight: 1.6, marginBottom: '32px' }}>
+        <p style={{ fontStyle: 'italic', fontSize: '12px', lineHeight: 1.6, marginBottom: '16px' }}>
           Die Zahlung erfolgt innerhalb von {paymentDays} Tagen ab Rechnungseingang ohne Abzüge auf das unten
           angegebene Bankkonto. Ich danke Ihnen für Ihren Auftrag und freue mich auf die weitere Zusammenarbeit.
         </p>
 
         {/* ── Aláírás ── */}
-        <div style={{ fontStyle: 'italic', fontSize: '12px', marginBottom: '60px', lineHeight: 1.8 }}>
+        <div style={{ fontStyle: 'italic', fontSize: '12px', marginBottom: '20px', lineHeight: 1.8 }}>
           <p>Mit freundlichen Grüßen</p>
           <p style={{ fontWeight: 700 }}>Laszlo Arpad Dohanyos</p>
         </div>
 
         {/* ── Lábléc 3 oszlop ── */}
-        <div style={{ borderTop: '1px solid #333', paddingTop: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', fontSize: '10px', lineHeight: 1.6 }}>
+        <div id="invoice-footer" style={{ borderTop: '1px solid #333', paddingTop: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', fontSize: '10px', lineHeight: 1.6 }}>
           <div>
             <p style={{ fontWeight: 700 }}>Laszlo Arpad Dohanyos e.U.</p>
             <p>Römerstraße 32,</p>
@@ -260,7 +260,7 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
 
       <style>{`
         @media print {
-          @page { size: A4; margin: 15mm 20mm; }
+          @page { size: A4; margin: 12mm 18mm; }
           body * { visibility: hidden !important; }
           #invoice-print, #invoice-print * { visibility: visible !important; }
           #invoice-print {
@@ -274,6 +274,14 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
             padding: 0 !important;
             margin: 0 !important;
             box-shadow: none !important;
+            background: white !important;
+          }
+          #invoice-footer {
+            position: fixed !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            padding: 8px 0 0 0 !important;
             background: white !important;
           }
         }
