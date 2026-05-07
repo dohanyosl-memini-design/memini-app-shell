@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+const include = {
+  contact: true,
+  deal: true,
+  company: true,
+  assignee: { select: { id: true, name: true } },
+  subtasks: { orderBy: { createdAt: 'asc' as const } },
+}
+
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   const body = await request.json()
 
@@ -12,11 +20,13 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       dueDate: body.dueDate ? new Date(body.dueDate) : null,
       status: body.status,
       priority: body.priority,
+      taskType: body.taskType || null,
+      assigneeId: body.assigneeId || null,
       contactId: body.contactId || null,
       dealId: body.dealId || null,
       companyId: body.companyId || null,
     },
-    include: { contact: true, deal: true },
+    include,
   })
 
   return NextResponse.json(task)

@@ -3,19 +3,20 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      String   @default("user")
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  password      String
+  role          String   @default("user")
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  assignedTasks Task[]
 }
 
 model Contact {
@@ -93,14 +94,27 @@ model Task {
   dueDate     DateTime?
   status      String    @default("pending")
   priority    String    @default("medium")
+  taskType    String?
+  assigneeId  String?
+  assignee    User?     @relation(fields: [assigneeId], references: [id])
   contactId   String?
   contact     Contact?  @relation(fields: [contactId], references: [id])
   dealId      String?
   deal        Deal?     @relation(fields: [dealId], references: [id])
   companyId   String?
   company     Company?  @relation(fields: [companyId], references: [id])
+  subtasks    SubTask[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+model SubTask {
+  id        String   @id @default(cuid())
+  title     String
+  completed Boolean  @default(false)
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 }
 
 model Activity {
@@ -284,7 +298,7 @@ model PriceListEntry {
   hordozo   String?
   costPrice Float    @default(0)
   basePrice Float    @default(0)
-  tiers     Json     @default("[]")
+  tiers     String   @default("[]")
   notes     String?
   active    Boolean  @default(true)
   sortOrder Int      @default(0)

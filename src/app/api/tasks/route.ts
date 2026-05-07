@@ -12,7 +12,13 @@ export async function GET(request: NextRequest) {
 
   const tasks = await prisma.task.findMany({
     where,
-    include: { contact: true, deal: true },
+    include: {
+      contact: true,
+      deal: true,
+      company: true,
+      assignee: { select: { id: true, name: true } },
+      subtasks: { orderBy: { createdAt: 'asc' } },
+    },
     orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
   })
 
@@ -29,11 +35,22 @@ export async function POST(request: NextRequest) {
       dueDate: body.dueDate ? new Date(body.dueDate) : null,
       status: body.status || 'pending',
       priority: body.priority || 'medium',
+      taskType: body.taskType || null,
+      assigneeId: body.assigneeId || null,
       contactId: body.contactId || null,
       dealId: body.dealId || null,
       companyId: body.companyId || null,
+      subtasks: body.subtasks?.length
+        ? { create: (body.subtasks as string[]).map((s: string) => ({ title: s })) }
+        : undefined,
     },
-    include: { contact: true, deal: true },
+    include: {
+      contact: true,
+      deal: true,
+      company: true,
+      assignee: { select: { id: true, name: true } },
+      subtasks: { orderBy: { createdAt: 'asc' } },
+    },
   })
 
   return NextResponse.json(task, { status: 201 })
