@@ -64,12 +64,16 @@ export async function POST(request: NextRequest) {
           unitPrice: number
           vatRate: number
           productId?: string
+          isDiscount?: boolean
         }) => ({
           description: item.description,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           vatRate: item.vatRate,
-          total: item.quantity * item.unitPrice * (1 + item.vatRate / 100),
+          total: item.isDiscount
+            ? -(Math.abs(item.unitPrice))
+            : item.quantity * item.unitPrice * (1 + item.vatRate / 100),
+          isDiscount: item.isDiscount || false,
           productId: item.productId || null,
         })),
       },

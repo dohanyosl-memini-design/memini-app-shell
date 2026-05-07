@@ -10,6 +10,7 @@ interface InvoiceItem {
   unitPrice: number
   vatRate: number
   total: number
+  isDiscount: boolean
 }
 
 interface Invoice {
@@ -47,6 +48,11 @@ function fmtDate(d: string) {
 
 export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
   const paymentDays = differenceInDays(new Date(invoice.dueDate), new Date(invoice.date))
+  const productItems = invoice.items.filter(i => !i.isDiscount)
+  const discountItems = invoice.items.filter(i => i.isDiscount)
+  const hasDiscounts = discountItems.length > 0
+  const productSubtotal = productItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+  const discountTotal = discountItems.reduce((s, i) => s + Math.abs(i.unitPrice), 0)
 
   return (
     <div>
@@ -171,7 +177,8 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
             </tr>
           </thead>
           <tbody>
-            {invoice.items.map((item) => (
+            {/* Termék sorok */}
+            {productItems.map((item) => (
               <tr key={item.id}>
                 <td style={{ border: '1px solid #333', padding: '8px 10px', fontStyle: 'italic', fontWeight: 700 }}>
                   {item.description}
@@ -183,18 +190,45 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
                   {fmtDE(item.unitPrice)}
                 </td>
                 <td style={{ border: '1px solid #333', padding: '8px 10px', textAlign: 'right' }}>
-                  {fmtDE(item.total)}
+                  {fmtDE(item.quantity * item.unitPrice)}
                 </td>
               </tr>
             ))}
 
-            {/* Összesítő sorok */}
+            {/* Summe Netto (kedvezmény előtt) — csak ha van kedvezmény */}
+            {hasDiscounts && (
+              <tr>
+                <td colSpan={3} style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'right', fontWeight: 700 }}>
+                  Summe Netto
+                </td>
+                <td style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'right' }}>
+                  {fmtDE(productSubtotal)}
+                </td>
+              </tr>
+            )}
+
+            {/* Kedvezmény sorok */}
+            {discountItems.map((item) => (
+              <tr key={item.id}>
+                <td colSpan={2} style={{ border: '1px solid #333', padding: '8px 10px', fontStyle: 'italic', fontWeight: 700 }}>
+                  {item.description}
+                </td>
+                <td style={{ border: '1px solid #333', padding: '8px 10px', textAlign: 'center' }}>
+                  1
+                </td>
+                <td style={{ border: '1px solid #333', padding: '8px 10px', textAlign: 'right' }}>
+                  {fmtDE(Math.abs(item.unitPrice))}
+                </td>
+              </tr>
+            ))}
+
+            {/* Summe Netto (kedvezmény után) */}
             <tr>
               <td colSpan={3} style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'right', fontWeight: 700 }}>
                 Summe Netto
               </td>
               <td style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'right' }}>
-                {fmtDE(invoice.subtotal)}
+                {fmtDE(hasDiscounts ? productSubtotal - discountTotal : invoice.subtotal)}
               </td>
             </tr>
             <tr>

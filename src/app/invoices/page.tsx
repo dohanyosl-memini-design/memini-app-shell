@@ -15,6 +15,7 @@ interface InvoiceItem {
   unitPrice: number
   vatRate: number
   total: number
+  isDiscount: boolean
 }
 
 interface Invoice {

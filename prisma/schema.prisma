@@ -185,6 +185,7 @@ model InvoiceItem {
   unitPrice   Float
   vatRate     Float    @default(19)
   total       Float
+  isDiscount  Boolean  @default(false)
   invoiceId   String
   invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   productId   String?
