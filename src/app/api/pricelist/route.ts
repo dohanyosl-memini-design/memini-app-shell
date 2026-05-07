@@ -82,16 +82,12 @@ const SEED_DATA = [
     tiers: STD(0.985,0.98,0.975,0.965,0.96,0.95) },
 ]
 
-function parseTiers(raw: string | null): object[] {
-  try { return raw ? JSON.parse(raw) : [] } catch { return [] }
-}
-
 export async function GET() {
   const entries = await prisma.priceListEntry.findMany({
     where: { active: true },
     orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
   })
-  return NextResponse.json(entries.map((e) => ({ ...e, tiers: parseTiers(e.tiers) })))
+  return NextResponse.json(entries)
 }
 
 export async function POST(request: NextRequest) {
@@ -104,7 +100,7 @@ export async function POST(request: NextRequest) {
     const toCreate = SEED_DATA.filter(e => !existing.has(e.name))
     if (toCreate.length === 0) return NextResponse.json({ ok: true, added: 0 })
     await prisma.priceListEntry.createMany({
-      data: toCreate.map(({ tiers, ...rest }) => ({ ...rest, tiers: JSON.stringify(tiers) })),
+      data: toCreate.map(({ tiers, ...rest }) => ({ ...rest, tiers })),
     })
     return NextResponse.json({ ok: true, added: toCreate.length })
   }
@@ -115,10 +111,10 @@ export async function POST(request: NextRequest) {
       hordozo: body.hordozo || null,
       costPrice: parseFloat(body.costPrice) || 0,
       basePrice: parseFloat(body.basePrice) || 0,
-      tiers: JSON.stringify(body.tiers || []),
+      tiers: body.tiers || [],
       notes: body.notes || null,
       sortOrder: parseInt(body.sortOrder) || 0,
     },
   })
-  return NextResponse.json({ ...entry, tiers: parseTiers(entry.tiers) }, { status: 201 })
+  return NextResponse.json(entry, { status: 201 })
 }

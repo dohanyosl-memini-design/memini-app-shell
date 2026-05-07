@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -298,7 +298,7 @@ model PriceListEntry {
   hordozo   String?
   costPrice Float    @default(0)
   basePrice Float    @default(0)
-  tiers     String   @default("[]")
+  tiers     Json     @default("[]")
   notes     String?
   active    Boolean  @default(true)
   sortOrder Int      @default(0)

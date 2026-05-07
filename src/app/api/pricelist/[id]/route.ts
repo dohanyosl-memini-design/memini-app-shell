@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-function parseTiers(raw: string | null): object[] {
-  try { return raw ? JSON.parse(raw) : [] } catch { return [] }
-}
-
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   const body = await request.json()
   const entry = await prisma.priceListEntry.update({
@@ -14,12 +10,12 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       hordozo: body.hordozo || null,
       costPrice: parseFloat(body.costPrice) || 0,
       basePrice: parseFloat(body.basePrice) || 0,
-      tiers: JSON.stringify(body.tiers || []),
+      tiers: body.tiers || [],
       notes: body.notes || null,
       sortOrder: parseInt(body.sortOrder) || 0,
     },
   })
-  return NextResponse.json({ ...entry, tiers: parseTiers(entry.tiers) })
+  return NextResponse.json(entry)
 }
 
 export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
