@@ -12,6 +12,8 @@ import { format, formatDistanceToNow } from 'date-fns'
 import { hu } from 'date-fns/locale'
 import Modal from '@/components/Modal'
 import ContactForm from '@/components/ContactForm'
+import TaskForm from '@/components/TaskForm'
+import { TASK_TYPES } from '@/components/TaskForm'
 
 interface Activity {
   id: string
@@ -60,9 +62,17 @@ interface Order {
 interface Task {
   id: string
   title: string
+  description: string | null
   dueDate: string | null
   priority: string
   status: string
+  taskType: string | null
+  assigneeId: string | null
+  contactId: string | null
+  companyId: string | null
+  dealId: string | null
+  assignee: { id: string; name: string } | null
+  company: { name: string } | null
 }
 
 interface Contact {
@@ -252,13 +262,20 @@ export default function ContactDetailPage() {
   const [loading, setLoading] = useState(true)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showActivityModal, setShowActivityModal] = useState(false)
-  const [activeTab, setActiveTab] = useState<'timeline' | 'deals' | 'quotes' | 'orders' | 'invoices'>('timeline')
+  const [showNewTaskModal, setShowNewTaskModal] = useState(false)
+  const [editTask, setEditTask] = useState<Task | null>(null)
+  const [companyTasks, setCompanyTasks] = useState<Task[]>([])
+  const [activeTab, setActiveTab] = useState<'timeline' | 'deals' | 'quotes' | 'orders' | 'invoices' | 'tasks'>('timeline')
 
   const fetchContact = useCallback(async () => {
     const res = await fetch(`/api/contacts/${id}`)
     if (res.ok) {
       const data = await res.json()
       setContact(data)
+      if (data.companyId) {
+        const tr = await fetch(`/api/tasks?companyId=${data.companyId}`)
+        if (tr.ok) setCompanyTasks(await tr.json())
+      }
     }
     setLoading(false)
   }, [id])
@@ -449,6 +466,7 @@ export default function ContactDetailPage() {
           <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto">
             {([
               { key: 'timeline', label: 'Kommunikáció', count: contact.activities.length },
+              { key: 'tasks', label: 'Feladatok', count: [...contact.tasks, ...companyTasks.filter(ct => !contact.tasks.find(t => t.id === ct.id))].length },
               { key: 'deals', label: 'Dealek', count: contact.deals.length },
               { key: 'quotes', label: 'Ajánlatok', count: contact.quotes.length },
               { key: 'orders', label: 'Rendelések', count: contact.orders.length },
@@ -683,6 +701,79 @@ export default function ContactDetailPage() {
               )}
             </div>
           )}
+          {/* Tasks tab */}
+          {activeTab === 'tasks' && (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                <div>
+                  <h2 className="font-semibold text-gray-900">Feladatok</h2>
+                  {contact.company && (
+                    <p className="text-xs text-gray-400 mt-0.5">Saját + {contact.company.name} feladatai</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => { setEditTask(null); setShowNewTaskModal(true) }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus size={14} /> Új feladat
+                </button>
+              </div>
+              {(() => {
+                const allTasks = [
+                  ...contact.tasks.map(t => ({ ...t, _source: 'contact' as const })),
+                  ...companyTasks
+                    .filter(ct => !contact.tasks.find(t => t.id === ct.id))
+                    .map(t => ({ ...t, _source: 'company' as const })),
+                ].sort((a, b) => {
+                  if (!a.dueDate && !b.dueDate) return 0
+                  if (!a.dueDate) return 1
+                  if (!b.dueDate) return -1
+                  return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+                })
+                if (allTasks.length === 0) return (
+                  <div className="px-5 py-12 text-center text-gray-400 text-sm">Nincs feladat.</div>
+                )
+                return (
+                  <div className="divide-y divide-gray-50">
+                    {allTasks.map((task) => {
+                      const typeInfo = TASK_TYPES.find(t => t.value === task.taskType)
+                      const PRIORITY: Record<string, string> = { high: 'bg-red-100 text-red-700', medium: 'bg-amber-100 text-amber-700', low: 'bg-gray-100 text-gray-500' }
+                      const STATUS_DOT: Record<string, string> = { pending: 'bg-gray-300', in_progress: 'bg-blue-400', completed: 'bg-green-400' }
+                      return (
+                        <div key={task.id} className={`px-5 py-3 flex items-start gap-3 group ${task.status === 'completed' ? 'opacity-50' : ''}`}>
+                          <span className={`w-2 h-2 rounded-full mt-2 shrink-0 ${STATUS_DOT[task.status] || 'bg-gray-300'}`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className={`text-sm font-medium text-gray-900 ${task.status === 'completed' ? 'line-through' : ''}`}>{task.title}</p>
+                              {typeInfo && <span className={`text-xs px-1.5 py-0.5 rounded-full border ${typeInfo.color}`}>{typeInfo.icon} {typeInfo.label}</span>}
+                              {task._source === 'company' && contact.company && (
+                                <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{contact.company.name}</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-400">
+                              {task.dueDate && <span>{format(new Date(task.dueDate), 'MM.dd.', { locale: hu })}</span>}
+                              {task.assignee && <span>{task.assignee.name}</span>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full ${PRIORITY[task.priority]}`}>
+                              {task.priority === 'high' ? 'Magas' : task.priority === 'medium' ? 'Közepes' : 'Alacsony'}
+                            </span>
+                            <button
+                              onClick={() => { setEditTask(task); setShowNewTaskModal(true) }}
+                              className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-600 transition-all"
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+            </div>
+          )}
         </div>
       </div>
 
@@ -715,6 +806,19 @@ export default function ContactDetailPage() {
             contactId={id}
             onSave={() => { setShowActivityModal(false); fetchContact() }}
             onCancel={() => setShowActivityModal(false)}
+          />
+        </Modal>
+      )}
+
+      {/* Task modal */}
+      {showNewTaskModal && (
+        <Modal title={editTask ? 'Feladat szerkesztése' : 'Új feladat'} onClose={() => { setShowNewTaskModal(false); setEditTask(null) }} size="lg">
+          <TaskForm
+            task={editTask}
+            defaultContactId={id}
+            defaultCompanyId={contact.companyId || undefined}
+            onSave={() => { setShowNewTaskModal(false); setEditTask(null); fetchContact() }}
+            onCancel={() => { setShowNewTaskModal(false); setEditTask(null) }}
           />
         </Modal>
       )}

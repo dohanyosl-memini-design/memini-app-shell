@@ -13,6 +13,7 @@ import { hu } from 'date-fns/locale'
 import Modal from '@/components/Modal'
 import CompanyForm from '@/components/CompanyForm'
 import ContactForm from '@/components/ContactForm'
+import TaskForm from '@/components/TaskForm'
 
 interface Activity {
   id: string
@@ -255,89 +256,6 @@ function ActivityForm({ companyId, onSave, onCancel }: ActivityFormProps) {
   )
 }
 
-interface CompanyTaskFormProps {
-  companyId: string
-  onSave: () => void
-  onCancel: () => void
-}
-
-function CompanyTaskForm({ companyId, onSave, onCancel }: CompanyTaskFormProps) {
-  const [loading, setLoading] = useState(false)
-  const [form, setForm] = useState({
-    title: '',
-    description: '',
-    dueDate: '',
-    priority: 'medium',
-  })
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setLoading(true)
-    await fetch('/api/tasks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, companyId, status: 'pending' }),
-    })
-    setLoading(false)
-    onSave()
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Feladat neve *</label>
-        <input
-          required
-          type="text"
-          value={form.title}
-          onChange={(e) => setForm({ ...form, title: e.target.value })}
-          placeholder="pl. Ajánlat elküldése"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Leírás</label>
-        <textarea
-          rows={2}
-          value={form.description}
-          onChange={(e) => setForm({ ...form, description: e.target.value })}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-        />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Határidő</label>
-          <input
-            type="date"
-            value={form.dueDate}
-            onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Prioritás</label>
-          <select
-            value={form.priority}
-            onChange={(e) => setForm({ ...form, priority: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="low">Alacsony</option>
-            <option value="medium">Közepes</option>
-            <option value="high">Sürgős</option>
-          </select>
-        </div>
-      </div>
-      <div className="flex justify-end gap-3 pt-2">
-        <button type="button" onClick={onCancel} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-          Mégse
-        </button>
-        <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
-          {loading ? 'Mentés...' : 'Mentés'}
-        </button>
-      </div>
-    </form>
-  )
-}
 
 export default function CompanyDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -874,9 +792,10 @@ export default function CompanyDetailPage() {
       )}
 
       {showNewTaskModal && (
-        <Modal title="Új feladat" onClose={() => setShowNewTaskModal(false)}>
-          <CompanyTaskForm
-            companyId={id}
+        <Modal title="Új feladat" onClose={() => setShowNewTaskModal(false)} size="lg">
+          <TaskForm
+            task={null}
+            defaultCompanyId={id}
             onSave={() => { setShowNewTaskModal(false); fetchCompany() }}
             onCancel={() => setShowNewTaskModal(false)}
           />

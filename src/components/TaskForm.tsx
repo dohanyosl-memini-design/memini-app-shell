@@ -16,6 +16,7 @@ export const TASK_TYPES = [
   { value: 'admin',       label: 'Adminisztráció',  icon: '📋', color: 'bg-gray-100 text-gray-700 border-gray-300' },
   { value: 'szallitas',   label: 'Szállítás',       icon: '🚚', color: 'bg-orange-100 text-orange-700 border-orange-300' },
   { value: 'megbeszeles', label: 'Megbeszélés',     icon: '💬', color: 'bg-teal-100 text-teal-700 border-teal-300' },
+  { value: 'szamlairas',  label: 'Számlaírás',      icon: '🧾', color: 'bg-indigo-100 text-indigo-700 border-indigo-300' },
   { value: 'egyeb',       label: 'Egyéb',           icon: '⭐', color: 'bg-gray-100 text-gray-600 border-gray-200' },
 ]
 
@@ -36,11 +37,13 @@ interface TaskData {
 interface TaskFormProps {
   task: TaskData | null
   defaultStatus?: string
+  defaultCompanyId?: string
+  defaultContactId?: string
   onSave: () => void
   onCancel: () => void
 }
 
-export default function TaskForm({ task, defaultStatus = 'pending', onSave, onCancel }: TaskFormProps) {
+export default function TaskForm({ task, defaultStatus = 'pending', defaultCompanyId, defaultContactId, onSave, onCancel }: TaskFormProps) {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [users, setUsers] = useState<AppUser[]>([])
@@ -56,8 +59,8 @@ export default function TaskForm({ task, defaultStatus = 'pending', onSave, onCa
     priority: task?.priority || 'medium',
     taskType: task?.taskType || '',
     assigneeId: task?.assigneeId || '',
-    contactId: task?.contactId || '',
-    companyId: task?.companyId || '',
+    contactId: task?.contactId || defaultContactId || '',
+    companyId: task?.companyId || defaultCompanyId || '',
     dealId: task?.dealId || '',
   })
 
