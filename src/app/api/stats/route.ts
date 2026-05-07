@@ -22,6 +22,15 @@ export async function GET() {
     allTransactions,
     paidInvoicesByMonth,
     dormantCompanies,
+    totalContacts,
+    totalCompanies,
+    totalDeals,
+    pendingTasks,
+    dealsByStage,
+    upcomingTasks,
+    recentContacts,
+    partnersByType,
+    partnersByClassification,
   ] = await Promise.all([
     prisma.invoice.findMany({
       where: { status: 'open' },
@@ -64,13 +73,39 @@ export async function GET() {
       orderBy: { paidAt: 'asc' },
     }),
     prisma.company.findMany({
-      where: {
-        updatedAt: { lt: days90Ago },
-      },
-      select: { id: true, name: true, classification: true, city: true, lastOrderDate: true },
+      where: { updatedAt: { lt: days90Ago } },
+      select: { id: true, name: true, classification: true, city: true, partnerType: true },
       orderBy: { name: 'asc' },
       take: 8,
     }),
+    prisma.contact.count(),
+    prisma.company.count(),
+    prisma.deal.count({ where: { stage: { notIn: ['closed_won', 'closed_lost'] } } }),
+    prisma.task.count({ where: { status: { in: ['pending', 'in_progress'] } } }),
+    prisma.deal.groupBy({
+      by: ['stage'],
+      _count: true,
+      _sum: { value: true },
+    }),
+    prisma.task.findMany({
+      where: { status: { in: ['pending', 'in_progress'] } },
+      orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+      take: 6,
+      select: {
+        id: true, title: true, dueDate: true, priority: true,
+        contact: { select: { firstName: true, lastName: true } },
+      },
+    }),
+    prisma.contact.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: {
+        id: true, firstName: true, lastName: true, status: true, createdAt: true,
+        company: { select: { name: true } },
+      },
+    }),
+    prisma.company.groupBy({ by: ['partnerType'], _count: true }),
+    prisma.company.groupBy({ by: ['classification'], _count: true }),
   ])
 
   const lowStockProducts = allActiveProducts.filter(p => p.stock <= p.minStock)
@@ -82,6 +117,10 @@ export async function GET() {
   const totalStockSalesValue = allActiveProducts.reduce((s, p) => s + p.stock * p.salesPrice, 0)
   const openInvoicesTotal = openInvoices.reduce((s, i) => s + i.total, 0)
 
+  const topProducts = [...allActiveProducts]
+    .sort((a, b) => b.stock - a.stock)
+    .slice(0, 6)
+
   return NextResponse.json({
     openInvoicesTotal,
     openInvoicesCount: openInvoices.length,
@@ -89,6 +128,7 @@ export async function GET() {
     openInvoicesList: openInvoices.slice(0, 5),
     lowStockProducts,
     topProductsByValue,
+    topProducts,
     totalStockCostValue,
     totalStockSalesValue,
     monthlyIncome: monthlyIncome._sum.amount || 0,
@@ -99,5 +139,14 @@ export async function GET() {
     allTransactions,
     paidInvoicesByMonth,
     dormantCompanies,
+    totalContacts,
+    totalCompanies,
+    totalDeals,
+    pendingTasks,
+    dealsByStage,
+    upcomingTasks,
+    recentContacts,
+    partnersByType,
+    partnersByClassification,
   })
 }
