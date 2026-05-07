@@ -8,6 +8,8 @@ export async function GET() {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
   const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
   const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0)
+  const days90Ago = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+  const days180Ago = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000)
 
   const [
     totalContacts,
@@ -27,6 +29,9 @@ export async function GET() {
     lastMonthExpenses,
     allTransactions,
     topProducts,
+    dormantCompanies,
+    partnersByType,
+    partnersByClassification,
   ] = await Promise.all([
     prisma.contact.count(),
     prisma.company.count(),
@@ -82,6 +87,19 @@ export async function GET() {
       take: 5,
       select: { name: true, sku: true, stock: true, salesPrice: true },
     }),
+    prisma.company.findMany({
+      where: {
+        orders: {
+          some: { createdAt: { lt: days90Ago } },
+          none: { createdAt: { gte: days90Ago } },
+        },
+      },
+      select: { id: true, name: true, classification: true, partnerType: true, city: true },
+      orderBy: { name: 'asc' },
+      take: 10,
+    }),
+    prisma.company.groupBy({ by: ['partnerType'], _count: true }),
+    prisma.company.groupBy({ by: ['classification'], _count: true }),
   ])
 
   const openInvoicesTotal = openInvoices.reduce((s, i) => s + i.total, 0)
@@ -110,5 +128,8 @@ export async function GET() {
     totalRevenue: wonRevenue._sum.amount || 0,
     allTransactions,
     topProducts,
+    dormantCompanies,
+    partnersByType,
+    partnersByClassification,
   })
 }

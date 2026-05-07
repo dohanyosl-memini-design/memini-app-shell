@@ -28,23 +28,31 @@ model Contact {
 }
 
 model Company {
-  id         String     @id @default(cuid())
-  name       String
-  industry   String?
-  website    String?
-  phone      String?
-  address    String?
-  city       String?
-  country    String?    @default("DE")
-  vatId      String?
-  contacts   Contact[]
-  deals      Deal[]
-  invoices   Invoice[]
-  activities Activity[]
-  quotes     Quote[]
-  orders     Order[]
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  id             String     @id @default(cuid())
+  name           String
+  partnerType    String?
+  industry       String?
+  website        String?
+  phone          String?
+  email          String?
+  address        String?
+  city           String?
+  region         String?
+  country        String?    @default("DE")
+  vatId          String?
+  classification String?    @default("D")
+  language       String?    @default("DE")
+  channel        String?
+  notes          String?
+  lastOrderDate  DateTime?
+  contacts       Contact[]
+  deals          Deal[]
+  invoices       Invoice[]
+  activities     Activity[]
+  quotes         Quote[]
+  orders         Order[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 }
 
 model Deal {
