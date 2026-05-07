@@ -76,7 +76,7 @@ export default function ContactsPage() {
     : contacts.filter((c) => c.status === filterStatus)
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Ügyfelek</h1>
@@ -115,7 +115,8 @@ export default function ContactsPage() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <table className="w-full">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[600px]">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ügyfél</th>
@@ -193,6 +194,7 @@ export default function ContactsPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {showModal && (

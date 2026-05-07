@@ -110,7 +110,7 @@ export default function Dashboard() {
   ]
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
         <p className="text-gray-500 mt-1">Memini Design · Ulm, Deutschland · {format(new Date(), 'yyyy. MMMM d.', { locale: hu })}</p>
@@ -145,7 +145,7 @@ export default function Dashboard() {
       )}
 
       {/* KPI kártyák */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
         {kpis.map(({ label, value, sub, icon: Icon, color, alert }) => (
           <div key={label} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
             <div className="flex items-center justify-between mb-3">
@@ -163,9 +163,9 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
         {/* Cashflow grafikon */}
-        <div className="col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-base font-semibold text-gray-900 mb-4">Havi cashflow (utolsó 6 hónap)</h2>
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
@@ -211,7 +211,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
         {/* Sales pipeline */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-base font-semibold text-gray-900 mb-4">Sales pipeline</h2>

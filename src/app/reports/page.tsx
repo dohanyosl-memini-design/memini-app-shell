@@ -57,8 +57,8 @@ export default function ReportsPage() {
       .catch(() => { setError(true); setLoading(false) })
   }, [])
 
-  if (loading) return <div className="p-6 flex items-center justify-center h-64 text-gray-400">Betöltés...</div>
-  if (error || !stats) return <div className="p-6 flex items-center justify-center h-64 text-red-400">Hiba a statisztikák betöltésekor.</div>
+  if (loading) return <div className="p-4 md:p-6 flex items-center justify-center h-64 text-gray-400">Betöltés...</div>
+  if (error || !stats) return <div className="p-4 md:p-6 flex items-center justify-center h-64 text-red-400">Hiba a statisztikák betöltésekor.</div>
 
   const thisMonthBalance = stats.monthlyIncome - stats.monthlyExpenses
   const lastMonthBalance = stats.lastMonthIncome - stats.lastMonthExpenses
@@ -68,14 +68,14 @@ export default function ReportsPage() {
   const now = new Date()
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Riportok & Statisztikák</h1>
         <p className="text-gray-500 mt-1">{format(now, 'yyyy. MMMM', { locale: hu })} – aktuális üzleti áttekintés</p>
       </div>
 
       {/* ── KPI sor ── */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         {/* Havi bevétel */}
         <div className="bg-green-50 border border-green-100 rounded-xl p-5">
           <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Havi bevétel</p>
@@ -145,7 +145,7 @@ export default function ReportsPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
         {/* ── Nyitott számlák listája ── */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
@@ -211,7 +211,7 @@ export default function ReportsPage() {
           <h2 className="text-base font-semibold text-red-700 mb-3 flex items-center gap-2">
             <AlertTriangle size={16} /> Alacsony készlet – rendelj utána!
           </h2>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {stats.lowStockProducts.map((p) => (
               <div key={p.id} className="bg-white border border-red-100 rounded-lg p-3">
                 <p className="text-sm font-medium text-gray-900 truncate">{p.name}</p>
@@ -228,7 +228,7 @@ export default function ReportsPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-base font-semibold text-gray-900 mb-1">Inaktív partnerek</h2>
           <p className="text-xs text-gray-400 mb-4">90+ napja nem volt aktivitás</p>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {stats.dormantCompanies.map((c) => (
               <div key={c.id} className="border border-gray-100 rounded-lg p-3 bg-gray-50">
                 <p className="text-sm font-medium text-gray-900 truncate">{c.name}</p>

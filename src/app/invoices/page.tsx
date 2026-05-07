@@ -114,7 +114,7 @@ export default function InvoicesPage() {
   const paidTotal = invoices.filter((i) => i.status === 'paid').reduce((s, i) => s + i.total, 0)
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Számlák</h1>
@@ -172,7 +172,8 @@ export default function InvoicesPage() {
 
       {/* Számla táblázat */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <table className="w-full">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px]">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Számlaszám</th>
@@ -268,6 +269,7 @@ export default function InvoicesPage() {
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {showCreateModal && (

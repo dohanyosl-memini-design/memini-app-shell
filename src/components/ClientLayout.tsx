@@ -10,19 +10,17 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const isLoginPage = pathname === '/login'
 
-  if (isLoginPage) {
-    return <>{children}</>
-  }
-
-  if (!session) {
-    return <>{children}</>
-  }
+  if (isLoginPage) return <>{children}</>
+  if (!session) return <>{children}</>
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       <Sidebar session={session} />
-      <main className="flex-1 overflow-auto">
-        {children}
+      {/* pb-16 on mobile reserves space for the fixed bottom nav */}
+      <main className="flex-1 overflow-auto pb-16 md:pb-0">
+        <div className="max-w-screen-2xl mx-auto">
+          {children}
+        </div>
       </main>
     </div>
   )

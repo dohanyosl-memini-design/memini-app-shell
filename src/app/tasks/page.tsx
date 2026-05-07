@@ -283,7 +283,7 @@ export default function TasksPage() {
   const byStatus = (status: string) => filtered.filter((t) => t.status === status)
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
@@ -346,10 +346,10 @@ export default function TasksPage() {
         <div className="py-24 text-center text-gray-400">Betöltés...</div>
       ) : view === 'kanban' ? (
         /* ── KANBAN ── */
-        <div className="grid grid-cols-3 gap-4">
+        <div className="flex md:grid md:grid-cols-3 gap-4 overflow-x-auto pb-2 md:overflow-visible">
           {COLUMNS.map((col) => (
+            <div key={col.id} className="min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
             <KanbanColumn
-              key={col.id}
               col={col}
               tasks={byStatus(col.id)}
               onEdit={handleEdit}
@@ -359,6 +359,7 @@ export default function TasksPage() {
               onDrop={onDrop}
               draggingId={draggingId}
             />
+            </div>
           ))}
         </div>
       ) : (
