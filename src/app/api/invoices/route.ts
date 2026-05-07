@@ -33,15 +33,22 @@ export async function POST(request: NextRequest) {
   )
   const total = subtotal + vatAmount
 
-  const year = new Date().getFullYear()
-  const lastInvoice = await prisma.invoice.findFirst({
-    where: { number: { endsWith: `/${year}` } },
-    orderBy: { createdAt: 'desc' },
-  })
-  const lastNum = lastInvoice
-    ? parseInt(lastInvoice.number.split('/')[0] || '0')
-    : 0
-  const number = `${String(lastNum + 1).padStart(2, '0')}/${year}`
+  let number: string
+  if (body.number && String(body.number).trim()) {
+    number = String(body.number).trim()
+    const conflict = await prisma.invoice.findFirst({ where: { number } })
+    if (conflict) {
+      return NextResponse.json({ error: `A(z) ${number} számlaszám már foglalt.` }, { status: 409 })
+    }
+  } else {
+    const year = new Date().getFullYear()
+    const lastInvoice = await prisma.invoice.findFirst({
+      where: { number: { endsWith: `/${year}` }, stornoOf: null },
+      orderBy: { createdAt: 'desc' },
+    })
+    const lastNum = lastInvoice ? parseInt(lastInvoice.number.split('/')[0] || '0') : 0
+    number = `${String(lastNum + 1).padStart(2, '0')}/${year}`
+  }
 
   const invoice = await prisma.invoice.create({
     data: {

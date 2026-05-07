@@ -55,7 +55,7 @@ export default function InvoiceForm({ onSave, onCancel }: { onSave: () => void; 
   const due30 = format(addDays(new Date(), 30), 'yyyy-MM-dd')
 
   const [form, setForm] = useState({
-    contactId: '', companyId: '', date: today, dueDate: due30,
+    invoiceNumber: '', contactId: '', companyId: '', date: today, dueDate: due30,
     deliveryInfo: '', currency: 'EUR', notes: '',
   })
 
@@ -69,7 +69,11 @@ export default function InvoiceForm({ onSave, onCancel }: { onSave: () => void; 
       fetch('/api/companies').then(r => r.json()),
       fetch('/api/products').then(r => r.json()),
       fetch('/api/pricelist').then(r => r.json()),
-    ]).then(([c, co, p, pl]) => { setContacts(c); setCompanies(co); setProducts(p); setPricelist(pl) })
+      fetch('/api/invoices/next-number').then(r => r.json()),
+    ]).then(([c, co, p, pl, nn]) => {
+      setContacts(c); setCompanies(co); setProducts(p); setPricelist(pl)
+      setForm(f => ({ ...f, invoiceNumber: nn.number }))
+    })
   }, [])
 
   const productSubtotal = items
@@ -188,11 +192,18 @@ export default function InvoiceForm({ onSave, onCancel }: { onSave: () => void; 
       return { ...li, isDiscount: false }
     })
 
-    await fetch('/api/invoices', {
+    const res = await fetch('/api/invoices', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, items: apiItems }),
+      body: JSON.stringify({ ...form, number: form.invoiceNumber, items: apiItems }),
     })
+
+    if (!res.ok) {
+      const err = await res.json()
+      alert(err.error || 'Hiba történt a számla kiállítása során.')
+      setLoading(false)
+      return
+    }
 
     setLoading(false)
     onSave()
@@ -200,6 +211,20 @@ export default function InvoiceForm({ onSave, onCancel }: { onSave: () => void; 
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
+      {/* Számlaszám */}
+      <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+        <span className="text-sm font-semibold text-blue-700 whitespace-nowrap">Számlaszám:</span>
+        <input
+          type="text"
+          value={form.invoiceNumber}
+          onChange={e => setForm({ ...form, invoiceNumber: e.target.value })}
+          placeholder="pl. 07/2026"
+          required
+          className="flex-1 px-3 py-1.5 border border-blue-300 rounded-lg text-sm font-mono font-bold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+        />
+        <span className="text-xs text-blue-500 whitespace-nowrap">szerkeszthető</span>
+      </div>
+
       {/* Fejléc mezők */}
       <div className="grid grid-cols-2 gap-4">
         <div>
