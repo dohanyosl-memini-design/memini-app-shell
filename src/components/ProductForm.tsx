@@ -1,6 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import { ImagePlus, X, Loader2 } from 'lucide-react'
+import Image from 'next/image'
 
 interface Product {
   id: string
@@ -17,6 +19,7 @@ interface Product {
   minStock: number
   unit: string
   vatRate: number
+  imageUrl: string | null
 }
 
 interface ProductFormProps {
@@ -41,6 +44,10 @@ const PRODUCT_TYPES = [
 
 export default function ProductForm({ product, onSave, onCancel }: ProductFormProps) {
   const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [imageUrl, setImageUrl] = useState<string>(product?.imageUrl || '')
+  const fileRef = useRef<HTMLInputElement>(null)
+
   const [form, setForm] = useState({
     name: product?.name || '',
     sku: product?.sku || '',
@@ -57,6 +64,19 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     vatRate: product?.vatRate?.toString() || '19',
   })
 
+  async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch('/api/upload', { method: 'POST', body: fd })
+    const data = await res.json()
+    if (data.url) setImageUrl(data.url)
+    setUploading(false)
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
@@ -67,7 +87,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, imageUrl: imageUrl || null }),
     })
 
     setLoading(false)
@@ -80,6 +100,57 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+
+      {/* Fotó */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Termékfotó (JPEG / WebP)</label>
+        <div className="flex items-start gap-4">
+          {imageUrl ? (
+            <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-gray-200 shrink-0">
+              <Image src={imageUrl} alt="termékfotó" fill className="object-cover" />
+              <button
+                type="button"
+                onClick={() => { setImageUrl(''); if (fileRef.current) fileRef.current.value = '' }}
+                className="absolute top-1 right-1 bg-white rounded-full p-0.5 shadow hover:bg-red-50 transition-colors"
+              >
+                <X size={12} className="text-gray-600" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="w-24 h-24 border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:border-blue-400 hover:text-blue-500 transition-colors shrink-0"
+            >
+              {uploading
+                ? <Loader2 size={20} className="animate-spin" />
+                : <><ImagePlus size={20} /><span className="text-xs mt-1">Feltöltés</span></>}
+            </button>
+          )}
+          <div className="text-xs text-gray-400 pt-1 space-y-1">
+            <p>Max. 4 MB</p>
+            <p>JPEG vagy WebP formátum</p>
+            {imageUrl && (
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="text-blue-500 hover:underline"
+              >
+                Csere
+              </button>
+            )}
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/jpeg,image/webp"
+            className="hidden"
+            onChange={handleImageChange}
+          />
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-1">Termék neve *</label>
@@ -238,7 +309,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
       <div className="flex justify-end gap-3 pt-2">
         <button type="button" onClick={onCancel} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">Mégse</button>
-        <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
+        <button type="submit" disabled={loading || uploading} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
           {loading ? 'Mentés...' : 'Mentés'}
         </button>
       </div>

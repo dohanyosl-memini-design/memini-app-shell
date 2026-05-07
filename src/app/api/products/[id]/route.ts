@@ -19,6 +19,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       minStock: parseInt(body.minStock) || 10,
       unit: body.unit || 'db',
       vatRate: parseFloat(body.vatRate) || 19,
+      imageUrl: body.imageUrl !== undefined ? (body.imageUrl || null) : undefined,
     },
   })
 

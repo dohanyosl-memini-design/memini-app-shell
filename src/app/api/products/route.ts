@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
       minStock: parseInt(body.minStock) || 10,
       unit: body.unit || 'db',
       vatRate: parseFloat(body.vatRate) || 19,
+      imageUrl: body.imageUrl || null,
     },
   })
 

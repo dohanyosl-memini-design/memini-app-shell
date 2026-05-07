@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, ArrowUpDown } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, ArrowUpDown, X } from 'lucide-react'
+import Image from 'next/image'
 import Modal from '@/components/Modal'
 import ProductForm from '@/components/ProductForm'
 import StockMovementForm from '@/components/StockMovementForm'
@@ -21,6 +22,7 @@ interface Product {
   minStock: number
   unit: string
   vatRate: number
+  imageUrl: string | null
 }
 
 const MATERIAL_CONFIG: Record<string, { label: string; color: string }> = {
@@ -46,6 +48,7 @@ export default function WarehousePage() {
   const [showStockModal, setShowStockModal] = useState(false)
   const [editProduct, setEditProduct] = useState<Product | null>(null)
   const [stockProduct, setStockProduct] = useState<Product | null>(null)
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
   const fetchProducts = useCallback(async () => {
     setLoading(true)
@@ -176,9 +179,24 @@ export default function WarehousePage() {
                 <tr key={product.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-                        <Package size={14} className="text-blue-500" />
-                      </div>
+                      {product.imageUrl ? (
+                        <button
+                          onClick={() => setLightboxUrl(product.imageUrl)}
+                          className="w-10 h-10 rounded-lg overflow-hidden border border-gray-100 shrink-0 hover:ring-2 hover:ring-blue-400 transition-all"
+                        >
+                          <Image
+                            src={product.imageUrl}
+                            alt={product.name}
+                            width={40}
+                            height={40}
+                            className="object-cover w-full h-full"
+                          />
+                        </button>
+                      ) : (
+                        <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center shrink-0">
+                          <Package size={16} className="text-blue-400" />
+                        </div>
+                      )}
                       <div>
                         <p className="font-medium text-gray-900 text-sm">{product.name}</p>
                         <p className="text-xs text-gray-400 font-mono">{product.sku}</p>
@@ -246,6 +264,30 @@ export default function WarehousePage() {
         <Modal title="Készletmozgás rögzítése" onClose={() => setShowStockModal(false)}>
           <StockMovementForm product={stockProduct} onSave={() => { setShowStockModal(false); fetchProducts() }} onCancel={() => setShowStockModal(false)} />
         </Modal>
+      )}
+
+      {/* Lightbox */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors"
+            onClick={() => setLightboxUrl(null)}
+          >
+            <X size={28} />
+          </button>
+          <div className="relative max-w-2xl max-h-[80vh] w-full" onClick={(e) => e.stopPropagation()}>
+            <Image
+              src={lightboxUrl}
+              alt="Termékfotó"
+              width={800}
+              height={800}
+              className="object-contain w-full h-full max-h-[80vh] rounded-lg"
+            />
+          </div>
+        </div>
       )}
     </div>
   )

@@ -135,6 +135,7 @@ model Product {
   unit         String          @default("db")
   vatRate      Float           @default(19)
   active       Boolean         @default(true)
+  imageUrl     String?
   movements    StockMovement[]
   invoiceItems InvoiceItem[]
   quoteItems   QuoteItem[]
