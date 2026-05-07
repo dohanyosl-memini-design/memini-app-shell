@@ -68,9 +68,12 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
         {/* ── Fejléc: logo + feladó cím (jobb oldal) ── */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '24px' }}>
           <div style={{ textAlign: 'right' }}>
-            {/* MEMiNi DESIGN logo */}
+            {/* MEMiNi DESIGN logo — replace /memini-logo.png with the real file when available */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/memini-logo.png" alt="Memini Design" style={{ height: '56px', width: 'auto', display: 'block', marginLeft: 'auto' }} />
+            <img src="/memini-logo.png" alt="Memini Design"
+              onError={(e) => { (e.target as HTMLImageElement).src = '/memini-logo.svg' }}
+              style={{ height: '60px', width: 'auto', display: 'block', marginLeft: 'auto' }}
+            />
             <div style={{ marginTop: '10px', lineHeight: 1.5 }}>
               <p style={{ fontWeight: 700, fontSize: '12px' }}>Laszlo Arpad Dohanyos e.U.</p>
               <p style={{ fontSize: '11px' }}>Laszlo Arpad Dohanyos</p>

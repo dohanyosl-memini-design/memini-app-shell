@@ -1,0 +1,11 @@
+<svg viewBox="0 0 370 108" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@900&amp;display=swap');
+      .logo-text { font-family: 'Nunito', 'Arial Rounded MT Bold', 'Arial Black', Arial, sans-serif; font-weight: 900; font-size: 86px; fill: black; }
+      .design-text { font-family: 'Arial Black', 'Arial Bold', Arial, sans-serif; font-weight: 900; font-size: 26px; fill: black; letter-spacing: 3px; }
+    </style>
+  </defs>
+  <text class="logo-text" x="2" y="84">memini</text>
+  <text class="design-text" x="188" y="107">DESIGN</text>
+</svg>
