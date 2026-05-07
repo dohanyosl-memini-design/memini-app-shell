@@ -267,3 +267,17 @@ model OrderItem {
   productId   String?
   product     Product? @relation(fields: [productId], references: [id])
 }
+
+model PriceListEntry {
+  id        String   @id @default(cuid())
+  name      String
+  hordozo   String?
+  costPrice Float    @default(0)
+  basePrice Float    @default(0)
+  tiers     Json     @default("[]")
+  notes     String?
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

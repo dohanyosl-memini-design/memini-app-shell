@@ -7,7 +7,7 @@ import type { Session } from 'next-auth'
 import {
   LayoutDashboard, Users, Building2, TrendingUp,
   CheckSquare, BarChart3, Package, FileText, Wallet,
-  ClipboardList, ShoppingCart, LogOut,
+  ClipboardList, ShoppingCart, LogOut, Euro,
 } from 'lucide-react'
 
 const navGroups = [
@@ -35,6 +35,7 @@ const navGroups = [
     label: 'Raktár',
     items: [
       { href: '/warehouse', label: 'Termékek & Készlet', icon: Package },
+      { href: '/pricelist', label: 'Ártáblázat', icon: Euro },
     ],
   },
   {
