@@ -69,12 +69,8 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '24px' }}>
           <div style={{ textAlign: 'right' }}>
             {/* MEMiNi DESIGN logo */}
-            <div style={{ lineHeight: 1, marginBottom: '6px' }}>
-              <div style={{ fontFamily: 'Arial Black, Arial, sans-serif', fontWeight: 900, fontSize: '34px', letterSpacing: '-1px', lineHeight: 1 }}>
-                ME<span style={{ fontWeight: 400, fontSize: '30px' }}>mi</span>N<span style={{ fontWeight: 400, fontSize: '30px' }}>i</span>
-              </div>
-              <div style={{ fontSize: '9px', letterSpacing: '5px', fontWeight: 400, marginTop: '-2px', paddingLeft: '2px' }}>DESIGN</div>
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/memini-logo.png" alt="Memini Design" style={{ height: '56px', width: 'auto', display: 'block', marginLeft: 'auto' }} />
             <div style={{ marginTop: '10px', lineHeight: 1.5 }}>
               <p style={{ fontWeight: 700, fontSize: '12px' }}>Laszlo Arpad Dohanyos e.U.</p>
               <p style={{ fontSize: '11px' }}>Laszlo Arpad Dohanyos</p>
