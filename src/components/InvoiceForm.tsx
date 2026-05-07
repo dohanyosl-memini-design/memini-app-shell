@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, Tag } from 'lucide-react'
 import { format, addDays } from 'date-fns'
 
 interface Contact { id: string; firstName: string; lastName: string }
 interface Company { id: string; name: string }
-interface Product { id: string; name: string; nameDE: string | null; sku: string; salesPrice: number; vatRate: number }
+interface Product { id: string; name: string; nameDE: string | null; sku: string; material: string | null; salesPrice: number; vatRate: number }
+interface PriceTier { qty: number; m: number }
+interface PriceEntry { id: string; hordozo: string | null; basePrice: number; tiers: PriceTier[] }
 
 interface LineItem {
   description: string
@@ -21,10 +23,22 @@ interface InvoiceFormProps {
   onCancel: () => void
 }
 
+function calcTierPrice(hordozo: string | null, quantity: number, pricelist: PriceEntry[]): { price: number; tier: PriceTier | null; entry: PriceEntry } | null {
+  if (!hordozo) return null
+  const entry = pricelist.find(e => e.hordozo === hordozo)
+  if (!entry) return null
+  const sorted = [...entry.tiers].sort((a, b) => b.qty - a.qty)
+  const tier = sorted.find(t => t.qty <= quantity) ?? null
+  const m = tier ? tier.m : 1
+  const price = Math.round(entry.basePrice * m * 100) / 100
+  return { price, tier, entry }
+}
+
 export default function InvoiceForm({ onSave, onCancel }: InvoiceFormProps) {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [pricelist, setPricelist] = useState<PriceEntry[]>([])
   const [loading, setLoading] = useState(false)
 
   const today = format(new Date(), 'yyyy-MM-dd')
@@ -46,10 +60,16 @@ export default function InvoiceForm({ onSave, onCancel }: InvoiceFormProps) {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/contacts').then((r) => r.json()),
-      fetch('/api/companies').then((r) => r.json()),
-      fetch('/api/products').then((r) => r.json()),
-    ]).then(([c, co, p]) => { setContacts(c); setCompanies(co); setProducts(p) })
+      fetch('/api/contacts').then(r => r.json()),
+      fetch('/api/companies').then(r => r.json()),
+      fetch('/api/products').then(r => r.json()),
+      fetch('/api/pricelist').then(r => r.json()),
+    ]).then(([c, co, p, pl]) => {
+      setContacts(c)
+      setCompanies(co)
+      setProducts(p)
+      setPricelist(pl)
+    })
   }, [])
 
   function addItem() {
@@ -64,34 +84,57 @@ export default function InvoiceForm({ onSave, onCancel }: InvoiceFormProps) {
     const updated = [...items]
     updated[idx] = { ...updated[idx], [field]: value }
 
-    if (field === 'productId' && value) {
-      const product = products.find((p) => p.id === value)
-      if (product) {
-        updated[idx].description = product.nameDE || product.name
-        updated[idx].unitPrice = product.salesPrice
-        updated[idx].vatRate = product.vatRate
+    if (field === 'productId') {
+      if (value) {
+        const product = products.find(p => p.id === value)
+        if (product) {
+          updated[idx].description = product.nameDE || product.name
+          updated[idx].vatRate = product.vatRate
+          const calc = calcTierPrice(product.material, updated[idx].quantity, pricelist)
+          updated[idx].unitPrice = calc ? calc.price : product.salesPrice
+        }
+      } else {
+        updated[idx].description = ''
+        updated[idx].unitPrice = 0
       }
     }
+
+    if (field === 'quantity' && updated[idx].productId) {
+      const product = products.find(p => p.id === updated[idx].productId)
+      if (product?.material) {
+        const calc = calcTierPrice(product.material, Number(value), pricelist)
+        if (calc) updated[idx].unitPrice = calc.price
+      }
+    }
+
     setItems(updated)
   }
 
+  function getTierLabel(idx: number): string | null {
+    const item = items[idx]
+    if (!item.productId) return null
+    const product = products.find(p => p.id === item.productId)
+    if (!product?.material) return null
+    const calc = calcTierPrice(product.material, item.quantity, pricelist)
+    if (!calc) return null
+    if (!calc.tier) return `Alap ár`
+    const discount = ((1 - calc.tier.m) * 100).toFixed(1)
+    return `${calc.tier.qty}+ db · −${discount}%`
+  }
+
   const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
-  const vatAmount = items.reduce(
-    (sum, item) => sum + item.quantity * item.unitPrice * (item.vatRate / 100), 0
-  )
+  const vatAmount = items.reduce((sum, item) => sum + item.quantity * item.unitPrice * (item.vatRate / 100), 0)
   const total = subtotal + vatAmount
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (items.every((i) => !i.description)) return
+    if (items.every(i => !i.description)) return
     setLoading(true)
-
     await fetch('/api/invoices', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...form, items }),
     })
-
     setLoading(false)
     onSave()
   }
@@ -101,24 +144,18 @@ export default function InvoiceForm({ onSave, onCancel }: InvoiceFormProps) {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Ügyfél</label>
-          <select
-            value={form.contactId}
-            onChange={(e) => setForm({ ...form, contactId: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-          >
+          <select value={form.contactId} onChange={(e) => setForm({ ...form, contactId: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
             <option value="">Válassz ügyfelet</option>
-            {contacts.map((c) => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
+            {contacts.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
           </select>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Cég</label>
-          <select
-            value={form.companyId}
-            onChange={(e) => setForm({ ...form, companyId: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-          >
+          <select value={form.companyId} onChange={(e) => setForm({ ...form, companyId: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
             <option value="">Válassz céget</option>
-            {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
         <div>
@@ -152,65 +189,72 @@ export default function InvoiceForm({ onSave, onCancel }: InvoiceFormProps) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
-                <th className="text-left px-3 py-2 font-medium text-gray-600">Leírás / Termék</th>
-                <th className="text-right px-3 py-2 font-medium text-gray-600 w-16">Menny.</th>
-                <th className="text-right px-3 py-2 font-medium text-gray-600 w-24">Egységár (€)</th>
+                <th className="text-left px-3 py-2 font-medium text-gray-600">Termék / Leírás</th>
+                <th className="text-right px-3 py-2 font-medium text-gray-600 w-20">Menny.</th>
+                <th className="text-right px-3 py-2 font-medium text-gray-600 w-28">Egységár (€)</th>
                 <th className="text-right px-3 py-2 font-medium text-gray-600 w-20">MwSt</th>
                 <th className="text-right px-3 py-2 font-medium text-gray-600 w-24">Összesen</th>
                 <th className="w-8" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {items.map((item, idx) => (
-                <tr key={idx}>
-                  <td className="px-3 py-2">
-                    <select
-                      value={item.productId}
-                      onChange={(e) => updateItem(idx, 'productId', e.target.value)}
-                      className="w-full text-xs border border-gray-200 rounded px-2 py-1 mb-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    >
-                      <option value="">— Termék választása —</option>
-                      {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                    <input
-                      type="text"
-                      value={item.description}
-                      onChange={(e) => updateItem(idx, 'description', e.target.value)}
-                      placeholder="Tétel leírása"
-                      className="w-full text-sm border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input type="number" min="1" value={item.quantity}
-                      onChange={(e) => updateItem(idx, 'quantity', parseFloat(e.target.value))}
-                      className="w-full text-sm text-right border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input type="number" step="0.01" value={item.unitPrice}
-                      onChange={(e) => updateItem(idx, 'unitPrice', parseFloat(e.target.value))}
-                      className="w-full text-sm text-right border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                  </td>
-                  <td className="px-3 py-2">
-                    <select value={item.vatRate}
-                      onChange={(e) => updateItem(idx, 'vatRate', parseFloat(e.target.value))}
-                      className="w-full text-sm border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500">
-                      <option value={19}>19%</option>
-                      <option value={7}>7%</option>
-                      <option value={0}>0%</option>
-                    </select>
-                  </td>
-                  <td className="px-3 py-2 text-right font-medium text-gray-900">
-                    €{(item.quantity * item.unitPrice * (1 + item.vatRate / 100)).toFixed(2)}
-                  </td>
-                  <td className="px-2 py-2">
-                    {items.length > 1 && (
-                      <button type="button" onClick={() => removeItem(idx)} className="text-gray-300 hover:text-red-500">
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {items.map((item, idx) => {
+                const tierLabel = getTierLabel(idx)
+                return (
+                  <tr key={idx}>
+                    <td className="px-3 py-2">
+                      <select value={item.productId} onChange={(e) => updateItem(idx, 'productId', e.target.value)}
+                        className="w-full text-xs border border-gray-200 rounded px-2 py-1 mb-1 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option value="">— Termék választása —</option>
+                        {products.map(p => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}{p.nameDE ? ` · ${p.nameDE}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <input type="text" value={item.description}
+                        onChange={(e) => updateItem(idx, 'description', e.target.value)}
+                        placeholder="Tétel leírása (számlán megjelenő szöveg)"
+                        className="w-full text-sm border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input type="number" min="1" value={item.quantity}
+                        onChange={(e) => updateItem(idx, 'quantity', parseFloat(e.target.value))}
+                        className="w-full text-sm text-right border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input type="number" step="0.01" value={item.unitPrice}
+                        onChange={(e) => updateItem(idx, 'unitPrice', parseFloat(e.target.value))}
+                        className="w-full text-sm text-right border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                      {tierLabel && (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <Tag size={9} className="text-green-500 shrink-0" />
+                          <span className="text-[10px] text-green-600 font-medium">{tierLabel}</span>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <select value={item.vatRate}
+                        onChange={(e) => updateItem(idx, 'vatRate', parseFloat(e.target.value))}
+                        className="w-full text-sm border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option value={19}>19%</option>
+                        <option value={7}>7%</option>
+                        <option value={0}>0%</option>
+                      </select>
+                    </td>
+                    <td className="px-3 py-2 text-right font-medium text-gray-900">
+                      €{(item.quantity * item.unitPrice * (1 + item.vatRate / 100)).toFixed(2)}
+                    </td>
+                    <td className="px-2 py-2">
+                      {items.length > 1 && (
+                        <button type="button" onClick={() => removeItem(idx)} className="text-gray-300 hover:text-red-500">
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -223,7 +267,7 @@ export default function InvoiceForm({ onSave, onCancel }: InvoiceFormProps) {
               <span>€{subtotal.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-gray-600">
-              <span>MwSt:</span>
+              <span>MwSt 19%:</span>
               <span>€{vatAmount.toFixed(2)}</span>
             </div>
             <div className="flex justify-between font-bold text-gray-900 text-base border-t border-gray-200 pt-1">
@@ -235,9 +279,9 @@ export default function InvoiceForm({ onSave, onCancel }: InvoiceFormProps) {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Megjegyzés</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Megjegyzés / Hinweis</label>
         <textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
-          placeholder="pl. Bankátutalás: 30 napon belül"
+          placeholder="pl. 10% Neukunden-Rabatt..."
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm" />
       </div>
 
