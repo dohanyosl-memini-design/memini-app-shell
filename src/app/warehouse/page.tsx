@@ -10,6 +10,7 @@ import StockMovementForm from '@/components/StockMovementForm'
 interface Product {
   id: string
   name: string
+  nameDE: string | null
   sku: string
   description: string | null
   material: string | null
@@ -199,6 +200,9 @@ export default function WarehousePage() {
                       )}
                       <div>
                         <p className="font-medium text-gray-900 text-sm">{product.name}</p>
+                        {product.nameDE && (
+                          <p className="text-xs text-blue-600 italic">{product.nameDE}</p>
+                        )}
                         <p className="text-xs text-gray-400 font-mono">{product.sku}</p>
                       </div>
                     </div>

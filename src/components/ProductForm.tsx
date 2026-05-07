@@ -8,6 +8,7 @@ import Image from 'next/image'
 interface Product {
   id: string
   name: string
+  nameDE: string | null
   sku: string
   description: string | null
   material: string | null
@@ -72,6 +73,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
   const [form, setForm] = useState({
     name: product?.name || '',
+    nameDE: product?.nameDE || '',
     sku: product?.sku || '',
     description: product?.description || '',
     material: product?.material || 'ko_grafitoptik_normal',
@@ -191,14 +193,26 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div className="col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Termék neve *</label>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Magyar név *</label>
           <input
             required
             type="text"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="pl. Ulmer Münster – Kő hűtőmágnes"
+            placeholder="pl. Ulmi Münster – Kő hűtőmágnes"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Német megnevezés <span className="text-blue-600 font-semibold">(számlára kerül)</span>
+          </label>
+          <input
+            type="text"
+            value={form.nameDE}
+            onChange={(e) => setForm({ ...form, nameDE: e.target.value })}
+            placeholder="pl. Graphitoptik – Steinmagnet, Ulm - 01 / 01"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>

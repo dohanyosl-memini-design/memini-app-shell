@@ -6,7 +6,7 @@ import { format, addDays } from 'date-fns'
 
 interface Contact { id: string; firstName: string; lastName: string }
 interface Company { id: string; name: string }
-interface Product { id: string; name: string; sku: string; salesPrice: number; vatRate: number }
+interface Product { id: string; name: string; nameDE: string | null; sku: string; salesPrice: number; vatRate: number }
 
 interface LineItem {
   description: string
@@ -67,7 +67,7 @@ export default function InvoiceForm({ onSave, onCancel }: InvoiceFormProps) {
     if (field === 'productId' && value) {
       const product = products.find((p) => p.id === value)
       if (product) {
-        updated[idx].description = product.name
+        updated[idx].description = product.nameDE || product.name
         updated[idx].unitPrice = product.salesPrice
         updated[idx].vatRate = product.vatRate
       }

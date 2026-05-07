@@ -123,6 +123,7 @@ model Activity {
 model Product {
   id           String          @id @default(cuid())
   name         String
+  nameDE       String?
   sku          String          @unique
   description  String?
   material     String?

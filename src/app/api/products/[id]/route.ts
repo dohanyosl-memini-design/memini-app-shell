@@ -8,6 +8,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     where: { id: params.id },
     data: {
       name: body.name,
+      nameDE: body.nameDE || null,
       sku: body.sku,
       description: body.description || null,
       material: body.material || null,
