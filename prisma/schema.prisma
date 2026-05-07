@@ -62,6 +62,7 @@ model Company {
   activities     Activity[]
   quotes         Quote[]
   orders         Order[]
+  tasks          Task[]
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 }
@@ -95,6 +96,8 @@ model Task {
   contact     Contact?  @relation(fields: [contactId], references: [id])
   dealId      String?
   deal        Deal?     @relation(fields: [dealId], references: [id])
+  companyId   String?
+  company     Company?  @relation(fields: [companyId], references: [id])
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }

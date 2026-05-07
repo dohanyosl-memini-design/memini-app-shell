@@ -14,6 +14,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       priority: body.priority,
       contactId: body.contactId || null,
       dealId: body.dealId || null,
+      companyId: body.companyId || null,
     },
     include: { contact: true, deal: true },
   })

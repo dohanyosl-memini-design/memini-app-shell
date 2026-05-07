@@ -6,12 +6,13 @@ import Link from 'next/link'
 import {
   ArrowLeft, Phone, Globe, MapPin, Edit2, Plus, Trash2,
   PhoneCall, Mail as MailIcon, Users, FileText, MessageSquare,
-  Clock, Building2, ChevronRight,
+  Clock, Building2, ChevronRight, CheckCircle2, Circle, AlertCircle,
 } from 'lucide-react'
-import { format, formatDistanceToNow } from 'date-fns'
+import { format, formatDistanceToNow, isPast } from 'date-fns'
 import { hu } from 'date-fns/locale'
 import Modal from '@/components/Modal'
 import CompanyForm from '@/components/CompanyForm'
+import ContactForm from '@/components/ContactForm'
 
 interface Activity {
   id: string
@@ -63,6 +64,16 @@ interface Order {
   date: string
 }
 
+interface Task {
+  id: string
+  title: string
+  description: string | null
+  dueDate: string | null
+  status: string
+  priority: string
+  contactId: string | null
+}
+
 interface Company {
   id: string
   name: string
@@ -79,6 +90,7 @@ interface Company {
   invoices: Invoice[]
   quotes: Quote[]
   orders: Order[]
+  tasks: Task[]
   createdAt: string
 }
 
@@ -243,6 +255,90 @@ function ActivityForm({ companyId, onSave, onCancel }: ActivityFormProps) {
   )
 }
 
+interface CompanyTaskFormProps {
+  companyId: string
+  onSave: () => void
+  onCancel: () => void
+}
+
+function CompanyTaskForm({ companyId, onSave, onCancel }: CompanyTaskFormProps) {
+  const [loading, setLoading] = useState(false)
+  const [form, setForm] = useState({
+    title: '',
+    description: '',
+    dueDate: '',
+    priority: 'medium',
+  })
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    await fetch('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...form, companyId, status: 'pending' }),
+    })
+    setLoading(false)
+    onSave()
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Feladat neve *</label>
+        <input
+          required
+          type="text"
+          value={form.title}
+          onChange={(e) => setForm({ ...form, title: e.target.value })}
+          placeholder="pl. Ajánlat elküldése"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Leírás</label>
+        <textarea
+          rows={2}
+          value={form.description}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Határidő</label>
+          <input
+            type="date"
+            value={form.dueDate}
+            onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Prioritás</label>
+          <select
+            value={form.priority}
+            onChange={(e) => setForm({ ...form, priority: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="low">Alacsony</option>
+            <option value="medium">Közepes</option>
+            <option value="high">Sürgős</option>
+          </select>
+        </div>
+      </div>
+      <div className="flex justify-end gap-3 pt-2">
+        <button type="button" onClick={onCancel} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+          Mégse
+        </button>
+        <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
+          {loading ? 'Mentés...' : 'Mentés'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
 export default function CompanyDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
@@ -250,7 +346,9 @@ export default function CompanyDetailPage() {
   const [loading, setLoading] = useState(true)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showActivityModal, setShowActivityModal] = useState(false)
-  const [activeTab, setActiveTab] = useState<'timeline' | 'contacts' | 'deals' | 'quotes' | 'orders' | 'invoices'>('timeline')
+  const [showNewContactModal, setShowNewContactModal] = useState(false)
+  const [showNewTaskModal, setShowNewTaskModal] = useState(false)
+  const [activeTab, setActiveTab] = useState<'timeline' | 'contacts' | 'deals' | 'quotes' | 'orders' | 'invoices' | 'tasks'>('timeline')
 
   const fetchCompany = useCallback(async () => {
     const res = await fetch(`/api/companies/${id}`)
@@ -275,6 +373,22 @@ export default function CompanyDetailPage() {
     if (!confirm(`Biztosan törli a(z) ${company?.name} céget?`)) return
     await fetch(`/api/companies/${id}`, { method: 'DELETE' })
     router.push('/companies')
+  }
+
+  async function handleToggleTask(task: Task) {
+    const nextStatus = task.status === 'completed' ? 'pending' : 'completed'
+    await fetch(`/api/tasks/${task.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...task, status: nextStatus, companyId: id }),
+    })
+    fetchCompany()
+  }
+
+  async function handleDeleteTask(taskId: string) {
+    if (!confirm('Törli ezt a feladatot?')) return
+    await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' })
+    fetchCompany()
   }
 
   if (loading) {
@@ -371,6 +485,10 @@ export default function CompanyDetailPage() {
                 <span className="font-medium">{company.activities.length} bejegyzés</span>
               </div>
               <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Feladatok</span>
+                <span className="font-medium">{company.tasks.filter(t => t.status !== 'completed').length} nyitott</span>
+              </div>
+              <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Dealek</span>
                 <span className="font-medium">{company.deals.length} db</span>
               </div>
@@ -396,6 +514,7 @@ export default function CompanyDetailPage() {
             {([
               { key: 'timeline', label: 'Kommunikáció', count: company.activities.length },
               { key: 'contacts', label: 'Kapcsolatok', count: company.contacts.length },
+              { key: 'tasks', label: 'Feladatok', count: company.tasks.length },
               { key: 'deals', label: 'Dealek', count: company.deals.length },
               { key: 'quotes', label: 'Ajánlatok', count: company.quotes.length },
               { key: 'orders', label: 'Rendelések', count: company.orders.length },
@@ -482,8 +601,14 @@ export default function CompanyDetailPage() {
           {/* Contacts */}
           {activeTab === 'contacts' && (
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-              <div className="px-5 py-4 border-b border-gray-100">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                 <h2 className="font-semibold text-gray-900">Kapcsolattartók ({company.contacts.length})</h2>
+                <button
+                  onClick={() => setShowNewContactModal(true)}
+                  className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  <Plus size={14} />Új kapcsolat
+                </button>
               </div>
               {company.contacts.length === 0 ? (
                 <div className="px-5 py-12 text-center text-gray-400 text-sm">
@@ -508,6 +633,73 @@ export default function CompanyDetailPage() {
                           <ChevronRight size={14} className="text-gray-300" />
                         </div>
                       </Link>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tasks */}
+          {activeTab === 'tasks' && (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                <h2 className="font-semibold text-gray-900">Feladatok ({company.tasks.length})</h2>
+                <button
+                  onClick={() => setShowNewTaskModal(true)}
+                  className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  <Plus size={14} />Új feladat
+                </button>
+              </div>
+              {company.tasks.length === 0 ? (
+                <div className="px-5 py-12 text-center text-gray-400 text-sm">
+                  <CheckCircle2 size={32} className="text-gray-200 mx-auto mb-3" />
+                  Nincs feladat ehhez a céghez.
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {company.tasks.map((task) => {
+                    const overdue = task.dueDate && task.status !== 'completed' && isPast(new Date(task.dueDate))
+                    return (
+                      <div key={task.id} className="px-5 py-3 flex items-start gap-3 group">
+                        <button
+                          onClick={() => handleToggleTask(task)}
+                          className="mt-0.5 shrink-0 text-gray-300 hover:text-green-500 transition-colors"
+                        >
+                          {task.status === 'completed'
+                            ? <CheckCircle2 size={18} className="text-green-500" />
+                            : <Circle size={18} />}
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium ${task.status === 'completed' ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+                            {task.title}
+                          </p>
+                          {task.description && <p className="text-xs text-gray-500 mt-0.5">{task.description}</p>}
+                          <div className="flex items-center gap-2 mt-1">
+                            {task.dueDate && (
+                              <span className={`text-xs flex items-center gap-1 ${overdue ? 'text-red-500' : 'text-gray-400'}`}>
+                                {overdue && <AlertCircle size={10} />}
+                                <Clock size={10} />
+                                {format(new Date(task.dueDate), 'MMM d.', { locale: hu })}
+                              </span>
+                            )}
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                              task.priority === 'high' ? 'bg-red-100 text-red-600' :
+                              task.priority === 'medium' ? 'bg-amber-100 text-amber-600' :
+                              'bg-gray-100 text-gray-500'
+                            }`}>
+                              {task.priority === 'high' ? 'Sürgős' : task.priority === 'medium' ? 'Közepes' : 'Alacsony'}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteTask(task.id)}
+                          className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-colors shrink-0"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     )
                   })}
                 </div>
@@ -666,6 +858,27 @@ export default function CompanyDetailPage() {
             companyId={id}
             onSave={() => { setShowActivityModal(false); fetchCompany() }}
             onCancel={() => setShowActivityModal(false)}
+          />
+        </Modal>
+      )}
+
+      {showNewContactModal && (
+        <Modal title="Új kapcsolattartó" onClose={() => setShowNewContactModal(false)}>
+          <ContactForm
+            contact={null}
+            defaultCompanyId={id}
+            onSave={() => { setShowNewContactModal(false); fetchCompany() }}
+            onCancel={() => setShowNewContactModal(false)}
+          />
+        </Modal>
+      )}
+
+      {showNewTaskModal && (
+        <Modal title="Új feladat" onClose={() => setShowNewTaskModal(false)}>
+          <CompanyTaskForm
+            companyId={id}
+            onSave={() => { setShowNewTaskModal(false); fetchCompany() }}
+            onCancel={() => setShowNewTaskModal(false)}
           />
         </Modal>
       )}

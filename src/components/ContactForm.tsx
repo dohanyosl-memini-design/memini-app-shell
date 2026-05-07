@@ -20,11 +20,12 @@ interface Contact {
 
 interface ContactFormProps {
   contact: Contact | null
+  defaultCompanyId?: string
   onSave: () => void
   onCancel: () => void
 }
 
-export default function ContactForm({ contact, onSave, onCancel }: ContactFormProps) {
+export default function ContactForm({ contact, defaultCompanyId, onSave, onCancel }: ContactFormProps) {
   const [companies, setCompanies] = useState<Company[]>([])
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
@@ -34,7 +35,7 @@ export default function ContactForm({ contact, onSave, onCancel }: ContactFormPr
     phone: contact?.phone || '',
     status: contact?.status || 'lead',
     notes: contact?.notes || '',
-    companyId: contact?.companyId || '',
+    companyId: contact?.companyId || defaultCompanyId || '',
   })
 
   useEffect(() => {

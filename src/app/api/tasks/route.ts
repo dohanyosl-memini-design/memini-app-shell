@@ -4,9 +4,14 @@ import { prisma } from '@/lib/prisma'
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const status = searchParams.get('status')
+  const companyId = searchParams.get('companyId')
+
+  const where: Record<string, unknown> = {}
+  if (status && status !== 'all') where.status = status
+  if (companyId) where.companyId = companyId
 
   const tasks = await prisma.task.findMany({
-    where: status && status !== 'all' ? { status } : {},
+    where,
     include: { contact: true, deal: true },
     orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
   })
@@ -26,6 +31,7 @@ export async function POST(request: NextRequest) {
       priority: body.priority || 'medium',
       contactId: body.contactId || null,
       dealId: body.dealId || null,
+      companyId: body.companyId || null,
     },
     include: { contact: true, deal: true },
   })
