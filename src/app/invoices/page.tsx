@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Search, Eye, Trash2, CheckCircle, Clock, AlertCircle, FileText, Printer } from 'lucide-react'
+import { Plus, Search, Eye, Trash2, CheckCircle, Clock, AlertCircle, FileText, Ban } from 'lucide-react'
 import Modal from '@/components/Modal'
 import InvoiceForm from '@/components/InvoiceForm'
 import InvoicePreview from '@/components/InvoicePreview'
@@ -25,6 +25,7 @@ interface Invoice {
   dueDate: string
   deliveryInfo: string | null
   status: string
+  stornoOf: string | null
   currency: string
   subtotal: number
   vatAmount: number
@@ -48,7 +49,8 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof
   open: { label: 'Nyitott', color: 'bg-blue-100 text-blue-700', icon: Clock },
   paid: { label: 'Fizetve', color: 'bg-green-100 text-green-700', icon: CheckCircle },
   overdue: { label: 'Lejárt', color: 'bg-red-100 text-red-700', icon: AlertCircle },
-  cancelled: { label: 'Törölve', color: 'bg-gray-100 text-gray-500', icon: FileText },
+  cancelled: { label: 'Stornózva', color: 'bg-gray-100 text-gray-500', icon: Ban },
+  storno: { label: 'Storno', color: 'bg-orange-100 text-orange-600', icon: FileText },
 }
 
 export default function InvoicesPage() {
@@ -83,6 +85,17 @@ export default function InvoicesPage() {
   async function handleDelete(id: string) {
     if (!confirm('Biztosan törölni szeretné ezt a számlát?')) return
     await fetch(`/api/invoices/${id}`, { method: 'DELETE' })
+    fetchInvoices()
+  }
+
+  async function handleStorno(invoice: Invoice) {
+    if (!confirm(`Biztosan stornózni szeretné a(z) ${invoice.number} számot?\n\nEgy új K-${invoice.number} stornószámla kerül kiállításra, az eredeti számla "Stornózva" állapotba kerül.`)) return
+    const res = await fetch(`/api/invoices/${invoice.id}/storno`, { method: 'POST' })
+    if (!res.ok) {
+      const err = await res.json()
+      alert(err.error || 'Hiba történt a stornózás során.')
+      return
+    }
     fetchInvoices()
   }
 
@@ -178,14 +191,20 @@ export default function InvoicesPage() {
               <tr><td colSpan={7} className="px-5 py-12 text-center text-gray-400">Nem található számla</td></tr>
             ) : filtered.map((invoice) => {
               const isOverdue = invoice.status === 'open' && new Date(invoice.dueDate) < now
-              const statusKey = isOverdue ? 'overdue' : invoice.status
+              const isStornoDoc = !!invoice.stornoOf
+              const statusKey = isStornoDoc ? 'storno' : isOverdue ? 'overdue' : invoice.status
               const status = STATUS_CONFIG[statusKey] || STATUS_CONFIG.open
               const StatusIcon = status.icon
 
               return (
                 <tr key={invoice.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-5 py-3.5">
-                    <span className="font-mono text-sm font-semibold text-gray-900">{invoice.number}</span>
+                    <span className={`font-mono text-sm font-semibold ${isStornoDoc ? 'text-orange-600' : invoice.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                      {invoice.number}
+                    </span>
+                    {invoice.status === 'cancelled' && !isStornoDoc && (
+                      <span className="ml-1.5 text-xs text-gray-400">(K-{invoice.number})</span>
+                    )}
                   </td>
                   <td className="px-5 py-3.5">
                     <p className="text-sm font-medium text-gray-900">{invoice.company?.name || '-'}</p>
@@ -225,6 +244,15 @@ export default function InvoicesPage() {
                           className="text-gray-400 hover:text-green-600 transition-colors"
                         >
                           <CheckCircle size={15} />
+                        </button>
+                      )}
+                      {(invoice.status === 'open' || invoice.status === 'paid') && !isStornoDoc && (
+                        <button
+                          onClick={() => handleStorno(invoice)}
+                          title="Stornózás"
+                          className="text-gray-400 hover:text-orange-500 transition-colors"
+                        >
+                          <Ban size={15} />
                         </button>
                       )}
                       <button

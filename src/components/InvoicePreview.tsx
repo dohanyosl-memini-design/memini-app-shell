@@ -19,6 +19,7 @@ interface Invoice {
   dueDate: string
   deliveryInfo: string | null
   status: string
+  stornoOf: string | null
   currency: string
   subtotal: number
   vatAmount: number
@@ -147,16 +148,25 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
           </div>
         </div>
 
-        {/* ── Cím: Rechnung ── */}
+        {/* ── Cím: Rechnung / Stornorechnung ── */}
         <h1 style={{ fontSize: '36px', fontWeight: 400, marginBottom: '10px', marginTop: '8px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-          Rechnung
+          {invoice.stornoOf ? 'Stornorechnung' : 'Rechnung'}
         </h1>
 
+        {/* ── Storno referencia szöveg ── */}
+        {invoice.stornoOf && (
+          <p style={{ fontStyle: 'italic', fontSize: '12px', marginBottom: '16px', color: '#c00', lineHeight: 1.5 }}>
+            Diese Stornorechnung bezieht sich auf Rechnung Nr. {invoice.stornoOf} und hebt diese vollständig auf.
+          </p>
+        )}
+
         {/* ── Bevezető szöveg ── */}
-        <p style={{ fontStyle: 'italic', fontSize: '12px', marginBottom: '20px', lineHeight: 1.5 }}>
-          Ich danke Ihnen herzlich für Ihr Vertrauen in unsere Produkte und werde Ihnen nun, gemäß unserer
-          Vereinbarung, die folgenden Lieferungen in Rechnung stellen:
-        </p>
+        {!invoice.stornoOf && (
+          <p style={{ fontStyle: 'italic', fontSize: '12px', marginBottom: '20px', lineHeight: 1.5 }}>
+            Ich danke Ihnen herzlich für Ihr Vertrauen in unsere Produkte und werde Ihnen nun, gemäß unserer
+            Vereinbarung, die folgenden Lieferungen in Rechnung stellen:
+          </p>
+        )}
 
         {/* ── Tételek táblázat ── */}
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', marginBottom: '24px' }}>

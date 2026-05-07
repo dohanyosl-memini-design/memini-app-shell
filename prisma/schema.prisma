@@ -164,6 +164,7 @@ model Invoice {
   status       String        @default("open")
   notes        String?
   deliveryInfo String?
+  stornoOf     String?
   contactId    String?
   contact   Contact?      @relation(fields: [contactId], references: [id])
   companyId String?
