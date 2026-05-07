@@ -83,15 +83,23 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
       const fd = new FormData()
       fd.append('file', file)
       const res = await fetch('/api/upload', { method: 'POST', body: fd })
-      const data = await res.json()
+      const text = await res.text()
+      let data: { url?: string; error?: string }
+      try {
+        data = JSON.parse(text)
+      } catch {
+        setUploadError(`Szerverhiba (${res.status}): ${text.slice(0, 120)}`)
+        if (fileRef.current) fileRef.current.value = ''
+        return
+      }
       if (data.url) {
         setImageUrl(data.url)
       } else {
-        setUploadError(data.error || 'Feltöltési hiba. Ellenőrizd a Vercel Blob beállítást.')
+        setUploadError(data.error || 'Ismeretlen feltöltési hiba.')
         if (fileRef.current) fileRef.current.value = ''
       }
-    } catch {
-      setUploadError('Hálózati hiba a feltöltés során.')
+    } catch (err) {
+      setUploadError(`Hálózati hiba: ${err instanceof Error ? err.message : String(err)}`)
       if (fileRef.current) fileRef.current.value = ''
     } finally {
       setUploading(false)

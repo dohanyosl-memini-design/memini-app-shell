@@ -18,10 +18,14 @@ export async function POST(request: NextRequest) {
 
   const contentType = file.type || (ext === 'webp' ? 'image/webp' : 'image/jpeg')
 
-  const blob = await put(`products/${Date.now()}-${file.name}`, file, {
-    access: 'public',
-    contentType,
-  })
-
-  return NextResponse.json({ url: blob.url })
+  try {
+    const blob = await put(`products/${Date.now()}-${file.name}`, file, {
+      access: 'public',
+      contentType,
+    })
+    return NextResponse.json({ url: blob.url })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    return NextResponse.json({ error: `Blob feltöltési hiba: ${message}` }, { status: 500 })
+  }
 }
