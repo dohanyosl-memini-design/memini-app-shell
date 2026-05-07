@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { upload } from '@vercel/blob/client'
 import { ImagePlus, X, Loader2 } from 'lucide-react'
 import Image from 'next/image'
 
@@ -80,26 +81,13 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     setUploadError(null)
     setUploading(true)
     try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const res = await fetch('/api/upload', { method: 'POST', body: fd })
-      const text = await res.text()
-      let data: { url?: string; error?: string }
-      try {
-        data = JSON.parse(text)
-      } catch {
-        setUploadError(`Szerverhiba (${res.status}): ${text.slice(0, 120)}`)
-        if (fileRef.current) fileRef.current.value = ''
-        return
-      }
-      if (data.url) {
-        setImageUrl(data.url)
-      } else {
-        setUploadError(data.error || 'Ismeretlen feltöltési hiba.')
-        if (fileRef.current) fileRef.current.value = ''
-      }
+      const blob = await upload(file.name, file, {
+        access: 'public',
+        handleUploadUrl: '/api/upload',
+      })
+      setImageUrl(blob.url)
     } catch (err) {
-      setUploadError(`Hálózati hiba: ${err instanceof Error ? err.message : String(err)}`)
+      setUploadError(err instanceof Error ? err.message : 'Feltöltési hiba')
       if (fileRef.current) fileRef.current.value = ''
     } finally {
       setUploading(false)
