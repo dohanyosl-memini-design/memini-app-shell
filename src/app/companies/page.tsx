@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Search, Edit2, Trash2, Globe, Phone, Users } from 'lucide-react'
+import Link from 'next/link'
+import { Plus, Search, Edit2, Trash2, Globe, Phone, Users, ChevronRight } from 'lucide-react'
 import Modal from '@/components/Modal'
 import CompanyForm from '@/components/CompanyForm'
 
@@ -97,13 +98,16 @@ export default function CompaniesPage() {
           companies.map((company) => (
             <div key={company.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between mb-3">
-                <div>
-                  <h3 className="font-semibold text-gray-900">{company.name}</h3>
+                <Link href={`/companies/${company.id}`} className="flex-1 min-w-0 group">
+                  <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors flex items-center gap-1">
+                    {company.name}
+                    <ChevronRight size={14} className="text-gray-300 group-hover:text-blue-400" />
+                  </h3>
                   {company.industry && (
                     <p className="text-sm text-gray-500 mt-0.5">{company.industry}</p>
                   )}
-                </div>
-                <div className="flex items-center gap-1">
+                </Link>
+                <div className="flex items-center gap-1 shrink-0">
                   <button
                     onClick={() => handleEdit(company)}
                     className="text-gray-400 hover:text-blue-600 transition-colors p-1"

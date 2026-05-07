@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, Building2, TrendingUp,
   CheckSquare, BarChart3, Package, FileText, Wallet,
+  ClipboardList, ShoppingCart,
 } from 'lucide-react'
 
 const navGroups = [
@@ -23,6 +24,8 @@ const navGroups = [
   {
     label: 'Értékesítés',
     items: [
+      { href: '/quotes', label: 'Ajánlatok', icon: ClipboardList },
+      { href: '/orders', label: 'Megrendelések', icon: ShoppingCart },
       { href: '/invoices', label: 'Számlák', icon: FileText },
     ],
   },
@@ -67,7 +70,7 @@ export default function Sidebar() {
             )}
             <div className="space-y-0.5">
               {group.items.map(({ href, label, icon: Icon }) => {
-                const isActive = pathname === href
+                const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href)
                 return (
                   <Link
                     key={href}

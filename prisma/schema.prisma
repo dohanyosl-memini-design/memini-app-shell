@@ -21,25 +21,30 @@ model Contact {
   tasks      Task[]
   activities Activity[]
   invoices   Invoice[]
+  quotes     Quote[]
+  orders     Order[]
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 }
 
 model Company {
-  id        String    @id @default(cuid())
-  name      String
-  industry  String?
-  website   String?
-  phone     String?
-  address   String?
-  city      String?
-  country   String?   @default("DE")
-  vatId     String?
-  contacts  Contact[]
-  deals     Deal[]
-  invoices  Invoice[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id         String     @id @default(cuid())
+  name       String
+  industry   String?
+  website    String?
+  phone      String?
+  address    String?
+  city       String?
+  country    String?    @default("DE")
+  vatId      String?
+  contacts   Contact[]
+  deals      Deal[]
+  invoices   Invoice[]
+  activities Activity[]
+  quotes     Quote[]
+  orders     Order[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
 }
 
 model Deal {
@@ -76,36 +81,44 @@ model Task {
 }
 
 model Activity {
-  id          String   @id @default(cuid())
-  type        String
-  description String
-  contactId   String?
-  contact     Contact? @relation(fields: [contactId], references: [id])
-  dealId      String?
-  deal        Deal?    @relation(fields: [dealId], references: [id])
-  createdAt   DateTime @default(now())
+  id           String    @id @default(cuid())
+  type         String
+  subject      String?
+  description  String
+  activityDate DateTime  @default(now())
+  duration     Int?
+  outcome      String?
+  contactId    String?
+  contact      Contact?  @relation(fields: [contactId], references: [id])
+  companyId    String?
+  company      Company?  @relation(fields: [companyId], references: [id])
+  dealId       String?
+  deal         Deal?     @relation(fields: [dealId], references: [id])
+  createdAt    DateTime  @default(now())
 }
 
 model Product {
-  id          String          @id @default(cuid())
-  name        String
-  sku         String          @unique
-  description String?
-  material    String?
-  productType String?
-  site        String?
-  city        String?
-  costPrice   Float           @default(0)
-  salesPrice  Float           @default(0)
-  stock       Int             @default(0)
-  minStock    Int             @default(10)
-  unit        String          @default("db")
-  vatRate     Float           @default(19)
-  active      Boolean         @default(true)
-  movements   StockMovement[]
+  id           String          @id @default(cuid())
+  name         String
+  sku          String          @unique
+  description  String?
+  material     String?
+  productType  String?
+  site         String?
+  city         String?
+  costPrice    Float           @default(0)
+  salesPrice   Float           @default(0)
+  stock        Int             @default(0)
+  minStock     Int             @default(10)
+  unit         String          @default("db")
+  vatRate      Float           @default(19)
+  active       Boolean         @default(true)
+  movements    StockMovement[]
   invoiceItems InvoiceItem[]
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  quoteItems   QuoteItem[]
+  orderItems   OrderItem[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 }
 
 model StockMovement {
@@ -163,4 +176,71 @@ model Transaction {
   reference   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model Quote {
+  id         String      @id @default(cuid())
+  number     String      @unique
+  date       DateTime    @default(now())
+  validUntil DateTime?
+  status     String      @default("draft")
+  notes      String?
+  contactId  String?
+  contact    Contact?    @relation(fields: [contactId], references: [id])
+  companyId  String?
+  company    Company?    @relation(fields: [companyId], references: [id])
+  items      QuoteItem[]
+  subtotal   Float       @default(0)
+  vatAmount  Float       @default(0)
+  total      Float       @default(0)
+  currency   String      @default("EUR")
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+model QuoteItem {
+  id          String   @id @default(cuid())
+  description String
+  quantity    Float
+  unitPrice   Float
+  vatRate     Float    @default(19)
+  total       Float
+  quoteId     String
+  quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id])
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  number      String      @unique
+  date        DateTime    @default(now())
+  status      String      @default("pending")
+  notes       String?
+  contactId   String?
+  contact     Contact?    @relation(fields: [contactId], references: [id])
+  companyId   String?
+  company     Company?    @relation(fields: [companyId], references: [id])
+  quoteId     String?
+  items       OrderItem[]
+  subtotal    Float       @default(0)
+  vatAmount   Float       @default(0)
+  total       Float       @default(0)
+  currency    String      @default("EUR")
+  deliveryDate DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  description String
+  quantity    Float
+  unitPrice   Float
+  vatRate     Float    @default(19)
+  total       Float
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id])
 }

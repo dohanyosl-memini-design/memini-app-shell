@@ -1,0 +1,674 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
+import {
+  ArrowLeft, Phone, Globe, MapPin, Edit2, Plus, Trash2,
+  PhoneCall, Mail as MailIcon, Users, FileText, MessageSquare,
+  Clock, Building2, ChevronRight,
+} from 'lucide-react'
+import { format, formatDistanceToNow } from 'date-fns'
+import { hu } from 'date-fns/locale'
+import Modal from '@/components/Modal'
+import CompanyForm from '@/components/CompanyForm'
+
+interface Activity {
+  id: string
+  type: string
+  subject: string | null
+  description: string
+  activityDate: string
+  duration: number | null
+  outcome: string | null
+}
+
+interface Contact {
+  id: string
+  firstName: string
+  lastName: string
+  email: string | null
+  phone: string | null
+  status: string
+}
+
+interface Deal {
+  id: string
+  title: string
+  value: number
+  stage: string
+}
+
+interface Invoice {
+  id: string
+  number: string
+  total: number
+  status: string
+  date: string
+}
+
+interface Quote {
+  id: string
+  number: string
+  total: number
+  status: string
+  date: string
+}
+
+interface Order {
+  id: string
+  number: string
+  total: number
+  status: string
+  date: string
+}
+
+interface Company {
+  id: string
+  name: string
+  industry: string | null
+  website: string | null
+  phone: string | null
+  address: string | null
+  city: string | null
+  country: string | null
+  vatId: string | null
+  contacts: Contact[]
+  deals: Deal[]
+  activities: Activity[]
+  invoices: Invoice[]
+  quotes: Quote[]
+  orders: Order[]
+  createdAt: string
+}
+
+const ACTIVITY_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string; bg: string }> = {
+  call: { label: 'Telefonhívás', icon: PhoneCall, color: 'text-blue-600', bg: 'bg-blue-100' },
+  email: { label: 'Email', icon: MailIcon, color: 'text-purple-600', bg: 'bg-purple-100' },
+  meeting: { label: 'Találkozó', icon: Users, color: 'text-green-600', bg: 'bg-green-100' },
+  note: { label: 'Feljegyzés', icon: FileText, color: 'text-amber-600', bg: 'bg-amber-100' },
+  whatsapp: { label: 'WhatsApp', icon: MessageSquare, color: 'text-emerald-600', bg: 'bg-emerald-100' },
+}
+
+const DEAL_STAGE_LABELS: Record<string, string> = {
+  prospect: 'Érdeklődő', qualified: 'Minősített', proposal: 'Ajánlat',
+  negotiation: 'Tárgyalás', closed_won: 'Nyert', closed_lost: 'Elveszett',
+}
+
+const QUOTE_STATUS: Record<string, { label: string; color: string }> = {
+  draft: { label: 'Tervezet', color: 'bg-gray-100 text-gray-600' },
+  sent: { label: 'Kiküldve', color: 'bg-blue-100 text-blue-700' },
+  accepted: { label: 'Elfogadva', color: 'bg-green-100 text-green-700' },
+  rejected: { label: 'Elutasítva', color: 'bg-red-100 text-red-700' },
+  expired: { label: 'Lejárt', color: 'bg-amber-100 text-amber-700' },
+}
+
+const ORDER_STATUS: Record<string, { label: string; color: string }> = {
+  pending: { label: 'Függőben', color: 'bg-amber-100 text-amber-700' },
+  confirmed: { label: 'Visszaigazolva', color: 'bg-blue-100 text-blue-700' },
+  in_production: { label: 'Gyártásban', color: 'bg-purple-100 text-purple-700' },
+  shipped: { label: 'Kiszállítva', color: 'bg-indigo-100 text-indigo-700' },
+  delivered: { label: 'Átadva', color: 'bg-green-100 text-green-700' },
+  cancelled: { label: 'Lemondva', color: 'bg-red-100 text-red-700' },
+}
+
+const CONTACT_STATUS: Record<string, { label: string; color: string }> = {
+  lead: { label: 'Érdeklődő', color: 'bg-yellow-100 text-yellow-800' },
+  active: { label: 'Aktív', color: 'bg-green-100 text-green-800' },
+  inactive: { label: 'Inaktív', color: 'bg-gray-100 text-gray-600' },
+}
+
+function fmtEur(v: number) {
+  return `€${v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+interface ActivityFormProps {
+  companyId: string
+  onSave: () => void
+  onCancel: () => void
+}
+
+function ActivityForm({ companyId, onSave, onCancel }: ActivityFormProps) {
+  const [loading, setLoading] = useState(false)
+  const now = new Date()
+  const localNow = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+
+  const [form, setForm] = useState({
+    type: 'call',
+    subject: '',
+    description: '',
+    activityDate: localNow,
+    duration: '',
+    outcome: '',
+  })
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    await fetch('/api/activities', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...form, companyId }),
+    })
+    setLoading(false)
+    onSave()
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Típus *</label>
+          <select
+            value={form.type}
+            onChange={(e) => setForm({ ...form, type: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="call">Telefonhívás</option>
+            <option value="email">Email</option>
+            <option value="meeting">Találkozó</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="note">Feljegyzés</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Dátum *</label>
+          <input
+            type="datetime-local"
+            value={form.activityDate}
+            onChange={(e) => setForm({ ...form, activityDate: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Tárgy</label>
+        <input
+          type="text"
+          placeholder="pl. Ajánlat megbeszélése"
+          value={form.subject}
+          onChange={(e) => setForm({ ...form, subject: e.target.value })}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Leírás *</label>
+        <textarea
+          required
+          rows={3}
+          placeholder="Mi hangzott el? Mi történt?"
+          value={form.description}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+        />
+      </div>
+
+      {(form.type === 'call' || form.type === 'meeting') && (
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Időtartam (perc)</label>
+            <input
+              type="number"
+              min="1"
+              placeholder="pl. 15"
+              value={form.duration}
+              onChange={(e) => setForm({ ...form, duration: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Eredmény</label>
+            <input
+              type="text"
+              placeholder="pl. Ajánlatot kér"
+              value={form.outcome}
+              onChange={(e) => setForm({ ...form, outcome: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-end gap-3 pt-2">
+        <button type="button" onClick={onCancel} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+          Mégse
+        </button>
+        <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
+          {loading ? 'Mentés...' : 'Mentés'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+export default function CompanyDetailPage() {
+  const { id } = useParams<{ id: string }>()
+  const router = useRouter()
+  const [company, setCompany] = useState<Company | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showActivityModal, setShowActivityModal] = useState(false)
+  const [activeTab, setActiveTab] = useState<'timeline' | 'contacts' | 'deals' | 'quotes' | 'orders' | 'invoices'>('timeline')
+
+  const fetchCompany = useCallback(async () => {
+    const res = await fetch(`/api/companies/${id}`)
+    if (res.ok) {
+      const data = await res.json()
+      setCompany(data)
+    }
+    setLoading(false)
+  }, [id])
+
+  useEffect(() => {
+    fetchCompany()
+  }, [fetchCompany])
+
+  async function handleDeleteActivity(activityId: string) {
+    if (!confirm('Törli ezt a bejegyzést?')) return
+    await fetch(`/api/activities/${activityId}`, { method: 'DELETE' })
+    fetchCompany()
+  }
+
+  async function handleDeleteCompany() {
+    if (!confirm(`Biztosan törli a(z) ${company?.name} céget?`)) return
+    await fetch(`/api/companies/${id}`, { method: 'DELETE' })
+    router.push('/companies')
+  }
+
+  if (loading) {
+    return <div className="p-6 flex items-center justify-center h-64 text-gray-400">Betöltés...</div>
+  }
+
+  if (!company) {
+    return (
+      <div className="p-6">
+        <p className="text-gray-500">A cég nem található.</p>
+        <Link href="/companies" className="text-blue-600 hover:underline mt-2 inline-block">← Vissza</Link>
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-4 md:p-6 max-w-6xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <button onClick={() => router.push('/companies')} className="text-gray-400 hover:text-gray-600 transition-colors">
+          <ArrowLeft size={20} />
+        </button>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900 truncate">{company.name}</h1>
+          {company.industry && <p className="text-sm text-gray-500 mt-0.5">{company.industry}</p>}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setShowEditModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Edit2 size={14} />
+            <span className="hidden sm:inline">Szerkesztés</span>
+          </button>
+          <button
+            onClick={() => setShowActivityModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={14} />
+            <span className="hidden sm:inline">Bejegyzés</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: company info */}
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+            <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 font-bold text-lg mb-4">
+              {company.name[0]}
+            </div>
+
+            <div className="space-y-3">
+              {company.phone && (
+                <a href={`tel:${company.phone}`} className="flex items-center gap-2.5 text-sm text-gray-700 hover:text-green-600 transition-colors group">
+                  <div className="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center group-hover:bg-green-50">
+                    <Phone size={13} className="text-gray-500 group-hover:text-green-600" />
+                  </div>
+                  {company.phone}
+                </a>
+              )}
+              {company.website && (
+                <a href={company.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2.5 text-sm text-gray-700 hover:text-blue-600 transition-colors group">
+                  <div className="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center group-hover:bg-blue-50">
+                    <Globe size={13} className="text-gray-500 group-hover:text-blue-600" />
+                  </div>
+                  <span className="truncate">{company.website.replace(/^https?:\/\//, '')}</span>
+                </a>
+              )}
+              {(company.address || company.city) && (
+                <div className="flex items-start gap-2.5 text-sm text-gray-600">
+                  <div className="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                    <MapPin size={13} className="text-gray-500" />
+                  </div>
+                  <span>{[company.address, company.city, company.country].filter(Boolean).join(', ')}</span>
+                </div>
+              )}
+              {company.vatId && (
+                <div className="text-xs text-gray-400 font-mono">MwSt-Nr.: {company.vatId}</div>
+              )}
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Összesítés</h3>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Kapcsolattartók</span>
+                <span className="font-medium">{company.contacts.length} fő</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Kommunikáció</span>
+                <span className="font-medium">{company.activities.length} bejegyzés</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Dealek</span>
+                <span className="font-medium">{company.deals.length} db</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Ajánlatok</span>
+                <span className="font-medium">{company.quotes.length} db</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Megrendelések</span>
+                <span className="font-medium">{company.orders.length} db</span>
+              </div>
+              <div className="flex justify-between text-sm pt-2 border-t border-gray-100">
+                <span className="text-gray-500">Számlázott</span>
+                <span className="font-semibold">{fmtEur(company.invoices.reduce((s, i) => s + i.total, 0))}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: tabs */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto">
+            {([
+              { key: 'timeline', label: 'Kommunikáció', count: company.activities.length },
+              { key: 'contacts', label: 'Kapcsolatok', count: company.contacts.length },
+              { key: 'deals', label: 'Dealek', count: company.deals.length },
+              { key: 'quotes', label: 'Ajánlatok', count: company.quotes.length },
+              { key: 'orders', label: 'Rendelések', count: company.orders.length },
+              { key: 'invoices', label: 'Számlák', count: company.invoices.length },
+            ] as const).map(({ key, label, count }) => (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                className={`flex-1 min-w-max px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                  activeTab === key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {label} {count > 0 && <span className="text-xs opacity-60">({count})</span>}
+              </button>
+            ))}
+          </div>
+
+          {/* Timeline */}
+          {activeTab === 'timeline' && (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                <h2 className="font-semibold text-gray-900">Kommunikáció történet</h2>
+                <button onClick={() => setShowActivityModal(true)} className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium">
+                  <Plus size={14} />Új bejegyzés
+                </button>
+              </div>
+              {company.activities.length === 0 ? (
+                <div className="px-5 py-12 text-center">
+                  <PhoneCall size={32} className="text-gray-200 mx-auto mb-3" />
+                  <p className="text-gray-400 text-sm">Még nincs kommunikációs bejegyzés.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {company.activities.map((activity) => {
+                    const cfg = ACTIVITY_CONFIG[activity.type] || ACTIVITY_CONFIG.note
+                    const Icon = cfg.icon
+                    return (
+                      <div key={activity.id} className="px-5 py-4 flex gap-4 group">
+                        <div className={`w-8 h-8 ${cfg.bg} rounded-full flex items-center justify-center shrink-0 mt-0.5`}>
+                          <Icon size={14} className={cfg.color} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <span className={`text-xs font-medium ${cfg.color}`}>{cfg.label}</span>
+                              {activity.subject && <p className="text-sm font-semibold text-gray-900 mt-0.5">{activity.subject}</p>}
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-xs text-gray-400 flex items-center gap-1">
+                                <Clock size={10} />
+                                {format(new Date(activity.activityDate), 'MMM d. HH:mm', { locale: hu })}
+                              </span>
+                              <button
+                                onClick={() => handleDeleteActivity(activity.id)}
+                                className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1 whitespace-pre-line">{activity.description}</p>
+                          <div className="flex items-center gap-3 mt-1.5">
+                            {activity.duration && (
+                              <span className="text-xs text-gray-400 flex items-center gap-1">
+                                <Clock size={10} />{activity.duration} perc
+                              </span>
+                            )}
+                            {activity.outcome && (
+                              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">→ {activity.outcome}</span>
+                            )}
+                            <span className="text-xs text-gray-300">
+                              {formatDistanceToNow(new Date(activity.activityDate), { locale: hu, addSuffix: true })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Contacts */}
+          {activeTab === 'contacts' && (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+              <div className="px-5 py-4 border-b border-gray-100">
+                <h2 className="font-semibold text-gray-900">Kapcsolattartók ({company.contacts.length})</h2>
+              </div>
+              {company.contacts.length === 0 ? (
+                <div className="px-5 py-12 text-center text-gray-400 text-sm">
+                  <Users size={32} className="text-gray-200 mx-auto mb-3" />
+                  Nincs kapcsolattartó ennél a cégnél.
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {company.contacts.map((c) => {
+                    const cs = CONTACT_STATUS[c.status]
+                    return (
+                      <Link key={c.id} href={`/contacts/${c.id}`} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
+                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-semibold text-sm shrink-0">
+                          {c.firstName[0]}{c.lastName[0]}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900">{c.firstName} {c.lastName}</p>
+                          <p className="text-xs text-gray-400">{c.email || c.phone || '-'}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cs?.color || ''}`}>{cs?.label || c.status}</span>
+                          <ChevronRight size={14} className="text-gray-300" />
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Deals */}
+          {activeTab === 'deals' && (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+              <div className="px-5 py-4 border-b border-gray-100">
+                <h2 className="font-semibold text-gray-900">Dealek ({company.deals.length})</h2>
+              </div>
+              {company.deals.length === 0 ? (
+                <div className="px-5 py-12 text-center text-gray-400 text-sm">Nincs deal.</div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {company.deals.map((deal) => (
+                    <div key={deal.id} className="px-5 py-3 flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{deal.title}</p>
+                        <p className="text-xs text-gray-400">{DEAL_STAGE_LABELS[deal.stage] || deal.stage}</p>
+                      </div>
+                      <p className="text-sm font-semibold text-gray-900">{fmtEur(deal.value)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Quotes */}
+          {activeTab === 'quotes' && (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                <h2 className="font-semibold text-gray-900">Ajánlatok ({company.quotes.length})</h2>
+                <Link href="/quotes" className="text-sm text-blue-600 hover:underline flex items-center gap-1">
+                  Összes <ChevronRight size={14} />
+                </Link>
+              </div>
+              {company.quotes.length === 0 ? (
+                <div className="px-5 py-12 text-center text-gray-400 text-sm">Nincs ajánlat.</div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {company.quotes.map((q) => {
+                    const qs = QUOTE_STATUS[q.status]
+                    return (
+                      <div key={q.id} className="px-5 py-3 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium font-mono text-gray-900">{q.number}</p>
+                          <p className="text-xs text-gray-400">{format(new Date(q.date), 'yyyy. MMM d.', { locale: hu })}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${qs?.color || ''}`}>{qs?.label || q.status}</span>
+                          <p className="text-sm font-semibold">{fmtEur(q.total)}</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Orders */}
+          {activeTab === 'orders' && (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                <h2 className="font-semibold text-gray-900">Megrendelések ({company.orders.length})</h2>
+                <Link href="/orders" className="text-sm text-blue-600 hover:underline flex items-center gap-1">
+                  Összes <ChevronRight size={14} />
+                </Link>
+              </div>
+              {company.orders.length === 0 ? (
+                <div className="px-5 py-12 text-center text-gray-400 text-sm">Nincs megrendelés.</div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {company.orders.map((o) => {
+                    const os = ORDER_STATUS[o.status]
+                    return (
+                      <div key={o.id} className="px-5 py-3 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium font-mono text-gray-900">{o.number}</p>
+                          <p className="text-xs text-gray-400">{format(new Date(o.date), 'yyyy. MMM d.', { locale: hu })}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${os?.color || ''}`}>{os?.label || o.status}</span>
+                          <p className="text-sm font-semibold">{fmtEur(o.total)}</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Invoices */}
+          {activeTab === 'invoices' && (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+              <div className="px-5 py-4 border-b border-gray-100">
+                <h2 className="font-semibold text-gray-900">Számlák ({company.invoices.length})</h2>
+              </div>
+              {company.invoices.length === 0 ? (
+                <div className="px-5 py-12 text-center text-gray-400 text-sm">Nincs számla.</div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {company.invoices.map((inv) => (
+                    <div key={inv.id} className="px-5 py-3 flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium font-mono text-gray-900">{inv.number}</p>
+                        <p className="text-xs text-gray-400">{format(new Date(inv.date), 'yyyy. MMM d.', { locale: hu })}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          inv.status === 'paid' ? 'bg-green-100 text-green-700' :
+                          inv.status === 'overdue' ? 'bg-red-100 text-red-700' :
+                          'bg-amber-100 text-amber-700'
+                        }`}>
+                          {inv.status === 'paid' ? 'Fizetve' : inv.status === 'overdue' ? 'Lejárt' : 'Nyitott'}
+                        </span>
+                        <p className="text-sm font-semibold">{fmtEur(inv.total)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">
+        <button
+          onClick={handleDeleteCompany}
+          className="flex items-center gap-2 text-sm text-red-500 hover:text-red-700 transition-colors"
+        >
+          <Trash2 size={14} />
+          Cég törlése
+        </button>
+      </div>
+
+      {showEditModal && (
+        <Modal title="Cég szerkesztése" onClose={() => setShowEditModal(false)}>
+          <CompanyForm
+            company={company}
+            onSave={() => { setShowEditModal(false); fetchCompany() }}
+            onCancel={() => setShowEditModal(false)}
+          />
+        </Modal>
+      )}
+
+      {showActivityModal && (
+        <Modal title="Kommunikáció rögzítése" onClose={() => setShowActivityModal(false)}>
+          <ActivityForm
+            companyId={id}
+            onSave={() => { setShowActivityModal(false); fetchCompany() }}
+            onCancel={() => setShowActivityModal(false)}
+          />
+        </Modal>
+      )}
+    </div>
+  )
+}

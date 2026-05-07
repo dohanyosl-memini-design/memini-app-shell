@@ -1,6 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
+  const company = await prisma.company.findUnique({
+    where: { id: params.id },
+    include: {
+      contacts: { orderBy: { firstName: 'asc' } },
+      deals: { orderBy: { createdAt: 'desc' } },
+      activities: { orderBy: { activityDate: 'desc' }, take: 50 },
+      invoices: { orderBy: { createdAt: 'desc' }, take: 10 },
+      quotes: { orderBy: { createdAt: 'desc' }, take: 10 },
+      orders: { orderBy: { createdAt: 'desc' }, take: 10 },
+    },
+  })
+  if (!company) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  return NextResponse.json(company)
+}
+
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   const body = await request.json()
 
@@ -12,6 +28,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       website: body.website || null,
       phone: body.phone || null,
       address: body.address || null,
+      city: body.city || null,
+      country: body.country || 'DE',
+      vatId: body.vatId || null,
     },
     include: { _count: { select: { contacts: true, deals: true } } },
   })

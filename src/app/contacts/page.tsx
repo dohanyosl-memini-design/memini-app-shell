@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Search, Edit2, Trash2, Building2 } from 'lucide-react'
+import Link from 'next/link'
+import { Plus, Search, Edit2, Trash2, Building2, ChevronRight } from 'lucide-react'
 import Modal from '@/components/Modal'
 import ContactForm from '@/components/ContactForm'
 
@@ -138,18 +139,20 @@ export default function ContactsPage() {
               filtered.map((contact) => {
                 const status = STATUS_CONFIG[contact.status]
                 return (
-                  <tr key={contact.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4">
+                  <tr key={contact.id} className="hover:bg-gray-50 transition-colors cursor-pointer">
+                    <td className="px-6 py-4" onClick={() => window.location.href = `/contacts/${contact.id}`}>
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-semibold text-sm shrink-0">
                           {contact.firstName[0]}{contact.lastName[0]}
                         </div>
-                        <div className="font-medium text-gray-900">
-                          {contact.firstName} {contact.lastName}
+                        <div>
+                          <div className="font-medium text-gray-900">
+                            {contact.firstName} {contact.lastName}
+                          </div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4" onClick={() => window.location.href = `/contacts/${contact.id}`}>
                       {contact.company ? (
                         <span className="flex items-center gap-1 text-gray-600 text-sm">
                           <Building2 size={13} />
@@ -159,9 +162,9 @@ export default function ContactsPage() {
                         <span className="text-gray-400">-</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{contact.email || '-'}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{contact.phone || '-'}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 text-sm text-gray-600" onClick={() => window.location.href = `/contacts/${contact.id}`}>{contact.email || '-'}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600" onClick={() => window.location.href = `/contacts/${contact.id}`}>{contact.phone || '-'}</td>
+                    <td className="px-6 py-4" onClick={() => window.location.href = `/contacts/${contact.id}`}>
                       {status && (
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.color}`}>
                           {status.label}

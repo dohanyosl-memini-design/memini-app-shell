@@ -4,7 +4,15 @@ import { prisma } from '@/lib/prisma'
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   const contact = await prisma.contact.findUnique({
     where: { id: params.id },
-    include: { company: true, deals: true, tasks: true, activities: true },
+    include: {
+      company: true,
+      deals: { orderBy: { createdAt: 'desc' } },
+      tasks: { where: { status: { not: 'completed' } }, orderBy: { dueDate: 'asc' } },
+      activities: { orderBy: { activityDate: 'desc' }, take: 50 },
+      invoices: { orderBy: { createdAt: 'desc' }, take: 10 },
+      quotes: { orderBy: { createdAt: 'desc' }, take: 10 },
+      orders: { orderBy: { createdAt: 'desc' }, take: 10 },
+    },
   })
 
   if (!contact) return NextResponse.json({ error: 'Not found' }, { status: 404 })
