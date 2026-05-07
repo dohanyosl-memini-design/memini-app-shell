@@ -155,6 +155,7 @@ model Product {
   vatRate      Float           @default(19)
   active       Boolean         @default(true)
   imageUrl     String?
+  priceListEntryId String?
   movements    StockMovement[]
   invoiceItems InvoiceItem[]
   quoteItems   QuoteItem[]

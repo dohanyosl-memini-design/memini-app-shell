@@ -29,6 +29,7 @@ interface Product {
   unit: string
   vatRate: number
   imageUrl: string | null
+  priceListEntryId: string | null
 }
 
 interface StockMovement {

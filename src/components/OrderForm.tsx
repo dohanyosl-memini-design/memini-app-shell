@@ -7,7 +7,7 @@ import { hu } from 'date-fns/locale'
 
 interface Company { id: string; name: string; city: string | null; partnerType: string | null; address: string | null }
 interface Contact { id: string; firstName: string; lastName: string; companyId: string | null }
-interface Product { id: string; name: string; sku: string; stock: number; salesPrice: number; city: string | null; productType: string | null }
+interface Product { id: string; name: string; sku: string; stock: number; salesPrice: number; city: string | null; productType: string | null; priceListEntryId: string | null }
 interface PriceEntry { id: string; name: string; basePrice: number; tiers: { qty: number; m: number }[] }
 interface PrevOrderItem { description: string; quantity: number; unitPrice: number; productId: string | null }
 interface PrevOrder { id: string; number: string; date: string; total: number; items: PrevOrderItem[] }
@@ -50,12 +50,10 @@ function getTierPrice(basePrice: number, qty: number, tiers: { qty: number; m: n
 }
 
 function findPriceEntry(product: Product, pricelist: PriceEntry[]): PriceEntry | null {
-  const pn = product.name.toLowerCase()
-  return (
-    pricelist.find(e => e.name.toLowerCase() === pn) ||
-    pricelist.find(e => pn.includes(e.name.toLowerCase()) || e.name.toLowerCase().includes(pn)) ||
-    null
-  )
+  if (product.priceListEntryId) {
+    return pricelist.find(e => e.id === product.priceListEntryId) || null
+  }
+  return null
 }
 
 export default function OrderForm({ order, defaultCompanyId, onSave, onCancel }: OrderFormProps) {

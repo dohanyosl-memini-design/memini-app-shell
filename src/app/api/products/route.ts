@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
       unit: body.unit || 'db',
       vatRate: parseFloat(body.vatRate) || 19,
       imageUrl: body.imageUrl || null,
+      priceListEntryId: body.priceListEntryId || null,
     },
   })
 

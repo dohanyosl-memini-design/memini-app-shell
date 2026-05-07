@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { upload } from '@vercel/blob/client'
 import { ImagePlus, X, Loader2 } from 'lucide-react'
 import Image from 'next/image'
+
+interface PriceListEntry { id: string; name: string; basePrice: number }
 
 interface Product {
   id: string
@@ -25,6 +27,7 @@ interface Product {
   unit: string
   vatRate: number
   imageUrl: string | null
+  priceListEntryId: string | null
 }
 
 interface ProductFormProps {
@@ -72,7 +75,12 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [imageUrl, setImageUrl] = useState<string>(product?.imageUrl || '')
+  const [priceListEntries, setPriceListEntries] = useState<PriceListEntry[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    fetch('/api/pricelist').then(r => r.json()).then(setPriceListEntries).catch(() => {})
+  }, [])
 
   const [form, setForm] = useState({
     name: product?.name || '',
@@ -91,6 +99,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     minStock: product?.minStock?.toString() || '10',
     unit: product?.unit || 'db',
     vatRate: product?.vatRate?.toString() || '19',
+    priceListEntryId: product?.priceListEntryId || '',
   })
 
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -131,7 +140,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, imageUrl: imageUrl || null }),
+      body: JSON.stringify({ ...form, imageUrl: imageUrl || null, priceListEntryId: form.priceListEntryId || null }),
     })
 
     setLoading(false)
@@ -388,6 +397,26 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
           )}
         </div>
       </div>
+
+      {priceListEntries.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Ártáblázat kapcsolat
+            <span className="text-gray-400 font-normal ml-1">(tier árazáshoz)</span>
+          </label>
+          <select
+            value={form.priceListEntryId}
+            onChange={e => setForm({ ...form, priceListEntryId: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          >
+            <option value="">— Nincs kapcsolva —</option>
+            {priceListEntries.map(e => (
+              <option key={e.id} value={e.id}>{e.name} (€{e.basePrice})</option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-400 mt-1">Ha be van állítva, a megrendelőlapon a mennyiség alapján automatikusan a megfelelő tier ár töltődik be.</p>
+        </div>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Leírás</label>
