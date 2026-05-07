@@ -263,17 +263,22 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
 
       <style>{`
         @media print {
-          body > * { display: none !important; }
+          @page { size: A4; margin: 15mm 20mm; }
+          body * { visibility: hidden !important; }
+          #invoice-print, #invoice-print * { visibility: visible !important; }
           #invoice-print {
-            display: block !important;
-            position: fixed;
-            inset: 0;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
             border: none !important;
             border-radius: 0 !important;
-            padding: 15mm 20mm !important;
-            max-width: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            box-shadow: none !important;
+            background: white !important;
           }
-          @page { size: A4; margin: 0; }
         }
       `}</style>
     </div>
