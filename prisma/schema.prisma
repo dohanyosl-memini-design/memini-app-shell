@@ -259,24 +259,27 @@ model QuoteItem {
 }
 
 model Order {
-  id          String      @id @default(cuid())
-  number      String      @unique
-  date        DateTime    @default(now())
-  status      String      @default("pending")
-  notes       String?
-  contactId   String?
-  contact     Contact?    @relation(fields: [contactId], references: [id])
-  companyId   String?
-  company     Company?    @relation(fields: [companyId], references: [id])
-  quoteId     String?
-  items       OrderItem[]
-  subtotal    Float       @default(0)
-  vatAmount   Float       @default(0)
-  total       Float       @default(0)
-  currency    String      @default("EUR")
-  deliveryDate DateTime?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id              String      @id @default(cuid())
+  number          String      @unique
+  date            DateTime    @default(now())
+  status          String      @default("pending")
+  notes           String?
+  internalNotes   String?
+  customerRef     String?
+  deliveryAddress String?
+  contactId       String?
+  contact         Contact?    @relation(fields: [contactId], references: [id])
+  companyId       String?
+  company         Company?    @relation(fields: [companyId], references: [id])
+  quoteId         String?
+  items           OrderItem[]
+  subtotal        Float       @default(0)
+  vatAmount       Float       @default(0)
+  total           Float       @default(0)
+  currency        String      @default("EUR")
+  deliveryDate    DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 }
 
 model OrderItem {
