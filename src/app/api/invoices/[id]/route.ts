@@ -19,6 +19,12 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   const body = await request.json()
 
   if (body.status) {
+    const existing = await prisma.invoice.findUnique({
+      where: { id: params.id },
+      include: { company: true, contact: true },
+    })
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
     const invoice = await prisma.invoice.update({
       where: { id: params.id },
       data: {
@@ -27,6 +33,29 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       },
       include: { contact: true, company: true, items: true },
     })
+
+    if (body.status === 'paid') {
+      // Create income transaction (avoid duplicate)
+      const already = await prisma.transaction.findFirst({ where: { reference: existing.number } })
+      if (!already) {
+        const who = existing.company?.name || (existing.contact ? `${existing.contact.firstName} ${existing.contact.lastName}` : null)
+        await prisma.transaction.create({
+          data: {
+            type: 'income',
+            amount: existing.total,
+            currency: existing.currency,
+            date: new Date(),
+            description: who ? `Számla: ${existing.number} – ${who}` : `Számla: ${existing.number}`,
+            category: 'Értékesítés',
+            reference: existing.number,
+          },
+        })
+      }
+    } else if (existing.status === 'paid') {
+      // Status changed away from paid → remove the auto-created transaction
+      await prisma.transaction.deleteMany({ where: { reference: existing.number, type: 'income' } })
+    }
+
     return NextResponse.json(invoice)
   }
 
