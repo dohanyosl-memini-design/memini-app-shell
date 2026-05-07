@@ -51,6 +51,7 @@ model Company {
   region         String?
   country        String?    @default("DE")
   vatId          String?
+  customerNumber String?
   classification String?    @default("D")
   language       String?    @default("DE")
   channel        String?
@@ -159,9 +160,10 @@ model Invoice {
   number    String        @unique
   date      DateTime      @default(now())
   dueDate   DateTime
-  status    String        @default("open")
-  notes     String?
-  contactId String?
+  status       String        @default("open")
+  notes        String?
+  deliveryInfo String?
+  contactId    String?
   contact   Contact?      @relation(fields: [contactId], references: [id])
   companyId String?
   company   Company?      @relation(fields: [companyId], references: [id])

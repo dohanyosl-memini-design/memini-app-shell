@@ -22,6 +22,7 @@ interface Invoice {
   number: string
   date: string
   dueDate: string
+  deliveryInfo: string | null
   status: string
   currency: string
   subtotal: number
@@ -30,7 +31,15 @@ interface Invoice {
   paidAt: string | null
   notes: string | null
   contact: { firstName: string; lastName: string } | null
-  company: { name: string; address: string | null; city: string | null; vatId: string | null } | null
+  company: {
+    name: string
+    address: string | null
+    city: string | null
+    vatId: string | null
+    phone: string | null
+    email: string | null
+    customerNumber: string | null
+  } | null
   items: InvoiceItem[]
 }
 
@@ -239,7 +248,7 @@ export default function InvoicesPage() {
       )}
 
       {previewInvoice && (
-        <Modal title={`${previewInvoice.number} – Előnézet`} onClose={() => setPreviewInvoice(null)} size="lg">
+        <Modal title={`${previewInvoice.number} – Előnézet`} onClose={() => setPreviewInvoice(null)} size="xl">
           <InvoicePreview invoice={previewInvoice} />
         </Modal>
       )}

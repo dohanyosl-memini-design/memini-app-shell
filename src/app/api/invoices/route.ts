@@ -33,14 +33,15 @@ export async function POST(request: NextRequest) {
   )
   const total = subtotal + vatAmount
 
-  const lastInvoice = await prisma.invoice.findFirst({
-    orderBy: { number: 'desc' },
-  })
   const year = new Date().getFullYear()
+  const lastInvoice = await prisma.invoice.findFirst({
+    where: { number: { endsWith: `/${year}` } },
+    orderBy: { createdAt: 'desc' },
+  })
   const lastNum = lastInvoice
-    ? parseInt(lastInvoice.number.split('-')[2] || '0')
+    ? parseInt(lastInvoice.number.split('/')[0] || '0')
     : 0
-  const number = `RE-${year}-${String(lastNum + 1).padStart(3, '0')}`
+  const number = `${String(lastNum + 1).padStart(2, '0')}/${year}`
 
   const invoice = await prisma.invoice.create({
     data: {
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
       dueDate: new Date(body.dueDate),
       status: 'open',
       notes: body.notes || null,
+      deliveryInfo: body.deliveryInfo || null,
       contactId: body.contactId || null,
       companyId: body.companyId || null,
       currency: body.currency || 'EUR',

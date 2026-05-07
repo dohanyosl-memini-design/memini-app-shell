@@ -81,6 +81,7 @@ interface Company {
   region?: string | null
   country?: string | null
   vatId?: string | null
+  customerNumber?: string | null
   classification?: string | null
   language?: string | null
   channel?: string | null
@@ -107,6 +108,7 @@ export default function CompanyForm({ company, onSave, onCancel }: CompanyFormPr
     region: company?.region || '',
     country: company?.country || 'DE',
     vatId: company?.vatId || '',
+    customerNumber: company?.customerNumber || '',
     classification: company?.classification || 'D',
     language: company?.language || 'DE',
     channel: company?.channel || '',
@@ -254,7 +256,7 @@ export default function CompanyForm({ company, onSave, onCancel }: CompanyFormPr
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Város</label>
               <input
@@ -265,12 +267,22 @@ export default function CompanyForm({ company, onSave, onCancel }: CompanyFormPr
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Adószám (MwSt-Nr.)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Adószám (USt-IdNr.)</label>
               <input
                 type="text"
                 value={form.vatId}
                 onChange={(e) => setForm({ ...form, vatId: e.target.value })}
                 placeholder="DE123456789"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Kunden-Nr.</label>
+              <input
+                type="text"
+                value={form.customerNumber}
+                onChange={(e) => setForm({ ...form, customerNumber: e.target.value })}
+                placeholder="pl. 0010"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>

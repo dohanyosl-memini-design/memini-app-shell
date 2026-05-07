@@ -35,6 +35,7 @@ export default function InvoiceForm({ onSave, onCancel }: InvoiceFormProps) {
     companyId: '',
     date: today,
     dueDate: due30,
+    deliveryInfo: '',
     currency: 'EUR',
     notes: '',
   })
@@ -128,6 +129,12 @@ export default function InvoiceForm({ onSave, onCancel }: InvoiceFormProps) {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Fizetési határidő</label>
           <input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Lieferdatum (szállítás dátuma)</label>
+          <input type="text" value={form.deliveryInfo} onChange={(e) => setForm({ ...form, deliveryInfo: e.target.value })}
+            placeholder="pl. 15.03.2026 vagy 10.01.2026 &amp; 15.03.2026"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
         </div>
       </div>

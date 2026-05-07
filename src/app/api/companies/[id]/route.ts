@@ -35,6 +35,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       region: body.region || null,
       country: body.country || 'DE',
       vatId: body.vatId || null,
+      customerNumber: body.customerNumber || null,
       classification: body.classification || 'D',
       language: body.language || 'DE',
       channel: body.channel || null,
