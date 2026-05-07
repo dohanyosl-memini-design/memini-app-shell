@@ -29,18 +29,38 @@ interface ProductFormProps {
   onCancel: () => void
 }
 
-const MATERIALS = [
-  { value: 'stone', label: 'Kő' },
-  { value: 'wood', label: 'Fa' },
-  { value: 'pla', label: 'PLA (3D)' },
-  { value: 'other', label: 'Egyéb' },
-]
-
-const PRODUCT_TYPES = [
-  { value: 'magnet', label: 'Hűtőmágnes' },
-  { value: 'postcard', label: 'Képeslap' },
-  { value: 'decor', label: 'Dekor elem' },
-  { value: 'other', label: 'Egyéb' },
+const HORDOZO_GROUPS = [
+  {
+    group: 'Kő',
+    options: [
+      { value: 'ko_grafitoptik_normal', label: 'Kő Grafitoptik GO – normál' },
+      { value: 'ko_grafitoptik_nagy',   label: 'Kő Grafitoptik GO – nagy' },
+      { value: 'ko_aquarel_normal',     label: 'Kő Aquarelle – normál' },
+      { value: 'ko_aquarel_nagy',       label: 'Kő Aquarelle – nagy' },
+    ],
+  },
+  {
+    group: 'Bélyeg',
+    options: [
+      { value: 'belyeg_1_normal', label: 'Bélyeg egyrétegű – normál' },
+      { value: 'belyeg_1_kicsi',  label: 'Bélyeg egyrétegű – kicsi' },
+      { value: 'belyeg_2',        label: 'Bélyeg kétrétegű' },
+    ],
+  },
+  {
+    group: 'Fa',
+    options: [
+      { value: 'faszelet_go',  label: 'Faszelet Grafitoptik GO' },
+      { value: 'fa_nagybetus', label: 'Fa Nagybetűs' },
+    ],
+  },
+  {
+    group: 'Templomablak',
+    options: [
+      { value: 'templomablak_kicsi', label: 'Templomablak – kicsi' },
+      { value: 'templomablak_nagy',  label: 'Templomablak – nagy' },
+    ],
+  },
 ]
 
 export default function ProductForm({ product, onSave, onCancel }: ProductFormProps) {
@@ -54,8 +74,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     name: product?.name || '',
     sku: product?.sku || '',
     description: product?.description || '',
-    material: product?.material || 'stone',
-    productType: product?.productType || 'magnet',
+    material: product?.material || 'ko_grafitoptik_normal',
     site: product?.site || '',
     city: product?.city || '',
     costPrice: product?.costPrice?.toString() || '',
@@ -207,25 +226,20 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Anyag</label>
+        <div className="col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Hordozó *</label>
           <select
             value={form.material}
             onChange={(e) => setForm({ ...form, material: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            {MATERIALS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Termék típus</label>
-          <select
-            value={form.productType}
-            onChange={(e) => setForm({ ...form, productType: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {PRODUCT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            {HORDOZO_GROUPS.map((g) => (
+              <optgroup key={g.group} label={g.group}>
+                {g.options.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </optgroup>
+            ))}
           </select>
         </div>
 

@@ -25,18 +25,18 @@ interface Product {
   imageUrl: string | null
 }
 
-const MATERIAL_CONFIG: Record<string, { label: string; color: string }> = {
-  stone: { label: 'Kő', color: 'bg-stone-100 text-stone-700' },
-  wood: { label: 'Fa', color: 'bg-amber-100 text-amber-700' },
-  pla: { label: 'PLA', color: 'bg-green-100 text-green-700' },
-  other: { label: 'Egyéb', color: 'bg-gray-100 text-gray-600' },
-}
-
-const TYPE_CONFIG: Record<string, { label: string }> = {
-  magnet: { label: 'Mágnes' },
-  postcard: { label: 'Képeslap' },
-  decor: { label: 'Dekor' },
-  other: { label: 'Egyéb' },
+const HORDOZO_CONFIG: Record<string, { label: string; color: string }> = {
+  ko_grafitoptik_normal: { label: 'Kő GO normál',     color: 'bg-stone-100 text-stone-700' },
+  ko_grafitoptik_nagy:   { label: 'Kő GO nagy',       color: 'bg-stone-100 text-stone-700' },
+  ko_aquarel_normal:     { label: 'Kő Aq. normál',    color: 'bg-teal-100 text-teal-700' },
+  ko_aquarel_nagy:       { label: 'Kő Aq. nagy',      color: 'bg-teal-100 text-teal-700' },
+  belyeg_1_normal:       { label: 'Bélyeg 1r. normál',color: 'bg-blue-100 text-blue-700' },
+  belyeg_1_kicsi:        { label: 'Bélyeg 1r. kicsi', color: 'bg-blue-100 text-blue-700' },
+  belyeg_2:              { label: 'Bélyeg kétrétegű', color: 'bg-indigo-100 text-indigo-700' },
+  faszelet_go:           { label: 'Faszelet GO',      color: 'bg-amber-100 text-amber-700' },
+  fa_nagybetus:          { label: 'Fa Nagybetűs',     color: 'bg-amber-100 text-amber-700' },
+  templomablak_kicsi:    { label: 'Templomablak K.',  color: 'bg-purple-100 text-purple-700' },
+  templomablak_nagy:     { label: 'Templomablak N.',  color: 'bg-purple-100 text-purple-700' },
 }
 
 export default function WarehousePage() {
@@ -141,10 +141,11 @@ export default function WarehousePage() {
           onChange={(e) => setMaterialFilter(e.target.value)}
           className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          <option value="">Minden anyag</option>
-          <option value="stone">Kő</option>
-          <option value="wood">Fa</option>
-          <option value="pla">PLA</option>
+          <option value="">Minden hordozó</option>
+          <option value="ko">Kő</option>
+          <option value="belyeg">Bélyeg</option>
+          <option value="fa">Fa / Faszelet</option>
+          <option value="templomablak">Templomablak</option>
         </select>
       </div>
 
@@ -168,8 +169,7 @@ export default function WarehousePage() {
             ) : products.length === 0 ? (
               <tr><td colSpan={7} className="px-5 py-12 text-center text-gray-400">Nem található termék</td></tr>
             ) : products.map((product) => {
-              const material = MATERIAL_CONFIG[product.material || 'other']
-              const type = TYPE_CONFIG[product.productType || 'other']
+              const hordozo = HORDOZO_CONFIG[product.material || '']
               const isLow = product.stock <= product.minStock
               const margin = product.salesPrice > 0
                 ? ((product.salesPrice - product.costPrice) / product.salesPrice * 100).toFixed(0)
@@ -208,10 +208,9 @@ export default function WarehousePage() {
                     {product.city && <p className="text-xs text-gray-400">{product.city}</p>}
                   </td>
                   <td className="px-5 py-3.5">
-                    <div className="flex flex-col gap-1">
-                      {material && <span className={`text-xs font-medium px-2 py-0.5 rounded-full w-fit ${material.color}`}>{material.label}</span>}
-                      {type && <span className="text-xs text-gray-400">{type.label}</span>}
-                    </div>
+                    {hordozo
+                      ? <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${hordozo.color}`}>{hordozo.label}</span>
+                      : <span className="text-xs text-gray-400">{product.material || '–'}</span>}
                   </td>
                   <td className="px-5 py-3.5 text-right text-sm text-gray-600">€{product.costPrice.toFixed(2)}</td>
                   <td className="px-5 py-3.5 text-right">
