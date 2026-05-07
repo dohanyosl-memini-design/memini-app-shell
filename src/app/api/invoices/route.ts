@@ -92,5 +92,31 @@ export async function POST(request: NextRequest) {
     },
   })
 
+  // Auto-deduct stock for product items
+  const productItems = body.items.filter(
+    (item: { productId?: string; isDiscount?: boolean }) => item.productId && !item.isDiscount
+  )
+  if (productItems.length > 0) {
+    await Promise.all(
+      productItems.map((item: { productId: string; quantity: number }) =>
+        prisma.$transaction([
+          prisma.stockMovement.create({
+            data: {
+              type: 'out',
+              quantity: Math.round(item.quantity),
+              reference: invoice.number,
+              note: `Számla: ${invoice.number}`,
+              productId: item.productId,
+            },
+          }),
+          prisma.product.update({
+            where: { id: item.productId },
+            data: { stock: { decrement: Math.round(item.quantity) } },
+          }),
+        ])
+      )
+    )
+  }
+
   return NextResponse.json(invoice, { status: 201 })
 }

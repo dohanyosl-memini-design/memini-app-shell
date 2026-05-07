@@ -151,6 +151,8 @@ model StockMovement {
   type      String
   quantity  Int
   note      String?
+  supplier  String?
+  reference String?
   productId String
   product   Product  @relation(fields: [productId], references: [id])
   createdAt DateTime @default(now())

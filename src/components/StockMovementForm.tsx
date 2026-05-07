@@ -21,6 +21,7 @@ export default function StockMovementForm({ product, onSave, onCancel }: StockMo
   const [form, setForm] = useState({
     type: 'in',
     quantity: '',
+    supplier: '',
     note: '',
   })
 
@@ -39,20 +40,23 @@ export default function StockMovementForm({ product, onSave, onCancel }: StockMo
     onSave()
   }
 
+  const qty = parseInt(form.quantity || '0')
   const newStock =
     form.quantity
       ? form.type === 'in'
-        ? product.stock + parseInt(form.quantity || '0')
+        ? product.stock + qty
         : form.type === 'out'
-        ? product.stock - parseInt(form.quantity || '0')
-        : parseInt(form.quantity || '0')
+        ? product.stock - qty
+        : qty  // adjustment = set to this absolute value
       : product.stock
 
   const TYPES = [
-    { value: 'in', label: 'Bevételezés', icon: ArrowDown, color: 'bg-green-100 text-green-700 border-green-300' },
-    { value: 'out', label: 'Kiadás', icon: ArrowUp, color: 'bg-red-100 text-red-700 border-red-300' },
-    { value: 'adjustment', label: 'Korrekció', icon: RefreshCw, color: 'bg-amber-100 text-amber-700 border-amber-300' },
+    { value: 'in',         label: 'Bevételezés', icon: ArrowDown,  color: 'bg-green-100 text-green-700 border-green-300' },
+    { value: 'out',        label: 'Kiadás',       icon: ArrowUp,    color: 'bg-red-100 text-red-700 border-red-300' },
+    { value: 'adjustment', label: 'Korrekció',    icon: RefreshCw,  color: 'bg-amber-100 text-amber-700 border-amber-300' },
   ]
+
+  const isAdjustment = form.type === 'adjustment'
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -69,7 +73,7 @@ export default function StockMovementForm({ product, onSave, onCancel }: StockMo
             <button
               key={value}
               type="button"
-              onClick={() => setForm({ ...form, type: value })}
+              onClick={() => setForm({ ...form, type: value, quantity: '' })}
               className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
                 form.type === value ? color : 'border-gray-200 text-gray-500 hover:bg-gray-50'
               }`}
@@ -83,23 +87,42 @@ export default function StockMovementForm({ product, onSave, onCancel }: StockMo
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          {form.type === 'adjustment' ? 'Új készlet (db)' : 'Mennyiség (db)'}
+          {isAdjustment ? 'Új készletszint (db)' : 'Mennyiség (db)'}
         </label>
         <input
           required
           type="number"
-          min="1"
+          min="0"
           value={form.quantity}
           onChange={(e) => setForm({ ...form, quantity: e.target.value })}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg font-medium"
-          placeholder="0"
+          placeholder={isAdjustment ? `Jelenlegi: ${product.stock}` : '0'}
         />
         {form.quantity && (
           <p className={`text-sm mt-1 ${newStock < 0 ? 'text-red-600' : 'text-gray-500'}`}>
-            Új készlet: <strong>{newStock} db</strong>
+            {isAdjustment ? 'Készlet módosul' : 'Új készlet'}:{' '}
+            <strong>{newStock} db</strong>
+            {!isAdjustment && (
+              <span className={`ml-2 text-xs font-semibold ${form.type === 'in' ? 'text-green-600' : 'text-red-600'}`}>
+                ({form.type === 'in' ? '+' : '−'}{qty} db)
+              </span>
+            )}
           </p>
         )}
       </div>
+
+      {form.type === 'in' && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Szállító / Forrás</label>
+          <input
+            type="text"
+            value={form.supplier}
+            onChange={(e) => setForm({ ...form, supplier: e.target.value })}
+            placeholder="pl. Gyártó neve, szállítólevél száma"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          />
+        </div>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Megjegyzés</label>
@@ -107,14 +130,18 @@ export default function StockMovementForm({ product, onSave, onCancel }: StockMo
           type="text"
           value={form.note}
           onChange={(e) => setForm({ ...form, note: e.target.value })}
-          placeholder="pl. Gyártótól bevételezve"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder={isAdjustment ? 'pl. Leltár alapján korrigálva' : 'Opcionális megjegyzés'}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
         />
       </div>
 
       <div className="flex justify-end gap-3 pt-2">
         <button type="button" onClick={onCancel} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">Mégse</button>
-        <button type="submit" disabled={loading || newStock < 0} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
+        <button
+          type="submit"
+          disabled={loading || (!isAdjustment && newStock < 0)}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+        >
           {loading ? 'Mentés...' : 'Rögzítés'}
         </button>
       </div>
