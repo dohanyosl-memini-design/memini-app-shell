@@ -62,6 +62,7 @@ export async function POST(request: NextRequest) {
       companyId: body.companyId || null,
       quoteId: body.quoteId || null,
       deliveryDate: body.deliveryDate ? new Date(body.deliveryDate) : null,
+      shippingMethod: body.shippingMethod || null,
       subtotal,
       vatAmount,
       total,

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { Search, Package, Building2, User, Plus, FileText, Copy, Edit2, Trash2, ChevronRight } from 'lucide-react'
+import { Search, Package, Building2, User, Plus, FileText, Copy, Edit2, Trash2, ChevronRight, Printer } from 'lucide-react'
 import { format } from 'date-fns'
 import { hu } from 'date-fns/locale'
 import Modal from '@/components/Modal'
@@ -16,7 +16,10 @@ interface Order {
   status: string
   total: number
   customerRef: string | null
+  shippingMethod: string | null
   notes: string | null
+  internalNotes: string | null
+  deliveryAddress: string | null
   contact: { id: string; firstName: string; lastName: string } | null
   company: { id: string; name: string } | null
   items: { id: string; description: string; quantity: number; unitPrice: number; total: number }[]
@@ -258,6 +261,14 @@ export default function OrdersPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => window.open(`/orders/${order.id}/print`, '_blank')}
+                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-gray-50 text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+                        title="Megrendelőlap nyomtatása"
+                      >
+                        <Printer size={12} />
+                        Nyomtatás
+                      </button>
                       <button
                         onClick={() => handleGenerateInvoice(order.id)}
                         disabled={generatingInvoice === order.id}

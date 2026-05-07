@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
 const include = {
-  contact: { select: { id: true, firstName: true, lastName: true, email: true } },
-  company: { select: { id: true, name: true, address: true, city: true } },
-  items: { include: { product: { select: { id: true, name: true, sku: true } } } },
+  contact: { select: { id: true, firstName: true, lastName: true, email: true, phone: true } },
+  company: { select: { id: true, name: true, address: true, city: true, region: true, country: true, phone: true, email: true, vatId: true, customerNumber: true } },
+  items: { include: { product: { select: { id: true, name: true, nameDE: true, sku: true, imageUrl: true, locationCabinet: true, locationShelf: true, locationBox: true } } } },
 }
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
@@ -36,6 +36,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       customerRef: body.customerRef || null,
       deliveryAddress: body.deliveryAddress || null,
       deliveryDate: body.deliveryDate ? new Date(body.deliveryDate) : null,
+      shippingMethod: body.shippingMethod || null,
       contactId: body.contactId || null,
       companyId: body.companyId || null,
       subtotal,
