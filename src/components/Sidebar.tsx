@@ -2,10 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { signOut } from 'next-auth/react'
+import type { Session } from 'next-auth'
 import {
   LayoutDashboard, Users, Building2, TrendingUp,
   CheckSquare, BarChart3, Package, FileText, Wallet,
-  ClipboardList, ShoppingCart,
+  ClipboardList, ShoppingCart, LogOut,
 } from 'lucide-react'
 
 const navGroups = [
@@ -50,8 +52,9 @@ const navGroups = [
   },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ session }: { session?: Session | null }) {
   const pathname = usePathname()
+  const user = session?.user
 
   return (
     <div className="w-60 bg-slate-900 text-white flex flex-col shrink-0">
@@ -92,7 +95,23 @@ export default function Sidebar() {
       </nav>
 
       <div className="p-4 border-t border-slate-700">
-        <p className="text-slate-500 text-xs">Memini Design · Ulm, DE</p>
+        {user ? (
+          <div className="flex items-center justify-between">
+            <div className="min-w-0">
+              <p className="text-white text-sm font-medium truncate">{user.name}</p>
+              <p className="text-slate-500 text-xs truncate">{user.email}</p>
+            </div>
+            <button
+              onClick={() => signOut({ callbackUrl: '/login' })}
+              title="Kijelentkezés"
+              className="text-slate-500 hover:text-white transition-colors ml-2 shrink-0"
+            >
+              <LogOut size={15} />
+            </button>
+          </div>
+        ) : (
+          <p className="text-slate-500 text-xs">Memini Design · Ulm, DE</p>
+        )}
       </div>
     </div>
   )

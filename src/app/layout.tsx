@@ -1,25 +1,26 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import Sidebar from '@/components/Sidebar'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import ClientLayout from '@/components/ClientLayout'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Memini CRM',
-  description: 'Ügyfélkezelő rendszer',
+  title: 'Memini Design',
+  description: 'Vállalatirányítás',
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const session = await getServerSession(authOptions)
+
   return (
     <html lang="hu">
       <body className={inter.className}>
-        <div className="flex h-screen bg-gray-50 overflow-hidden">
-          <Sidebar />
-          <main className="flex-1 overflow-auto">
-            {children}
-          </main>
-        </div>
+        <ClientLayout session={session}>
+          {children}
+        </ClientLayout>
       </body>
     </html>
   )
