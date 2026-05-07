@@ -130,6 +130,9 @@ model Product {
   productType  String?
   site         String?
   city         String?
+  locationCabinet String?
+  locationShelf   String?
+  locationBox     String?
   costPrice    Float           @default(0)
   salesPrice   Float           @default(0)
   stock        Int             @default(0)

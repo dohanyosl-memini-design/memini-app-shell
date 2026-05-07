@@ -15,6 +15,9 @@ interface Product {
   productType: string | null
   site: string | null
   city: string | null
+  locationCabinet: string | null
+  locationShelf: string | null
+  locationBox: string | null
   costPrice: number
   salesPrice: number
   stock: number
@@ -79,6 +82,9 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     material: product?.material || 'ko_grafitoptik_normal',
     site: product?.site || '',
     city: product?.city || '',
+    locationCabinet: product?.locationCabinet || '',
+    locationShelf: product?.locationShelf || '',
+    locationBox: product?.locationBox || '',
     costPrice: product?.costPrice?.toString() || '',
     salesPrice: product?.salesPrice?.toString() || '',
     stock: product?.stock?.toString() || '0',
@@ -277,6 +283,44 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
             placeholder="pl. Ulm"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+        </div>
+      </div>
+
+      {/* Raktárhely */}
+      <div className="border-t border-gray-100 pt-4">
+        <p className="text-sm font-medium text-gray-700 mb-1">Raktárhely</p>
+        <p className="text-xs text-gray-400 mb-3">Hol található fizikailag a raktárban?</p>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Szekrény / Rekesz</label>
+            <input
+              type="text"
+              value={form.locationCabinet}
+              onChange={(e) => setForm({ ...form, locationCabinet: e.target.value })}
+              placeholder="pl. A, B, Szekr. 1"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Polc</label>
+            <input
+              type="text"
+              value={form.locationShelf}
+              onChange={(e) => setForm({ ...form, locationShelf: e.target.value })}
+              placeholder="pl. 1, 2, Felső"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Doboz / Fiók</label>
+            <input
+              type="text"
+              value={form.locationBox}
+              onChange={(e) => setForm({ ...form, locationBox: e.target.value })}
+              placeholder="pl. 5, Kék doboz"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            />
+          </div>
         </div>
       </div>
 

@@ -19,6 +19,9 @@ interface Product {
   productType: string | null
   site: string | null
   city: string | null
+  locationCabinet: string | null
+  locationShelf: string | null
+  locationBox: string | null
   costPrice: number
   salesPrice: number
   stock: number
@@ -68,6 +71,7 @@ export default function WarehousePage() {
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [search, setSearch] = useState('')
   const [materialFilter, setMaterialFilter] = useState('')
+  const [cabinetFilter, setCabinetFilter] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [showStockModal, setShowStockModal] = useState(false)
   const [editProduct, setEditProduct] = useState<Product | null>(null)
@@ -89,10 +93,11 @@ export default function WarehousePage() {
     if (search) params.set('search', search)
     if (materialFilter) params.set('material', materialFilter)
     const res = await fetch(`/api/products?${params}`)
-    const data = await res.json()
+    let data: Product[] = await res.json()
+    if (cabinetFilter) data = data.filter(p => p.locationCabinet === cabinetFilter)
     setProducts(data)
     setLoadingProducts(false)
-  }, [search, materialFilter])
+  }, [search, materialFilter, cabinetFilter])
 
   const fetchMovements = useCallback(async () => {
     setLoadingMovements(true)
@@ -232,6 +237,19 @@ export default function WarehousePage() {
               <option value="fa">Fa / Faszelet</option>
               <option value="templomablak">Templomablak</option>
             </select>
+            {/* Szekrény szűrő — dinamikusan a meglévő értékekből */}
+            {Array.from(new Set(products.map(p => p.locationCabinet).filter(Boolean))).length > 0 && (
+              <select
+                value={cabinetFilter}
+                onChange={(e) => setCabinetFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Minden szekrény</option>
+                {Array.from(new Set(products.map(p => p.locationCabinet).filter(Boolean) as string[])).sort().map(cab => (
+                  <option key={cab} value={cab}>{cab}</option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -281,6 +299,11 @@ export default function WarehousePage() {
                               <p className="font-medium text-gray-900 text-sm">{product.name}</p>
                               {product.nameDE && <p className="text-xs text-blue-600 italic">{product.nameDE}</p>}
                               <p className="text-xs text-gray-400 font-mono">{product.sku}</p>
+                              {(product.locationCabinet || product.locationShelf || product.locationBox) && (
+                                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 mt-1 inline-block font-medium">
+                                  📦 {[product.locationCabinet, product.locationShelf && `P${product.locationShelf}`, product.locationBox].filter(Boolean).join(' · ')}
+                                </p>
+                              )}
                             </div>
                           </div>
                         </td>
