@@ -45,6 +45,7 @@ const PRODUCT_TYPES = [
 export default function ProductForm({ product, onSave, onCancel }: ProductFormProps) {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [imageUrl, setImageUrl] = useState<string>(product?.imageUrl || '')
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -68,13 +69,33 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     const file = e.target.files?.[0]
     if (!file) return
 
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    const allowedExt = ['jpg', 'jpeg', 'webp']
+    if (!allowedExt.includes(ext || '')) {
+      setUploadError('Csak JPEG és WebP formátum engedélyezett.')
+      if (fileRef.current) fileRef.current.value = ''
+      return
+    }
+
+    setUploadError(null)
     setUploading(true)
-    const fd = new FormData()
-    fd.append('file', file)
-    const res = await fetch('/api/upload', { method: 'POST', body: fd })
-    const data = await res.json()
-    if (data.url) setImageUrl(data.url)
-    setUploading(false)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (data.url) {
+        setImageUrl(data.url)
+      } else {
+        setUploadError(data.error || 'Feltöltési hiba. Ellenőrizd a Vercel Blob beállítást.')
+        if (fileRef.current) fileRef.current.value = ''
+      }
+    } catch {
+      setUploadError('Hálózati hiba a feltöltés során.')
+      if (fileRef.current) fileRef.current.value = ''
+    } finally {
+      setUploading(false)
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -139,6 +160,9 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
               >
                 Csere
               </button>
+            )}
+            {uploadError && (
+              <p className="text-red-500 font-medium">{uploadError}</p>
             )}
           </div>
           <input
