@@ -81,6 +81,9 @@ export default function WarehousePage() {
   const [expandedProductId, setExpandedProductId] = useState<string | null>(null)
   const [productMovements, setProductMovements] = useState<StockMovement[]>([])
   const [loadingProductMovements, setLoadingProductMovements] = useState(false)
+  const [detailProduct, setDetailProduct] = useState<Product | null>(null)
+  const [productStats, setProductStats] = useState<null | { thisYear: { year: number; quantity: number; revenue: number; orderCount: number }; lastYear: { year: number; quantity: number; revenue: number; orderCount: number }; twoYearsAgo: { year: number; quantity: number; revenue: number; orderCount: number } }>(null)
+  const [loadingStats, setLoadingStats] = useState(false)
 
   // Movement log state
   const [movements, setMovements] = useState<StockMovement[]>([])
@@ -115,6 +118,14 @@ export default function WarehousePage() {
     if (!confirm('Biztosan archiválja ezt a terméket?')) return
     await fetch(`/api/products/${id}`, { method: 'DELETE' })
     fetchProducts()
+  }
+
+  async function openProductDetail(product: Product) {
+    setDetailProduct(product)
+    setLoadingStats(true)
+    const res = await fetch(`/api/products/${product.id}/stats`)
+    if (res.ok) setProductStats(await res.json())
+    setLoadingStats(false)
   }
 
   async function toggleProductHistory(productId: string) {
@@ -297,7 +308,7 @@ export default function WarehousePage() {
                               </div>
                             )}
                             <div>
-                              <p className="font-medium text-gray-900 text-sm">{product.name}</p>
+                              <button onClick={() => openProductDetail(product)} className="font-medium text-gray-900 text-sm hover:text-blue-600 hover:underline text-left transition-colors">{product.name}</button>
                               {product.nameDE && <p className="text-xs text-blue-600 italic">{product.nameDE}</p>}
                               <p className="text-xs text-gray-400 font-mono">{product.sku}</p>
                               {(product.locationCabinet || product.locationShelf || product.locationBox) && (
@@ -502,6 +513,80 @@ export default function WarehousePage() {
       {showStockModal && stockProduct && (
         <Modal title="Készletmozgás rögzítése" onClose={() => setShowStockModal(false)}>
           <StockMovementForm product={stockProduct} onSave={() => { setShowStockModal(false); fetchProducts() }} onCancel={() => setShowStockModal(false)} />
+        </Modal>
+      )}
+
+      {detailProduct && (
+        <Modal title={detailProduct.name} onClose={() => { setDetailProduct(null); setProductStats(null) }} size="lg">
+          <div className="space-y-5">
+            <div className="flex gap-4">
+              {detailProduct.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={detailProduct.imageUrl} alt={detailProduct.name} className="w-32 h-32 object-cover rounded-xl border border-gray-100 shrink-0" />
+              ) : (
+                <div className="w-32 h-32 bg-blue-50 rounded-xl flex items-center justify-center shrink-0">
+                  <Package size={40} className="text-blue-200" />
+                </div>
+              )}
+              <div className="flex-1 grid grid-cols-2 gap-2 text-sm">
+                {detailProduct.nameDE && <div><p className="text-xs text-gray-400">Német név</p><p className="font-medium">{detailProduct.nameDE}</p></div>}
+                <div><p className="text-xs text-gray-400">SKU</p><p className="font-mono font-medium">{detailProduct.sku}</p></div>
+                <div><p className="text-xs text-gray-400">Egységár (eladási)</p><p className="font-bold text-green-700">€{detailProduct.salesPrice.toFixed(2)}</p></div>
+                <div><p className="text-xs text-gray-400">Önköltség</p><p className="font-medium">€{detailProduct.costPrice.toFixed(2)}</p></div>
+                {(detailProduct.locationCabinet || detailProduct.locationShelf) && (
+                  <div><p className="text-xs text-gray-400">Raktárhely</p><p className="font-mono font-bold text-amber-700">{[detailProduct.locationCabinet, detailProduct.locationShelf, detailProduct.locationBox].filter(Boolean).join(' / ')}</p></div>
+                )}
+                {detailProduct.site && <div><p className="text-xs text-gray-400">Helyszín</p><p>{detailProduct.site}{detailProduct.city ? ` · ${detailProduct.city}` : ''}</p></div>}
+              </div>
+            </div>
+
+            {/* Készlet */}
+            <div className={`rounded-xl p-4 flex items-center gap-4 ${detailProduct.stock <= detailProduct.minStock ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
+              <div className="text-center">
+                <p className="text-3xl font-black text-gray-900">{detailProduct.stock}</p>
+                <p className="text-xs text-gray-500">{detailProduct.unit} raktáron</p>
+              </div>
+              <div className="h-10 w-px bg-gray-200" />
+              <div className="text-sm text-gray-600">
+                <p>Minimum készlet: <span className="font-semibold">{detailProduct.minStock} {detailProduct.unit}</span></p>
+                {detailProduct.stock <= detailProduct.minStock && <p className="text-red-600 font-semibold mt-0.5">⚠️ Utánrendelés szükséges!</p>}
+              </div>
+            </div>
+
+            {/* Eladási statisztikák */}
+            <div>
+              <p className="text-sm font-semibold text-gray-700 mb-2">Eladások évente</p>
+              {loadingStats ? (
+                <p className="text-sm text-gray-400">Betöltés...</p>
+              ) : productStats ? (
+                <div className="grid grid-cols-3 gap-3">
+                  {[productStats.twoYearsAgo, productStats.lastYear, productStats.thisYear].map(stat => (
+                    <div key={stat.year} className="bg-gray-50 rounded-xl p-3 text-center">
+                      <p className="text-xs text-gray-400 mb-1">{stat.year}</p>
+                      <p className="text-xl font-bold text-gray-900">{stat.quantity} db</p>
+                      <p className="text-xs text-green-600 font-medium">€{stat.revenue.toFixed(0)}</p>
+                      <p className="text-xs text-gray-400">{stat.orderCount} megrendelés</p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="flex justify-between pt-2 border-t border-gray-100">
+              <button
+                onClick={() => { setStockProduct(detailProduct); setShowStockModal(true); setDetailProduct(null) }}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+              >
+                <ArrowUpDown size={14} /> Készletmozgás
+              </button>
+              <button
+                onClick={() => { setEditProduct(detailProduct); setShowModal(true); setDetailProduct(null) }}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+              >
+                <Edit2 size={14} /> Szerkesztés
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
 

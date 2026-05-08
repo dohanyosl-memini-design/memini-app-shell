@@ -14,6 +14,7 @@ import Modal from '@/components/Modal'
 import CompanyForm from '@/components/CompanyForm'
 import ContactForm from '@/components/ContactForm'
 import TaskForm from '@/components/TaskForm'
+import InvoicePreview from '@/components/InvoicePreview'
 
 interface Activity {
   id: string
@@ -267,6 +268,8 @@ export default function CompanyDetailPage() {
   const [showNewContactModal, setShowNewContactModal] = useState(false)
   const [showNewTaskModal, setShowNewTaskModal] = useState(false)
   const [activeTab, setActiveTab] = useState<'timeline' | 'contacts' | 'deals' | 'quotes' | 'orders' | 'invoices' | 'tasks'>('timeline')
+  const [previewInvoiceFull, setPreviewInvoiceFull] = useState<null | Record<string, unknown>>(null)
+  const [previewOrderData, setPreviewOrderData] = useState<null | Record<string, unknown>>(null)
 
   const fetchCompany = useCallback(async () => {
     const res = await fetch(`/api/companies/${id}`)
@@ -698,16 +701,23 @@ export default function CompanyDetailPage() {
                   {company.orders.map((o) => {
                     const os = ORDER_STATUS[o.status]
                     return (
-                      <div key={o.id} className="px-5 py-3 flex items-center justify-between">
+                      <button
+                        key={o.id}
+                        onClick={async () => {
+                          const res = await fetch(`/api/orders/${o.id}`)
+                          if (res.ok) setPreviewOrderData(await res.json())
+                        }}
+                        className="w-full px-5 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
+                      >
                         <div>
-                          <p className="text-sm font-medium font-mono text-gray-900">{o.number}</p>
+                          <p className="text-sm font-medium font-mono text-gray-900 hover:text-blue-600">{o.number}</p>
                           <p className="text-xs text-gray-400">{format(new Date(o.date), 'yyyy. MMM d.', { locale: hu })}</p>
                         </div>
                         <div className="flex items-center gap-3">
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${os?.color || ''}`}>{os?.label || o.status}</span>
                           <p className="text-sm font-semibold">{fmtEur(o.total)}</p>
                         </div>
-                      </div>
+                      </button>
                     )
                   })}
                 </div>
@@ -726,9 +736,16 @@ export default function CompanyDetailPage() {
               ) : (
                 <div className="divide-y divide-gray-50">
                   {company.invoices.map((inv) => (
-                    <div key={inv.id} className="px-5 py-3 flex items-center justify-between">
+                    <button
+                      key={inv.id}
+                      onClick={async () => {
+                        const res = await fetch(`/api/invoices/${inv.id}`)
+                        if (res.ok) setPreviewInvoiceFull(await res.json())
+                      }}
+                      className="w-full px-5 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
+                    >
                       <div>
-                        <p className="text-sm font-medium font-mono text-gray-900">{inv.number}</p>
+                        <p className="text-sm font-medium font-mono text-gray-900 hover:text-blue-600">{inv.number}</p>
                         <p className="text-xs text-gray-400">{format(new Date(inv.date), 'yyyy. MMM d.', { locale: hu })}</p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -741,7 +758,7 @@ export default function CompanyDetailPage() {
                         </span>
                         <p className="text-sm font-semibold">{fmtEur(inv.total)}</p>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -799,6 +816,41 @@ export default function CompanyDetailPage() {
             onSave={() => { setShowNewTaskModal(false); fetchCompany() }}
             onCancel={() => setShowNewTaskModal(false)}
           />
+        </Modal>
+      )}
+
+      {previewInvoiceFull && (
+        <Modal title={`Számla: ${(previewInvoiceFull as {number: string}).number}`} onClose={() => setPreviewInvoiceFull(null)} size="xl">
+          <InvoicePreview invoice={previewInvoiceFull as unknown as Parameters<typeof InvoicePreview>[0]['invoice']} />
+        </Modal>
+      )}
+
+      {previewOrderData && (
+        <Modal title={`Megrendelés: ${(previewOrderData as {number: string}).number}`} onClose={() => setPreviewOrderData(null)} size="lg">
+          {(() => {
+            const o = previewOrderData as { number: string; date: string; total: number; status: string; items: {id: string; description: string; quantity: number; unitPrice: number; total: number}[]; notes: string | null; company: {name: string} | null; contact: {firstName: string; lastName: string} | null }
+            return (
+              <div className="space-y-4">
+                <div className="flex justify-between text-sm text-gray-600">
+                  {o.company && <span className="font-semibold text-gray-900">{o.company.name}</span>}
+                  <span>{format(new Date(o.date), 'yyyy. MMM d.', { locale: hu })}</span>
+                </div>
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b text-xs text-gray-500"><th className="text-left py-1.5">Termék</th><th className="text-right py-1.5 px-2">Menny.</th><th className="text-right py-1.5 px-2">Egységár</th><th className="text-right py-1.5">Összesen</th></tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {o.items.map(item => (
+                      <tr key={item.id}><td className="py-1.5 pr-4">{item.description}</td><td className="py-1.5 px-2 text-right">{item.quantity} db</td><td className="py-1.5 px-2 text-right">€{item.unitPrice.toFixed(2)}</td><td className="py-1.5 text-right font-semibold">€{item.total.toFixed(2)}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="text-right font-bold text-gray-900 border-t pt-2">Összesen: €{o.total.toFixed(2)}</div>
+                {o.notes && <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">{o.notes}</p>}
+                <div className="flex justify-end">
+                  <a href={`/orders/${(previewOrderData as {id: string}).id}/print`} target="_blank" className="text-sm px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-600">🖨️ Nyomtatás</a>
+                </div>
+              </div>
+            )
+          })()}
         </Modal>
       )}
     </div>

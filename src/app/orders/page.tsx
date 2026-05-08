@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { Search, Package, Building2, User, Plus, FileText, Copy, Edit2, Trash2, ChevronRight, Printer } from 'lucide-react'
+import { Search, Package, Building2, User, Plus, FileText, Copy, Edit2, Trash2, ChevronRight, Printer, X } from 'lucide-react'
 import { format } from 'date-fns'
 import { hu } from 'date-fns/locale'
 import Modal from '@/components/Modal'
@@ -46,6 +46,7 @@ export default function OrdersPage() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [showModal, setShowModal] = useState(false)
   const [editOrder, setEditOrder] = useState<Order | null>(null)
+  const [viewOrder, setViewOrder] = useState<Order | null>(null)
   const [generatingInvoice, setGeneratingInvoice] = useState<string | null>(null)
   const [duplicating, setDuplicating] = useState<string | null>(null)
 
@@ -185,7 +186,7 @@ export default function OrdersPage() {
                     <div className="flex-1 min-w-0">
                       {/* Fejléc */}
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono font-semibold text-gray-900">{order.number}</span>
+                        <button onClick={() => setViewOrder(order)} className="font-mono font-semibold text-gray-900 hover:text-blue-600 hover:underline transition-colors">{order.number}</button>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${os?.color}`}>{os?.label}</span>
                         {order.customerRef && (
                           <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Ref: {order.customerRef}</span>
@@ -310,6 +311,57 @@ export default function OrdersPage() {
           })
         )}
       </div>
+
+      {/* Order detail view */}
+      {viewOrder && (
+        <Modal title={`Megrendelés: ${viewOrder.number}`} onClose={() => setViewOrder(null)} size="xl">
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-xs font-medium text-gray-500 mb-1">Cég / Partner</p>
+                {viewOrder.company && <p className="font-semibold text-gray-900">{viewOrder.company.name}</p>}
+                {viewOrder.contact && <p className="text-sm text-gray-600">{viewOrder.contact.firstName} {viewOrder.contact.lastName}</p>}
+              </div>
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-xs font-medium text-gray-500 mb-1">Adatok</p>
+                <p className="text-sm text-gray-700">Dátum: {format(new Date(viewOrder.date), 'yyyy. MMM d.', { locale: hu })}</p>
+                {viewOrder.deliveryDate && <p className="text-sm text-gray-700">Szállítás: {format(new Date(viewOrder.deliveryDate), 'yyyy. MMM d.', { locale: hu })}</p>}
+                {viewOrder.customerRef && <p className="text-sm text-gray-500">Ref: {viewOrder.customerRef}</p>}
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium mt-1 inline-block ${ORDER_STATUS[viewOrder.status]?.color}`}>{ORDER_STATUS[viewOrder.status]?.label}</span>
+              </div>
+            </div>
+            <table className="w-full text-sm">
+              <thead><tr className="border-b border-gray-200 text-xs text-gray-500">
+                <th className="text-left py-2 pr-4">Termék</th>
+                <th className="text-right py-2 px-2">Menny.</th>
+                <th className="text-right py-2 px-2">Egységár</th>
+                <th className="text-right py-2">Összesen</th>
+              </tr></thead>
+              <tbody className="divide-y divide-gray-100">
+                {viewOrder.items.map(item => (
+                  <tr key={item.id}>
+                    <td className="py-2 pr-4 text-gray-900">{item.description}</td>
+                    <td className="py-2 px-2 text-right text-gray-600">{item.quantity} db</td>
+                    <td className="py-2 px-2 text-right text-gray-600">€{item.unitPrice.toFixed(2)}</td>
+                    <td className="py-2 text-right font-semibold text-gray-900">€{item.total.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="text-right text-sm font-bold text-gray-900 border-t pt-2">
+              Összesen: €{viewOrder.total.toFixed(2)}
+            </div>
+            {viewOrder.notes && <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">{viewOrder.notes}</p>}
+            <div className="flex justify-between pt-2">
+              <div className="flex gap-2">
+                <button onClick={() => window.open(`/orders/${viewOrder.id}/print`, '_blank')} className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-600"><Printer size={14} /> Nyomtatás</button>
+                <button onClick={() => handleGenerateInvoice(viewOrder.id)} className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 rounded-lg hover:bg-green-100 transition-colors"><FileText size={14} /> Számla</button>
+              </div>
+              <button onClick={() => { setViewOrder(null); setEditOrder(viewOrder); setShowModal(true) }} className="flex items-center gap-1.5 text-sm px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"><Edit2 size={14} /> Szerkesztés</button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {showModal && (
         <Modal

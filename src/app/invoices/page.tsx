@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Search, Eye, Trash2, CheckCircle, Clock, AlertCircle, FileText, Ban } from 'lucide-react'
+import { Plus, Search, Eye, Trash2, CheckCircle, Clock, AlertCircle, FileText, Ban, Edit2, Send } from 'lucide-react'
 import Modal from '@/components/Modal'
 import InvoiceForm from '@/components/InvoiceForm'
 import InvoicePreview from '@/components/InvoicePreview'
@@ -32,8 +32,11 @@ interface Invoice {
   total: number
   paidAt: string | null
   notes: string | null
-  contact: { firstName: string; lastName: string } | null
+  contactId: string | null
+  companyId: string | null
+  contact: { id: string; firstName: string; lastName: string } | null
   company: {
+    id: string
     name: string
     address: string | null
     city: string | null
@@ -46,11 +49,12 @@ interface Invoice {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof Clock }> = {
-  open: { label: 'Nyitott', color: 'bg-blue-100 text-blue-700', icon: Clock },
-  paid: { label: 'Fizetve', color: 'bg-green-100 text-green-700', icon: CheckCircle },
-  overdue: { label: 'Lejárt', color: 'bg-red-100 text-red-700', icon: AlertCircle },
-  cancelled: { label: 'Stornózva', color: 'bg-gray-100 text-gray-500', icon: Ban },
-  storno: { label: 'Storno', color: 'bg-orange-100 text-orange-600', icon: FileText },
+  open:      { label: 'Nyitott',    color: 'bg-blue-100 text-blue-700',    icon: Clock },
+  sent:      { label: 'Kiküldve',   color: 'bg-purple-100 text-purple-700', icon: Send },
+  paid:      { label: 'Fizetve',    color: 'bg-green-100 text-green-700',   icon: CheckCircle },
+  overdue:   { label: 'Lejárt',     color: 'bg-red-100 text-red-700',       icon: AlertCircle },
+  cancelled: { label: 'Stornózva',  color: 'bg-gray-100 text-gray-500',     icon: Ban },
+  storno:    { label: 'Storno',     color: 'bg-orange-100 text-orange-600',  icon: FileText },
 }
 
 export default function InvoicesPage() {
@@ -60,6 +64,7 @@ export default function InvoicesPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [previewInvoice, setPreviewInvoice] = useState<Invoice | null>(null)
+  const [editInvoice, setEditInvoice] = useState<Invoice | null>(null)
 
   const fetchInvoices = useCallback(async () => {
     setLoading(true)
@@ -72,6 +77,15 @@ export default function InvoicesPage() {
   }, [statusFilter])
 
   useEffect(() => { fetchInvoices() }, [fetchInvoices])
+
+  async function handleMarkSent(id: string) {
+    await fetch(`/api/invoices/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'sent' }),
+    })
+    fetchInvoices()
+  }
 
   async function handleMarkPaid(id: string) {
     await fetch(`/api/invoices/${id}`, {
@@ -200,9 +214,12 @@ export default function InvoicesPage() {
               return (
                 <tr key={invoice.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-5 py-3.5">
-                    <span className={`font-mono text-sm font-semibold ${isStornoDoc ? 'text-orange-600' : invoice.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                    <button
+                      onClick={() => setPreviewInvoice(invoice)}
+                      className={`font-mono text-sm font-semibold hover:text-blue-600 hover:underline transition-colors text-left ${isStornoDoc ? 'text-orange-600' : invoice.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-900'}`}
+                    >
                       {invoice.number}
-                    </span>
+                    </button>
                     {invoice.status === 'cancelled' && !isStornoDoc && (
                       <span className="ml-1.5 text-xs text-gray-400">(K-{invoice.number})</span>
                     )}
@@ -233,12 +250,30 @@ export default function InvoicesPage() {
                     <div className="flex items-center justify-center gap-2">
                       <button
                         onClick={() => setPreviewInvoice(invoice)}
-                        title="Megtekintés / Nyomtatás"
+                        title="Előnézet / Nyomtatás"
                         className="text-gray-400 hover:text-blue-600 transition-colors"
                       >
                         <Eye size={15} />
                       </button>
+                      {(invoice.status === 'open' || invoice.status === 'sent') && !isStornoDoc && (
+                        <button
+                          onClick={() => setEditInvoice(invoice)}
+                          title="Szerkesztés"
+                          className="text-gray-400 hover:text-blue-600 transition-colors"
+                        >
+                          <Edit2 size={15} />
+                        </button>
+                      )}
                       {invoice.status === 'open' && (
+                        <button
+                          onClick={() => handleMarkSent(invoice.id)}
+                          title="Kiküldve jelölés"
+                          className="text-gray-400 hover:text-purple-600 transition-colors"
+                        >
+                          <Send size={15} />
+                        </button>
+                      )}
+                      {(invoice.status === 'open' || invoice.status === 'sent') && (
                         <button
                           onClick={() => handleMarkPaid(invoice.id)}
                           title="Fizetve jelölés"
@@ -247,7 +282,7 @@ export default function InvoicesPage() {
                           <CheckCircle size={15} />
                         </button>
                       )}
-                      {(invoice.status === 'open' || invoice.status === 'paid') && !isStornoDoc && (
+                      {(invoice.status === 'open' || invoice.status === 'sent' || invoice.status === 'paid') && !isStornoDoc && (
                         <button
                           onClick={() => handleStorno(invoice)}
                           title="Stornózás"
@@ -275,6 +310,12 @@ export default function InvoicesPage() {
       {showCreateModal && (
         <Modal title="Új számla kiállítása" onClose={() => setShowCreateModal(false)} size="lg">
           <InvoiceForm onSave={() => { setShowCreateModal(false); fetchInvoices() }} onCancel={() => setShowCreateModal(false)} />
+        </Modal>
+      )}
+
+      {editInvoice && (
+        <Modal title={`Számla szerkesztése: ${editInvoice.number}`} onClose={() => setEditInvoice(null)} size="lg">
+          <InvoiceForm invoice={editInvoice} onSave={() => { setEditInvoice(null); fetchInvoices() }} onCancel={() => setEditInvoice(null)} />
         </Modal>
       )}
 

@@ -44,7 +44,23 @@ function calcTierPrice(hordozo: string | null, quantity: number, pricelist: Pric
   return { price: Math.round(entry.basePrice * m * 100) / 100, tier }
 }
 
-export default function InvoiceForm({ onSave, onCancel }: { onSave: () => void; onCancel: () => void }) {
+interface ExistingInvoice {
+  id: string
+  number: string
+  date: string
+  dueDate: string
+  deliveryInfo: string | null
+  currency: string
+  notes: string | null
+  status: string
+  contactId?: string | null
+  companyId?: string | null
+  contact?: { id?: string } | null
+  company?: { id?: string } | null
+  items: { description: string; quantity: number; unitPrice: number; vatRate: number; productId?: string | null; isDiscount: boolean }[]
+}
+
+export default function InvoiceForm({ onSave, onCancel, invoice }: { onSave: () => void; onCancel: () => void; invoice?: ExistingInvoice | null }) {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -55,13 +71,23 @@ export default function InvoiceForm({ onSave, onCancel }: { onSave: () => void; 
   const due30 = format(addDays(new Date(), 30), 'yyyy-MM-dd')
 
   const [form, setForm] = useState({
-    invoiceNumber: '', contactId: '', companyId: '', date: today, dueDate: due30,
-    deliveryInfo: '', currency: 'EUR', notes: '',
+    invoiceNumber: invoice?.number || '',
+    contactId: invoice?.contact?.id || invoice?.contactId || '',
+    companyId: invoice?.company?.id || invoice?.companyId || '',
+    date: invoice?.date?.slice(0, 10) || today,
+    dueDate: invoice?.dueDate?.slice(0, 10) || due30,
+    deliveryInfo: invoice?.deliveryInfo || '',
+    currency: invoice?.currency || 'EUR',
+    notes: invoice?.notes || '',
   })
 
-  const [items, setItems] = useState<Item[]>([
-    { description: '', quantity: 1, unitPrice: 0, vatRate: 19, productId: '', isDiscount: false },
-  ])
+  const [items, setItems] = useState<Item[]>(
+    invoice?.items?.length
+      ? invoice.items.map(i => i.isDiscount
+          ? ({ description: i.description, discountType: 'fixed' as const, discountValue: Math.abs(i.unitPrice), isDiscount: true as const })
+          : ({ description: i.description, quantity: i.quantity, unitPrice: i.unitPrice, vatRate: i.vatRate, productId: i.productId || '', isDiscount: false as const }))
+      : [{ description: '', quantity: 1, unitPrice: 0, vatRate: 19, productId: '', isDiscount: false as const }]
+  )
 
   useEffect(() => {
     Promise.all([
@@ -72,9 +98,9 @@ export default function InvoiceForm({ onSave, onCancel }: { onSave: () => void; 
       fetch('/api/invoices/next-number').then(r => r.json()),
     ]).then(([c, co, p, pl, nn]) => {
       setContacts(c); setCompanies(co); setProducts(p); setPricelist(pl)
-      setForm(f => ({ ...f, invoiceNumber: nn.number }))
+      if (!invoice) setForm(f => ({ ...f, invoiceNumber: nn.number }))
     })
-  }, [])
+  }, [invoice])
 
   const productSubtotal = items
     .filter(i => !i.isDiscount)
@@ -192,8 +218,10 @@ export default function InvoiceForm({ onSave, onCancel }: { onSave: () => void; 
       return { ...li, isDiscount: false }
     })
 
-    const res = await fetch('/api/invoices', {
-      method: 'POST',
+    const url = invoice ? `/api/invoices/${invoice.id}` : '/api/invoices'
+    const method = invoice ? 'PUT' : 'POST'
+    const res = await fetch(url, {
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...form, number: form.invoiceNumber, items: apiItems }),
     })

@@ -18,7 +18,47 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   const body = await request.json()
 
-  if (body.status) {
+  // Full invoice edit (items provided)
+  if (body.items) {
+    const items = body.items as { description: string; quantity: number; unitPrice: number; vatRate: number; isDiscount?: boolean; productId?: string }[]
+    const subtotal = items.filter(i => !i.isDiscount).reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+    const discountTotal = items.filter(i => i.isDiscount).reduce((s, i) => s + Math.abs(i.quantity * i.unitPrice), 0)
+    const net = subtotal - discountTotal
+    const vatAmount = items.reduce((s, i) => s + i.quantity * i.unitPrice * (i.vatRate / 100), 0)
+    const total = net + vatAmount
+
+    await prisma.invoiceItem.deleteMany({ where: { invoiceId: params.id } })
+    const invoice = await prisma.invoice.update({
+      where: { id: params.id },
+      data: {
+        date: body.date ? new Date(body.date) : undefined,
+        dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
+        deliveryInfo: body.deliveryInfo ?? null,
+        notes: body.notes ?? null,
+        contactId: body.contactId || null,
+        companyId: body.companyId || null,
+        subtotal,
+        vatAmount,
+        total,
+        items: {
+          create: items.map(i => ({
+            description: i.description,
+            quantity: i.quantity,
+            unitPrice: i.unitPrice,
+            vatRate: i.vatRate,
+            total: i.quantity * i.unitPrice,
+            isDiscount: i.isDiscount ?? false,
+            productId: i.productId || null,
+          })),
+        },
+      },
+      include: { contact: true, company: true, items: true },
+    })
+    return NextResponse.json(invoice)
+  }
+
+  // Status-only update
+  if (body.status !== undefined) {
     const existing = await prisma.invoice.findUnique({
       where: { id: params.id },
       include: { company: true, contact: true },
