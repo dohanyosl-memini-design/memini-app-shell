@@ -81,12 +81,15 @@ export default function Sidebar({ session }: { session?: Session | null }) {
     <>
       {/* ── Desktop sidebar (md+) ── */}
       <div className="hidden md:flex h-screen w-56 lg:w-60 bg-slate-900 text-white flex-col shrink-0">
-        <div className="p-4 lg:p-5 border-b border-slate-700">
+        <div className="shrink-0 p-4 lg:p-5 border-b border-slate-700">
           <h1 className="text-base lg:text-lg font-bold text-white">Memini Design</h1>
           <p className="text-slate-400 text-xs mt-0.5">Vállalatirányítás</p>
         </div>
 
-        <nav className="flex-1 min-h-0 p-3 overflow-y-auto space-y-4">
+        <nav
+          className="p-3 space-y-2"
+          style={{ overflowY: 'scroll', maxHeight: 'calc(100vh - 130px)' }}
+        >
           {navGroups.map((group, gi) => (
             <div key={gi}>
               {group.label && (
@@ -99,7 +102,7 @@ export default function Sidebar({ session }: { session?: Session | null }) {
                   <Link
                     key={href}
                     href={href}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-sm ${
+                    className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg transition-colors text-sm ${
                       isActive(href)
                         ? 'bg-blue-600 text-white'
                         : 'text-slate-400 hover:bg-slate-800 hover:text-white'
@@ -114,7 +117,7 @@ export default function Sidebar({ session }: { session?: Session | null }) {
           ))}
         </nav>
 
-        <div className="p-4 border-t border-slate-700">
+        <div className="shrink-0 p-4 border-t border-slate-700">
           {user ? (
             <div className="flex items-center justify-between">
               <div className="min-w-0">
