@@ -513,22 +513,33 @@ export default function BookkeepingPage() {
                 <input
                   ref={fileRef}
                   type="file"
-                  accept="image/*"
-                  capture="environment"
+                  accept="image/*,application/pdf"
                   className="hidden"
                   onChange={e => { if (e.target.files?.[0]) handleScanFile(e.target.files[0]) }}
                 />
                 <div className="flex items-center justify-center gap-3">
                   <button
                     type="button"
-                    onClick={() => { if (fileRef.current) { fileRef.current.removeAttribute('capture'); fileRef.current.click() } }}
+                    onClick={() => {
+                      if (fileRef.current) {
+                        fileRef.current.removeAttribute('capture')
+                        fileRef.current.setAttribute('accept', 'image/*,application/pdf')
+                        fileRef.current.click()
+                      }
+                    }}
                     className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
                   >
-                    <Upload size={14} /> Feltöltés
+                    <Upload size={14} /> Feltöltés (kép / PDF)
                   </button>
                   <button
                     type="button"
-                    onClick={() => { if (fileRef.current) { fileRef.current.setAttribute('capture', 'environment'); fileRef.current.click() } }}
+                    onClick={() => {
+                      if (fileRef.current) {
+                        fileRef.current.setAttribute('capture', 'environment')
+                        fileRef.current.setAttribute('accept', 'image/*')
+                        fileRef.current.click()
+                      }
+                    }}
                     className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors text-sm"
                   >
                     <Camera size={14} /> Fotózás

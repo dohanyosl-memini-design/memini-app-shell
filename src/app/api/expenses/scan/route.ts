@@ -11,8 +11,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No image provided' }, { status: 400 })
   }
 
-  const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-  const type = validTypes.includes(mediaType) ? mediaType : 'image/jpeg'
+  const isPdf = mediaType === 'application/pdf'
+  const validImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+  const imageType = validImageTypes.includes(mediaType) ? mediaType : 'image/jpeg'
+
+  type ContentBlock =
+    | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string } }
+    | { type: 'image'; source: { type: 'base64'; media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'; data: string } }
+
+  const fileBlock: ContentBlock = isPdf
+    ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: imageBase64 } }
+    : { type: 'image', source: { type: 'base64', media_type: imageType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp', data: imageBase64 } }
 
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
@@ -21,17 +30,10 @@ export async function POST(request: NextRequest) {
       {
         role: 'user',
         content: [
-          {
-            type: 'image',
-            source: {
-              type: 'base64',
-              media_type: type as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
-              data: imageBase64,
-            },
-          },
+          fileBlock,
           {
             type: 'text',
-            text: `Extract the following fields from this receipt/invoice image and return ONLY valid JSON, no explanation:
+            text: `Extract the following fields from this receipt/invoice and return ONLY valid JSON, no explanation:
 {
   "vendor": "shop or company name",
   "date": "YYYY-MM-DD format",
