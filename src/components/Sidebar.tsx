@@ -61,12 +61,11 @@ const navGroups = [
 
 const allItems = navGroups.flatMap(g => g.items)
 
-// Bottom nav items for mobile (5 most important)
 const bottomNavItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/tasks', label: 'Feladatok', icon: CheckSquare },
-  { href: '/companies', label: 'Cégek', icon: Building2 },
   { href: '/invoices', label: 'Számlák', icon: FileText },
+  { href: '/backup', label: 'Mentés', icon: Shield },
 ]
 
 export default function Sidebar({ session }: { session?: Session | null }) {
@@ -171,7 +170,10 @@ export default function Sidebar({ session }: { session?: Session | null }) {
             className="md:hidden fixed inset-0 z-50 bg-black/60"
             onClick={() => setDrawerOpen(false)}
           />
-          <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-900 rounded-t-2xl max-h-[80vh] overflow-y-auto">
+          <div
+            className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-900 rounded-t-2xl"
+            style={{ maxHeight: '90vh', overflowY: 'scroll', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+          >
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-700">
               <div>
                 <p className="text-white font-semibold">Memini Design</p>
@@ -182,7 +184,7 @@ export default function Sidebar({ session }: { session?: Session | null }) {
               </button>
             </div>
 
-            <nav className="p-4 space-y-4">
+            <nav className="p-3 space-y-2">
               {navGroups.map((group, gi) => (
                 <div key={gi}>
                   {group.label && (
@@ -196,13 +198,13 @@ export default function Sidebar({ session }: { session?: Session | null }) {
                         key={href}
                         href={href}
                         onClick={() => setDrawerOpen(false)}
-                        className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-colors text-sm ${
+                        className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-sm ${
                           isActive(href)
                             ? 'bg-blue-600 text-white'
                             : 'text-slate-300 hover:bg-slate-800'
                         }`}
                       >
-                        <Icon size={18} />
+                        <Icon size={16} />
                         <span className="font-medium">{label}</span>
                       </Link>
                     ))}
