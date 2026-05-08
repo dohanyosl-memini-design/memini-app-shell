@@ -250,6 +250,18 @@ export default function InvoiceForm({ onSave, onCancel }: { onSave: () => void; 
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Fizetési határidő</label>
+          <div className="flex gap-1.5 mb-1.5">
+            {[7, 14, 30].map(days => (
+              <button
+                key={days}
+                type="button"
+                onClick={() => setForm({ ...form, dueDate: format(addDays(new Date(form.date || new Date()), days), 'yyyy-MM-dd') })}
+                className="px-2.5 py-1 text-xs bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors font-medium"
+              >
+                +{days} nap
+              </button>
+            ))}
+          </div>
           <input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
         </div>

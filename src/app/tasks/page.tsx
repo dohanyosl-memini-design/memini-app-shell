@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, Edit2, Trash2, LayoutGrid, List, Calendar, User, Building2, CheckSquare } from 'lucide-react'
+import { Plus, Edit2, Trash2, LayoutGrid, List, User, Building2, AlertCircle, Calendar, CheckSquare } from 'lucide-react'
+import Link from 'next/link'
 import Modal from '@/components/Modal'
 import TaskForm, { TASK_TYPES } from '@/components/TaskForm'
 import { format, isPast, isToday, isTomorrow } from 'date-fns'
@@ -202,8 +203,18 @@ function KanbanColumn({
   )
 }
 
+interface OverdueInvoice {
+  id: string
+  number: string
+  dueDate: string
+  total: number
+  company: { id: string; name: string } | null
+  contact: { id: string; firstName: string; lastName: string } | null
+}
+
 export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([])
+  const [overdueInvoices, setOverdueInvoices] = useState<OverdueInvoice[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'kanban' | 'list'>('kanban')
   const [filterPriority, setFilterPriority] = useState('all')
@@ -216,9 +227,16 @@ export default function TasksPage() {
 
   const fetchTasks = useCallback(async () => {
     setLoading(true)
-    const res = await fetch('/api/tasks')
-    const data = await res.json()
-    setTasks(data)
+    const [tasksRes, invoicesRes] = await Promise.all([
+      fetch('/api/tasks'),
+      fetch('/api/invoices?overdue=true'),
+    ])
+    const [tasksData, invoicesData] = await Promise.all([
+      tasksRes.json(),
+      invoicesRes.json(),
+    ])
+    setTasks(tasksData)
+    setOverdueInvoices(invoicesData)
     setLoading(false)
   }, [])
 
@@ -341,6 +359,47 @@ export default function TasksPage() {
           ))}
         </select>
       </div>
+
+      {/* Lejárt számlák figyelmeztetés */}
+      {overdueInvoices.length > 0 && (
+        <div className="mb-5 border border-red-200 bg-red-50 rounded-xl overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-red-100 border-b border-red-200">
+            <AlertCircle size={15} className="text-red-600" />
+            <span className="text-sm font-semibold text-red-700">
+              {overdueInvoices.length} lejárt számla azonnali figyelmet igényel
+            </span>
+          </div>
+          <div className="divide-y divide-red-100">
+            {overdueInvoices.map(inv => {
+              const overdueDays = Math.floor((Date.now() - new Date(inv.dueDate).getTime()) / 86400000)
+              return (
+                <div key={inv.id} className="flex items-center justify-between gap-3 px-4 py-2.5 bg-white hover:bg-red-50 transition-colors">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="font-mono text-sm font-semibold text-gray-800">{inv.number}</span>
+                    {inv.company && (
+                      <Link href={`/companies/${inv.company.id}`} className="text-sm text-gray-600 hover:text-blue-600 truncate">
+                        {inv.company.name}
+                      </Link>
+                    )}
+                    <span className="text-xs text-red-600 font-medium bg-red-100 px-1.5 py-0.5 rounded">
+                      {overdueDays} napja lejárt
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-sm font-bold text-gray-900">€{inv.total.toFixed(2)}</span>
+                    <Link
+                      href="/invoices"
+                      className="text-xs px-2.5 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      Megtekintés →
+                    </Link>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="py-24 text-center text-gray-400">Betöltés...</div>

@@ -9,6 +9,7 @@ import {
   LayoutDashboard, Users, Building2, TrendingUp,
   CheckSquare, BarChart3, Package, FileText, Wallet,
   ClipboardList, ShoppingCart, LogOut, Euro, Menu, X,
+  GitMerge, BookOpen, Calculator, HelpCircle,
 } from 'lucide-react'
 
 const navGroups = [
@@ -21,7 +22,8 @@ const navGroups = [
     items: [
       { href: '/contacts', label: 'Ügyfelek', icon: Users },
       { href: '/companies', label: 'Cégek', icon: Building2 },
-      { href: '/deals', label: 'Pipeline', icon: TrendingUp },
+      { href: '/leads', label: 'Lead Pipeline', icon: GitMerge },
+      { href: '/deals', label: 'Dealek', icon: TrendingUp },
     ],
   },
   {
@@ -43,6 +45,7 @@ const navGroups = [
     label: 'Pénzügy',
     items: [
       { href: '/finance', label: 'Cashflow', icon: Wallet },
+      { href: '/bookkeeping', label: 'Könyvelés', icon: Calculator },
       { href: '/reports', label: 'Riportok', icon: BarChart3 },
     ],
   },
@@ -50,6 +53,7 @@ const navGroups = [
     label: 'Egyéb',
     items: [
       { href: '/tasks', label: 'Feladatok', icon: CheckSquare },
+      { href: '/faq', label: 'Súgó / FAQ', icon: HelpCircle },
     ],
   },
 ]

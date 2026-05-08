@@ -4,12 +4,20 @@ import { prisma } from '@/lib/prisma'
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const status = searchParams.get('status') || ''
+  const overdue = searchParams.get('overdue') === 'true'
+
+  const where: Record<string, unknown> = {}
+  if (status) where.status = status
+  if (overdue) {
+    where.dueDate = { lt: new Date() }
+    where.status = { in: ['open', 'sent'] }
+  }
 
   const invoices = await prisma.invoice.findMany({
-    where: status ? { status } : {},
+    where,
     include: {
-      contact: true,
-      company: true,
+      contact: { select: { id: true, firstName: true, lastName: true } },
+      company: { select: { id: true, name: true } },
       items: { include: { product: true } },
     },
     orderBy: { date: 'desc' },
