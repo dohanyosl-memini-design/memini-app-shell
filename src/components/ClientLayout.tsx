@@ -4,6 +4,7 @@ import { SessionProvider, useSession } from 'next-auth/react'
 import { usePathname } from 'next/navigation'
 import type { Session } from 'next-auth'
 import Sidebar from '@/components/Sidebar'
+import ThemeProvider from '@/components/ThemeProvider'
 
 function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession()
@@ -15,7 +16,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
   if (!session) return <>{children}</>
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
       <Sidebar session={session} />
       {/* pb-16 on mobile reserves space for the fixed bottom nav */}
       <main className="flex-1 overflow-auto pb-16 md:pb-0">
@@ -36,7 +37,9 @@ export default function ClientLayout({
 }) {
   return (
     <SessionProvider session={session}>
-      <AppShell>{children}</AppShell>
+      <ThemeProvider>
+        <AppShell>{children}</AppShell>
+      </ThemeProvider>
     </SessionProvider>
   )
 }

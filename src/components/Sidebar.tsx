@@ -10,7 +10,9 @@ import {
   CheckSquare, BarChart3, Package, FileText, Wallet,
   ClipboardList, ShoppingCart, LogOut, Euro, Menu, X,
   GitMerge, BookOpen, Calculator, HelpCircle, Shield,
+  Sun, Moon,
 } from 'lucide-react'
+import { useTheme } from '@/components/ThemeProvider'
 
 const navGroups = [
   {
@@ -72,6 +74,7 @@ export default function Sidebar({ session }: { session?: Session | null }) {
   const pathname = usePathname()
   const user = session?.user
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const { dark, toggle } = useTheme()
 
   const isActive = (href: string) =>
     href === '/' ? pathname === '/' : pathname.startsWith(href)
@@ -123,13 +126,22 @@ export default function Sidebar({ session }: { session?: Session | null }) {
                 <p className="text-white text-sm font-medium truncate">{user.name}</p>
                 <p className="text-slate-500 text-xs truncate">{user.email}</p>
               </div>
-              <button
-                onClick={() => signOut({ callbackUrl: '/login' })}
-                title="Kijelentkezés"
-                className="text-slate-500 hover:text-white transition-colors ml-2 shrink-0"
-              >
-                <LogOut size={15} />
-              </button>
+              <div className="flex items-center gap-2 ml-2 shrink-0">
+                <button
+                  onClick={toggle}
+                  title={dark ? 'Nappali mód' : 'Éjszakai mód'}
+                  className="text-slate-500 hover:text-white transition-colors"
+                >
+                  {dark ? <Sun size={15} /> : <Moon size={15} />}
+                </button>
+                <button
+                  onClick={() => signOut({ callbackUrl: '/login' })}
+                  title="Kijelentkezés"
+                  className="text-slate-500 hover:text-white transition-colors"
+                >
+                  <LogOut size={15} />
+                </button>
+              </div>
             </div>
           ) : (
             <p className="text-slate-500 text-xs">Memini Design · Ulm, DE</p>
