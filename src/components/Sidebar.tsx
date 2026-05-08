@@ -9,7 +9,7 @@ import {
   LayoutDashboard, Users, Building2, TrendingUp,
   CheckSquare, BarChart3, Package, FileText, Wallet,
   ClipboardList, ShoppingCart, LogOut, Euro, Menu, X,
-  GitMerge, BookOpen, Calculator, HelpCircle,
+  GitMerge, BookOpen, Calculator, HelpCircle, Shield,
 } from 'lucide-react'
 
 const navGroups = [
@@ -54,6 +54,7 @@ const navGroups = [
     items: [
       { href: '/tasks', label: 'Feladatok', icon: CheckSquare },
       { href: '/faq', label: 'Súgó / FAQ', icon: HelpCircle },
+      { href: '/backup', label: 'Adatmentés', icon: Shield },
     ],
   },
 ]
