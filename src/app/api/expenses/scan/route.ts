@@ -6,12 +6,16 @@ export const maxDuration = 60
 const client = new Anthropic()
 
 export async function POST(request: NextRequest) {
-  const body = await request.json()
-  const { imageBase64, mediaType } = body
+  const formData = await request.formData()
+  const file = formData.get('file') as File | null
 
-  if (!imageBase64) {
-    return NextResponse.json({ error: 'No image provided' }, { status: 400 })
+  if (!file) {
+    return NextResponse.json({ error: 'No file provided' }, { status: 400 })
   }
+
+  const mediaType = file.type
+  const bytes = await file.arrayBuffer()
+  const imageBase64 = Buffer.from(bytes).toString('base64')
 
   const isPdf = mediaType === 'application/pdf'
   const validImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']

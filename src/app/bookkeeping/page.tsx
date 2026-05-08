@@ -152,51 +152,50 @@ export default function BookkeepingPage() {
   }
 
   async function handleScanFile(file: File) {
+    const MAX_BYTES = 4 * 1024 * 1024
+    if (file.size > MAX_BYTES) {
+      setScanResult('A fájl túl nagy (max 4 MB). Tömörítsd vagy szkenneld alacsonyabb minőségben.')
+      return
+    }
     setScanning(true)
     setScanResult(null)
-    const reader = new FileReader()
-    reader.onload = async (e) => {
-      try {
-        const dataUrl = e.target?.result as string
-        const base64 = dataUrl.split(',')[1]
-        const mediaType = file.type || 'image/jpeg'
-        const res = await fetch('/api/expenses/scan', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: base64, mediaType }),
-          signal: AbortSignal.timeout(55000),
-        })
-        if (!res.ok) {
-          setScanResult('Szerver hiba – töltsd ki kézzel.')
-          return
-        }
-        const data = await res.json()
-        if (data.ok && data.data) {
-          const d = data.data
-          setForm(f => ({
-            ...f,
-            vendor: d.vendor || f.vendor,
-            date: d.date || f.date,
-            amount: d.amount != null ? String(d.amount) : f.amount,
-            vatAmount: d.vatAmount != null ? String(d.vatAmount) : f.vatAmount,
-            description: d.description || f.description,
-            reference: d.reference || f.reference,
-          }))
-          setScanResult('✓ Adatok kinyerve – ellenőrizd és mentsd!')
-        } else {
-          setScanResult('Nem sikerült az adatokat kinyerni. Töltsd ki kézzel.')
-        }
-      } catch (err) {
-        if (err instanceof Error && err.name === 'TimeoutError') {
-          setScanResult('Időtúllépés – próbáld kisebb fájllal, vagy töltsd ki kézzel.')
-        } else {
-          setScanResult('Hiba történt – töltsd ki kézzel.')
-        }
-      } finally {
-        setScanning(false)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch('/api/expenses/scan', {
+        method: 'POST',
+        body: formData,
+        signal: AbortSignal.timeout(55000),
+      })
+      if (!res.ok) {
+        setScanResult('Szerver hiba – töltsd ki kézzel.')
+        return
       }
+      const data = await res.json()
+      if (data.ok && data.data) {
+        const d = data.data
+        setForm(f => ({
+          ...f,
+          vendor: d.vendor || f.vendor,
+          date: d.date || f.date,
+          amount: d.amount != null ? String(d.amount) : f.amount,
+          vatAmount: d.vatAmount != null ? String(d.vatAmount) : f.vatAmount,
+          description: d.description || f.description,
+          reference: d.reference || f.reference,
+        }))
+        setScanResult('✓ Adatok kinyerve – ellenőrizd és mentsd!')
+      } else {
+        setScanResult('Nem sikerült az adatokat kinyerni. Töltsd ki kézzel.')
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === 'TimeoutError') {
+        setScanResult('Időtúllépés – próbáld kisebb fájllal, vagy töltsd ki kézzel.')
+      } else {
+        setScanResult('Hiba történt – töltsd ki kézzel.')
+      }
+    } finally {
+      setScanning(false)
     }
-    reader.readAsDataURL(file)
   }
 
   // Recurring
