@@ -86,7 +86,7 @@ export default function Sidebar({ session }: { session?: Session | null }) {
           <p className="text-slate-400 text-xs mt-0.5">Vállalatirányítás</p>
         </div>
 
-        <nav className="flex-1 p-3 overflow-y-auto space-y-4">
+        <nav className="flex-1 min-h-0 p-3 overflow-y-auto space-y-4">
           {navGroups.map((group, gi) => (
             <div key={gi}>
               {group.label && (
