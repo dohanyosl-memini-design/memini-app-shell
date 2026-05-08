@@ -80,7 +80,7 @@ export default function Sidebar({ session }: { session?: Session | null }) {
   return (
     <>
       {/* ── Desktop sidebar (md+) ── */}
-      <div className="hidden md:flex w-56 lg:w-60 bg-slate-900 text-white flex-col shrink-0">
+      <div className="hidden md:flex h-screen w-56 lg:w-60 bg-slate-900 text-white flex-col shrink-0">
         <div className="p-4 lg:p-5 border-b border-slate-700">
           <h1 className="text-base lg:text-lg font-bold text-white">Memini Design</h1>
           <p className="text-slate-400 text-xs mt-0.5">Vállalatirányítás</p>
