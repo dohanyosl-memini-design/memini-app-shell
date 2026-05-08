@@ -5,7 +5,7 @@ import { upload } from '@vercel/blob/client'
 import { ImagePlus, X, Loader2 } from 'lucide-react'
 import Image from 'next/image'
 
-interface PriceListEntry { id: string; name: string; basePrice: number }
+interface PriceListEntry { id: string; name: string; costPrice: number; basePrice: number }
 
 interface Product {
   id: string
@@ -406,7 +406,17 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
           </label>
           <select
             value={form.priceListEntryId}
-            onChange={e => setForm({ ...form, priceListEntryId: e.target.value })}
+            onChange={e => {
+              const entry = priceListEntries.find(p => p.id === e.target.value)
+              setForm({
+                ...form,
+                priceListEntryId: e.target.value,
+                ...(entry && {
+                  salesPrice: entry.basePrice.toString(),
+                  costPrice: entry.costPrice.toString(),
+                }),
+              })
+            }}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
           >
             <option value="">— Nincs kapcsolva —</option>
@@ -414,7 +424,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
               <option key={e.id} value={e.id}>{e.name} (€{e.basePrice})</option>
             ))}
           </select>
-          <p className="text-xs text-gray-400 mt-1">Ha be van állítva, a megrendelőlapon a mennyiség alapján automatikusan a megfelelő tier ár töltődik be.</p>
+          <p className="text-xs text-gray-400 mt-1">Kiválasztáskor az Eladási ár és Önköltség automatikusan kitöltődik. Tier árazás a megrendelőlapon.</p>
         </div>
       )}
 
