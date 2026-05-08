@@ -90,6 +90,7 @@ export default function WarehousePage() {
   const [loadingMovements, setLoadingMovements] = useState(false)
   const [logSearch, setLogSearch] = useState('')
   const [logTypeFilter, setLogTypeFilter] = useState('')
+  const [lowStockOpen, setLowStockOpen] = useState(false)
 
   const fetchProducts = useCallback(async () => {
     setLoadingProducts(true)
@@ -141,7 +142,7 @@ export default function WarehousePage() {
     setLoadingProductMovements(false)
   }
 
-  const lowStock = products.filter((p) => p.stock <= p.minStock)
+  const lowStock = products.filter((p) => p.minStock > 0 && p.stock <= p.minStock)
   const totalStockValue = products.reduce((sum, p) => sum + p.stock * p.costPrice, 0)
   const totalSalesValue = products.reduce((sum, p) => sum + p.stock * p.salesPrice, 0)
 
@@ -192,18 +193,30 @@ export default function WarehousePage() {
 
       {/* Alacsony készlet figyelmeztetés */}
       {lowStock.length > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
-          <div className="flex items-center gap-2 mb-2">
-            <AlertTriangle size={16} className="text-red-600" />
-            <p className="text-sm font-semibold text-red-700">Alacsony készlet – rendelj utána!</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {lowStock.map((p) => (
-              <span key={p.id} className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">
-                {p.sku}: {p.stock} db (min: {p.minStock})
+        <div className="mb-4">
+          <button
+            onClick={() => setLowStockOpen(o => !o)}
+            className="w-full flex items-center justify-between bg-red-50 border border-red-200 rounded-xl px-4 py-3 hover:bg-red-100 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={15} className="text-red-600 shrink-0" />
+              <span className="text-sm font-semibold text-red-700">
+                Alacsony készlet – {lowStock.length} termék utánrendelést igényel
               </span>
-            ))}
-          </div>
+            </div>
+            <span className="text-red-400 text-xs">{lowStockOpen ? '▲ összecsuk' : '▼ részletek'}</span>
+          </button>
+          {lowStockOpen && (
+            <div className="bg-red-50 border border-t-0 border-red-200 rounded-b-xl px-4 pb-4 pt-3">
+              <div className="flex flex-wrap gap-2">
+                {lowStock.map((p) => (
+                  <span key={p.id} className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">
+                    {p.sku}: {p.stock} db (min: {p.minStock})
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
