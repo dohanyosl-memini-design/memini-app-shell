@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, ArrowUpDown, X, ArrowDown, ArrowUp, RefreshCw, FileText, ChevronDown, ChevronUp } from 'lucide-react'
 import Image from 'next/image'
 import Modal from '@/components/Modal'
@@ -91,6 +91,7 @@ export default function WarehousePage() {
   const [logSearch, setLogSearch] = useState('')
   const [logTypeFilter, setLogTypeFilter] = useState('')
   const [lowStockOpen, setLowStockOpen] = useState(false)
+  const [cityFilter, setCityFilter] = useState('')
 
   const fetchProducts = useCallback(async () => {
     setLoadingProducts(true)
@@ -145,6 +146,13 @@ export default function WarehousePage() {
   const lowStock = products.filter((p) => p.minStock > 0 && p.stock <= p.minStock)
   const totalStockValue = products.reduce((sum, p) => sum + p.stock * p.costPrice, 0)
   const totalSalesValue = products.reduce((sum, p) => sum + p.stock * p.salesPrice, 0)
+
+  const cities = Array.from(new Set(products.map(p => p.city).filter(Boolean) as string[])).sort()
+  const filteredByCityProducts = cityFilter ? products.filter(p => p.city === cityFilter) : products
+  const showCityHeaders = !cityFilter && cities.length > 1
+  const groupedForRender = showCityHeaders
+    ? cities.map(city => ({ city, items: filteredByCityProducts.filter(p => p.city === city) })).filter(g => g.items.length > 0)
+    : [{ city: '', items: filteredByCityProducts }]
 
   const filteredMovements = movements.filter((m) => {
     const matchType = !logTypeFilter || m.type === logTypeFilter
@@ -277,6 +285,30 @@ export default function WarehousePage() {
             )}
           </div>
 
+          {cities.length > 1 && (
+            <div className="flex gap-2 mb-4 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+              <button
+                onClick={() => setCityFilter('')}
+                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                  !cityFilter ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Összes ({products.length})
+              </button>
+              {cities.map(city => (
+                <button
+                  key={city}
+                  onClick={() => setCityFilter(city === cityFilter ? '' : city)}
+                  className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                    cityFilter === city ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {city} ({products.filter(p => p.city === city).length})
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <table className="w-full">
               <thead>
@@ -295,7 +327,20 @@ export default function WarehousePage() {
                   <tr><td colSpan={7} className="px-5 py-12 text-center text-gray-400">Betöltés...</td></tr>
                 ) : products.length === 0 ? (
                   <tr><td colSpan={7} className="px-5 py-12 text-center text-gray-400">Nem található termék</td></tr>
-                ) : products.map((product) => {
+                ) : groupedForRender.map(({ city, items: groupItems }) => (
+                  <React.Fragment key={city || '__all__'}>
+                    {showCityHeaders && city && (
+                      <tr>
+                        <td colSpan={7} className="px-5 py-2 bg-slate-50 border-y border-gray-100">
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1 h-px bg-gray-200" />
+                            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{city}</span>
+                            <div className="flex-1 h-px bg-gray-200" />
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    {groupItems.map((product) => {
                   const hordozo = HORDOZO_CONFIG[product.material || '']
                   const isLow = product.stock <= product.minStock
                   const margin = product.salesPrice > 0
@@ -419,6 +464,8 @@ export default function WarehousePage() {
                     </>
                   )
                 })}
+                  </React.Fragment>
+                ))}
               </tbody>
             </table>
           </div>
