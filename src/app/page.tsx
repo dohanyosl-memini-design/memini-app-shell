@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import {
   Users, Building2, TrendingUp, CheckSquare,
-  FileText, Package, AlertTriangle, TrendingDown,
+  FileText, AlertTriangle, TrendingDown,
   Clock, Euro,
 } from 'lucide-react'
 import { format, isToday, isTomorrow, isPast } from 'date-fns'
@@ -117,7 +117,7 @@ export default function Dashboard() {
       </div>
 
       {/* Figyelmeztetések */}
-      {(stats.overdueInvoices > 0 || stats.lowStockProducts.length > 0 || stats.dormantCompanies.length > 0) && (
+      {(stats.overdueInvoices > 0 || stats.dormantCompanies.length > 0) && (
         <div className="space-y-2">
           {stats.overdueInvoices > 0 && (
             <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
@@ -125,13 +125,7 @@ export default function Dashboard() {
               <span><strong>{stats.overdueInvoices} lejárt számla</strong> vár fizetésre — ellenőrizd a Számlák menüben!</span>
             </div>
           )}
-          {stats.lowStockProducts.length > 0 && (
-            <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700">
-              <Package size={16} />
-              <span><strong>{stats.lowStockProducts.length} termék</strong> alacsony készleten: {stats.lowStockProducts.map((p) => p.sku).join(', ')}</span>
-            </div>
-          )}
-          {stats.dormantCompanies.length > 0 && (
+{stats.dormantCompanies.length > 0 && (
             <div className="flex items-start gap-3 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 text-sm text-orange-700">
               <Building2 size={16} className="mt-0.5 shrink-0" />
               <div>
