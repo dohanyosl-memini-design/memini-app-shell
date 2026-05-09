@@ -5,5 +5,5 @@ import { authOptions } from '@/lib/auth'
 export default async function HomePage() {
   const session = await getServerSession(authOptions)
   if (!session) redirect('/login')
-  redirect('/products')
+  redirect('/home')
 }

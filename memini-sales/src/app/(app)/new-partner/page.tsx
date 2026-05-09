@@ -6,14 +6,8 @@ const COUNTRIES = ['DE', 'AT', 'CH', 'HU', 'PL', 'CZ', 'SK', 'NL', 'FR', 'IT']
 
 export default function NewPartnerPage() {
   const [form, setForm] = useState({
-    companyName: '',
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    city: '',
-    country: 'DE',
-    notes: '',
+    companyName: '', firstName: '', lastName: '',
+    email: '', phone: '', city: '', country: 'DE', notes: '',
   })
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -31,15 +25,12 @@ export default function NewPartnerPage() {
     }
     setLoading(true)
     setError('')
-
     const res = await fetch('/api/partners', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form),
     })
-
     setLoading(false)
-
     if (res.ok) {
       setSuccess(true)
       setForm({ companyName: '', firstName: '', lastName: '', email: '', phone: '', city: '', country: 'DE', notes: '' })
@@ -51,15 +42,15 @@ export default function NewPartnerPage() {
 
   if (success) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-6 p-8 text-center">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 p-8 text-center">
         <div className="text-6xl">✅</div>
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Partner mentve!</h2>
-          <p className="text-gray-500 mt-1">Az adatok bekerültek a CRM-be.</p>
+          <h2 className="text-2xl font-bold text-white">Partner mentve!</h2>
+          <p className="text-white/40 mt-1">Az adatok bekerültek a CRM-be.</p>
         </div>
         <button
           onClick={() => setSuccess(false)}
-          className="px-6 py-3 bg-brand-600 text-white font-semibold rounded-xl hover:bg-brand-700 transition"
+          className="px-6 py-3 bg-white text-black font-semibold rounded-xl transition"
         >
           Új partner
         </button>
@@ -68,8 +59,8 @@ export default function NewPartnerPage() {
   }
 
   return (
-    <div className="max-w-lg mx-auto p-4 pb-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Új partner</h1>
+    <div className="max-w-lg mx-auto px-4 pb-8">
+      <h1 className="text-2xl font-bold text-white mb-6 mt-2">Új partner</h1>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <Section title="Cég adatok">
@@ -77,15 +68,13 @@ export default function NewPartnerPage() {
           <div className="grid grid-cols-2 gap-3">
             <Field label="Város" value={form.city} onChange={(v) => update('city', v)} placeholder="München" />
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Ország</label>
+              <label className="block text-sm font-medium text-white/50 mb-1">Ország</label>
               <select
                 value={form.country}
                 onChange={(e) => update('country', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white"
+                className="w-full px-4 py-3 bg-[#161616] border border-white/10 rounded-xl text-white text-base focus:outline-none focus:border-white/30"
               >
-                {COUNTRIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
+                {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
           </div>
@@ -106,16 +95,16 @@ export default function NewPartnerPage() {
             onChange={(e) => update('notes', e.target.value)}
             rows={3}
             placeholder="Érdeklődési terület, megjegyzések..."
-            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+            className="w-full px-4 py-3 bg-[#161616] border border-white/10 rounded-xl text-white placeholder-white/30 text-base focus:outline-none focus:border-white/30 resize-none"
           />
         </Section>
 
-        {error && <p className="text-red-600 text-sm text-center">{error}</p>}
+        {error && <p className="text-red-400 text-sm text-center">{error}</p>}
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-4 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition disabled:opacity-60 text-base"
+          className="w-full py-4 bg-white hover:bg-white/90 text-black font-bold rounded-xl transition disabled:opacity-40 text-base"
         >
           {loading ? 'Mentés...' : 'Partner mentése a CRM-be'}
         </button>
@@ -127,30 +116,24 @@ export default function NewPartnerPage() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">{title}</h3>
+      <h3 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-3">{title}</h3>
       <div className="space-y-3">{children}</div>
     </div>
   )
 }
 
-function Field({
-  label, value, onChange, placeholder, type = 'text',
-}: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  placeholder?: string
-  type?: string
+function Field({ label, value, onChange, placeholder, type = 'text' }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <label className="block text-sm font-medium text-white/50 mb-1">{label}</label>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full px-4 py-3 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-brand-500"
+        className="w-full px-4 py-3 bg-[#161616] border border-white/10 rounded-xl text-white placeholder-white/30 text-base focus:outline-none focus:border-white/30"
       />
     </div>
   )
