@@ -32,15 +32,17 @@ export default function PartnersPage() {
   )
 
   return (
-    <div className="px-4 pb-8">
-      <h1 className="text-white text-2xl font-bold mb-4 mt-2">Partnerek</h1>
+    <div className="px-4 md:px-8 lg:px-12 pb-10">
+      <h1 className="text-white text-2xl md:text-3xl font-bold mb-4 md:mb-6 mt-2">
+        Partnerek
+      </h1>
 
       <input
         type="search"
         placeholder="Keresés..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="w-full px-4 py-3 bg-[#161616] border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-white/30 mb-4 text-base"
+        className="w-full px-4 py-3 md:py-4 bg-[#161616] border border-white/10 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-white/30 mb-4 text-base"
       />
 
       {loading ? (
@@ -48,24 +50,32 @@ export default function PartnersPage() {
       ) : filtered.length === 0 ? (
         <p className="text-white/40">Nincs találat</p>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
           {filtered.map((p) => (
             <div
               key={p.id}
-              className="bg-[#161616] border border-white/8 rounded-2xl px-5 py-4"
+              className="bg-[#161616] border border-white/[0.08] rounded-2xl px-5 py-4 md:px-6 md:py-5"
             >
-              <p className="text-white font-semibold text-base">{p.name}</p>
-              <div className="flex items-center gap-3 mt-1 flex-wrap">
+              <p className="text-white font-semibold text-base md:text-lg">{p.name}</p>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
                 {p.city && (
-                  <span className="text-white/40 text-sm">📍 {p.city}{p.country ? `, ${p.country}` : ''}</span>
+                  <span className="text-white/40 text-sm">
+                    📍 {p.city}{p.country ? `, ${p.country}` : ''}
+                  </span>
                 )}
                 {p.phone && (
-                  <a href={`tel:${p.phone}`} className="text-white/40 text-sm hover:text-white/70">
+                  <a
+                    href={`tel:${p.phone}`}
+                    className="text-white/40 text-sm hover:text-white/70 transition"
+                  >
                     📞 {p.phone}
                   </a>
                 )}
                 {p.email && (
-                  <a href={`mailto:${p.email}`} className="text-white/40 text-sm hover:text-white/70">
+                  <a
+                    href={`mailto:${p.email}`}
+                    className="text-white/40 text-sm hover:text-white/70 transition"
+                  >
                     ✉️ {p.email}
                   </a>
                 )}

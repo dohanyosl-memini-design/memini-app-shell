@@ -43,14 +43,14 @@ export default function NewPartnerPage() {
   if (success) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 p-8 text-center">
-        <div className="text-6xl">✅</div>
+        <div className="text-7xl">✅</div>
         <div>
-          <h2 className="text-2xl font-bold text-white">Partner mentve!</h2>
-          <p className="text-white/40 mt-1">Az adatok bekerültek a CRM-be.</p>
+          <h2 className="text-2xl md:text-3xl font-bold text-white">Partner mentve!</h2>
+          <p className="text-white/40 mt-2">Az adatok bekerültek a CRM-be.</p>
         </div>
         <button
           onClick={() => setSuccess(false)}
-          className="px-6 py-3 bg-white text-black font-semibold rounded-xl transition"
+          className="px-8 py-3.5 bg-white text-black font-semibold rounded-xl transition text-base"
         >
           Új partner
         </button>
@@ -59,35 +59,49 @@ export default function NewPartnerPage() {
   }
 
   return (
-    <div className="max-w-lg mx-auto px-4 pb-8">
-      <h1 className="text-2xl font-bold text-white mb-6 mt-2">Új partner</h1>
+    <div className="px-4 md:px-8 lg:px-12 pb-10">
+      <h1 className="text-white text-2xl md:text-3xl font-bold mb-6 mt-2">Új partner</h1>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <Section title="Cég adatok">
-          <Field label="Cégnév" value={form.companyName} onChange={(v) => update('companyName', v)} placeholder="Mustermann GmbH" />
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Város" value={form.city} onChange={(v) => update('city', v)} placeholder="München" />
-            <div>
-              <label className="block text-sm font-medium text-white/50 mb-1">Ország</label>
-              <select
-                value={form.country}
-                onChange={(e) => update('country', e.target.value)}
-                className="w-full px-4 py-3 bg-[#161616] border border-white/10 rounded-xl text-white text-base focus:outline-none focus:border-white/30"
-              >
-                {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
+      <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
+
+        {/* Cég + Kapcsolattartó: iPad landscape-en egymás mellett */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Section title="Cég adatok">
+            <Field
+              label="Cégnév"
+              value={form.companyName}
+              onChange={(v) => update('companyName', v)}
+              placeholder="Mustermann GmbH"
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <Field
+                label="Város"
+                value={form.city}
+                onChange={(v) => update('city', v)}
+                placeholder="München"
+              />
+              <div>
+                <label className="block text-sm font-medium text-white/50 mb-1.5">Ország</label>
+                <select
+                  value={form.country}
+                  onChange={(e) => update('country', e.target.value)}
+                  className="w-full px-4 py-3 bg-[#161616] border border-white/10 rounded-xl text-white text-base focus:outline-none focus:border-white/30 min-h-[50px]"
+                >
+                  {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
             </div>
-          </div>
-        </Section>
+          </Section>
 
-        <Section title="Kapcsolattartó">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Keresztnév" value={form.firstName} onChange={(v) => update('firstName', v)} placeholder="Hans" />
-            <Field label="Vezetéknév" value={form.lastName} onChange={(v) => update('lastName', v)} placeholder="Mustermann" />
-          </div>
-          <Field label="Email" value={form.email} onChange={(v) => update('email', v)} placeholder="hans@firma.de" type="email" />
-          <Field label="Telefon" value={form.phone} onChange={(v) => update('phone', v)} placeholder="+49 170 1234567" type="tel" />
-        </Section>
+          <Section title="Kapcsolattartó">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Keresztnév" value={form.firstName} onChange={(v) => update('firstName', v)} placeholder="Hans" />
+              <Field label="Vezetéknév" value={form.lastName} onChange={(v) => update('lastName', v)} placeholder="Mustermann" />
+            </div>
+            <Field label="Email" value={form.email} onChange={(v) => update('email', v)} placeholder="hans@firma.de" type="email" />
+            <Field label="Telefon" value={form.phone} onChange={(v) => update('phone', v)} placeholder="+49 170 1234567" type="tel" />
+          </Section>
+        </div>
 
         <Section title="Megjegyzés">
           <textarea
@@ -99,12 +113,12 @@ export default function NewPartnerPage() {
           />
         </Section>
 
-        {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+        {error && <p className="text-red-400 text-sm">{error}</p>}
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-4 bg-white hover:bg-white/90 text-black font-bold rounded-xl transition disabled:opacity-40 text-base"
+          className="w-full py-4 md:py-5 bg-white hover:bg-white/90 text-black font-bold rounded-xl transition disabled:opacity-40 text-base md:text-lg"
         >
           {loading ? 'Mentés...' : 'Partner mentése a CRM-be'}
         </button>
@@ -123,17 +137,21 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Field({ label, value, onChange, placeholder, type = 'text' }: {
-  label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  type?: string
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-white/50 mb-1">{label}</label>
+      <label className="block text-sm font-medium text-white/50 mb-1.5">{label}</label>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full px-4 py-3 bg-[#161616] border border-white/10 rounded-xl text-white placeholder-white/30 text-base focus:outline-none focus:border-white/30"
+        className="w-full px-4 py-3 bg-[#161616] border border-white/10 rounded-xl text-white placeholder-white/30 text-base focus:outline-none focus:border-white/30 min-h-[50px]"
       />
     </div>
   )
