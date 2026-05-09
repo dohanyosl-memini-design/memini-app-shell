@@ -160,14 +160,23 @@ function GlassInput({ label, value, onChange, placeholder, type = 'text', style,
   placeholder?: string; type?: string
   style: React.CSSProperties; textPrimary: string
 }) {
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (type === 'tel') {
+      onChange(e.target.value.replace(/[^0-9+\s\-()]/g, ''))
+    } else {
+      onChange(e.target.value)
+    }
+  }
+
   return (
     <div>
       <p className="text-xs font-medium uppercase tracking-wider mb-1.5" style={{ color: textPrimary }}>{label}</p>
       <input
         type={type}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={handleChange}
         placeholder={placeholder}
+        inputMode={type === 'tel' ? 'tel' : undefined}
         className="w-full px-4 py-3 rounded-xl text-base focus:outline-none min-h-[50px]"
         style={style}
       />
