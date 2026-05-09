@@ -14,7 +14,7 @@ const TILES = [
     Icon: UserPlus,
   },
   {
-    href: '/products',
+    href: '/order',
     label: 'Megrendelés',
     Icon: ClipboardList,
   },

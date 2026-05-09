@@ -24,6 +24,8 @@ interface Product {
 function ProductsContent() {
   const searchParams = useSearchParams()
   const initialCity = searchParams.get('city') ?? 'all'
+  const partnerName = searchParams.get('partnerName')
+  const partnerCity = searchParams.get('partnerCity')
   const { theme } = useTheme()
 
   const [products, setProducts] = useState<Product[]>([])
@@ -52,6 +54,27 @@ function ProductsContent() {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Partner banner */}
+      {partnerName && (
+        <div
+          className="px-4 md:px-8 lg:px-12 py-2 flex items-center gap-2"
+          style={{
+            background: theme.inputBg,
+            borderBottom: `1px solid ${theme.cardBorder}`,
+          }}
+        >
+          <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: theme.textSecondary }}>
+            Megrendelő:
+          </span>
+          <span className="text-sm font-semibold" style={{ color: theme.textPrimary }}>
+            {partnerName}
+          </span>
+          {partnerCity && (
+            <span className="text-xs" style={{ color: theme.textSecondary }}>— {partnerCity}</span>
+          )}
+        </div>
+      )}
+
       {/* Sticky filter bar */}
       <div
         className="px-4 md:px-8 lg:px-12 pt-2 pb-3 space-y-2 sticky top-0 z-10"
