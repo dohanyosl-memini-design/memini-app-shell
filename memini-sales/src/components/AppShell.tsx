@@ -1,24 +1,37 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
+import { ArrowLeft } from 'lucide-react'
+import { useTheme } from '@/contexts/ThemeContext'
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+  const { theme } = useTheme()
   const isHome = pathname === '/home'
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#0a0a0a]">
+    <div className="flex flex-col min-h-screen">
       {!isHome && (
         <header
-          className="flex items-end px-4 pb-3 pt-[max(1.5rem,env(safe-area-inset-top))]"
-          style={{ paddingLeft: 'max(1rem, env(safe-area-inset-left))' }}
+          className="flex items-end px-5 pb-3 md:px-10 lg:px-16"
+          style={{
+            paddingTop: 'max(1.5rem, env(safe-area-inset-top))',
+            paddingLeft: 'max(1.25rem, env(safe-area-inset-left))',
+          }}
         >
           <button
             onClick={() => router.back()}
-            className="w-11 h-11 rounded-full bg-white/10 flex items-center justify-center text-white/70 hover:bg-white/20 active:bg-white/30 transition text-lg"
+            className="w-11 h-11 rounded-full flex items-center justify-center transition active:scale-90"
+            style={{
+              background: theme.cardBg,
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              border: `1px solid ${theme.cardBorder}`,
+              color: theme.textPrimary,
+            }}
           >
-            ←
+            <ArrowLeft size={18} strokeWidth={2} />
           </button>
         </header>
       )}
