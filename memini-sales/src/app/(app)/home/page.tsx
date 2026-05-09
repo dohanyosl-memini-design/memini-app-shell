@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { UserPlus, ClipboardList, MapPin, Settings } from 'lucide-react'
+import { UserPlus, ClipboardList, MapPin, Settings, Contact } from 'lucide-react'
 import { Background } from '@/components/Background'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useSession } from 'next-auth/react'
@@ -22,6 +22,11 @@ const TILES = [
     href: '/cities',
     label: 'Városok',
     Icon: MapPin,
+  },
+  {
+    href: '/about',
+    label: 'Bemutatkozás',
+    Icon: Contact,
   },
 ]
 
