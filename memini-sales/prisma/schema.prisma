@@ -48,6 +48,11 @@ model Order {
   status    String      @default("pending")
   companyId String?
   contactId String?
+  notes     String?
+  subtotal  Float       @default(0)
+  vatAmount Float       @default(0)
+  total     Float       @default(0)
+  currency  String      @default("EUR")
   items     OrderItem[]
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt

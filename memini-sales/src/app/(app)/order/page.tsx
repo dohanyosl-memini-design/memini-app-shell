@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Search, Building2, User, ArrowRight } from 'lucide-react'
 import { Background } from '@/components/Background'
 import { useTheme } from '@/contexts/ThemeContext'
+import { useCart } from '@/contexts/CartContext'
 
 interface Company {
   id: string
@@ -25,6 +26,7 @@ interface Contact {
 export default function OrderPage() {
   const { theme } = useTheme()
   const router = useRouter()
+  const { cart, saveCartToDB, clearCart, saving } = useCart()
   const [query, setQuery] = useState('')
   const [companies, setCompanies] = useState<Company[]>([])
   const [contacts, setContacts] = useState<Contact[]>([])
@@ -52,6 +54,15 @@ export default function OrderPage() {
     return () => clearTimeout(t)
   }, [query])
 
+  async function navigate(partnerId: string, params: URLSearchParams) {
+    // If cart has items for a DIFFERENT partner → auto-save before switching
+    if (cart.items.length > 0 && cart.partnerId && cart.partnerId !== partnerId) {
+      await saveCartToDB()
+      clearCart()
+    }
+    router.push(`/products?${params}`)
+  }
+
   function selectCompany(c: Company) {
     const params = new URLSearchParams({
       partnerId: c.id,
@@ -59,7 +70,7 @@ export default function OrderPage() {
       ...(c.city ? { partnerCity: c.city } : {}),
       ...(c.country ? { partnerCountry: c.country } : {}),
     })
-    router.push(`/products?${params}`)
+    navigate(c.id, params)
   }
 
   function selectContact(c: Contact) {
@@ -68,7 +79,7 @@ export default function OrderPage() {
       partnerName: `${c.firstName} ${c.lastName}`.trim(),
       partnerType: 'contact',
     })
-    router.push(`/products?${params}`)
+    navigate(c.id, params)
   }
 
   const hasResults = companies.length > 0 || contacts.length > 0

@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useState, useCallback, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
+import { ShoppingCart, X, Plus, Minus } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
+import { useCart } from '@/contexts/CartContext'
 import type { Theme } from '@/lib/themes'
 
 interface Product {
@@ -19,6 +21,7 @@ interface Product {
   unit: string
   vatRate: number
   imageUrl: string | null
+  priceListEntryId: string | null
   orderCount?: number
 }
 
@@ -28,39 +31,56 @@ interface Section {
   products: Product[]
 }
 
+interface PriceEntry {
+  id: string
+  basePrice: number
+  tiers: { qty: number; m: number }[]
+}
+
+const QTY_STEPS = [50, 100, 200, 300, 500, 1000, 2000]
+
+function getTierPrice(basePrice: number, qty: number, tiers: { qty: number; m: number }[]): number {
+  if (!tiers.length) return basePrice
+  const sorted = [...tiers].sort((a, b) => b.qty - a.qty)
+  const tier = sorted.find((t) => qty >= t.qty)
+  return tier ? Math.round(basePrice * tier.m * 100) / 100 : basePrice
+}
+
 function ProductsContent() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const partnerId = searchParams.get('partnerId')
   const partnerName = searchParams.get('partnerName')
   const partnerCity = searchParams.get('partnerCity')
   const initialCity = searchParams.get('city') ?? 'all'
   const { theme } = useTheme()
+  const { cart, addItem, totalItems, subtotal, setPartner } = useCart()
 
-  // Smart mode state
   const [sections, setSections] = useState<Section[]>([])
-
-  // Regular mode state
   const [products, setProducts] = useState<Product[]>([])
   const [cities, setCities] = useState<string[]>([])
   const [selectedCity, setSelectedCity] = useState(initialCity)
   const [search, setSearch] = useState('')
-
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Product | null>(null)
 
   const isSmartMode = !!partnerId && !search
 
+  // Sync partner to cart context
+  useEffect(() => {
+    if (partnerId && partnerName) {
+      setPartner(partnerId, partnerName, partnerCity ?? undefined)
+    }
+  }, [partnerId, partnerName, partnerCity, setPartner])
+
   const fetchProducts = useCallback(async () => {
     setLoading(true)
     const params = new URLSearchParams()
-
     if (partnerId) params.set('partnerId', partnerId)
     if (!partnerId && selectedCity !== 'all') params.set('city', selectedCity)
     if (search) params.set('search', search)
-
     const res = await fetch(`/api/products?${params}`)
     const data = await res.json()
-
     if (data.smart) {
       setSections(data.sections ?? [])
     } else {
@@ -75,7 +95,7 @@ function ProductsContent() {
     return () => clearTimeout(t)
   }, [fetchProducts])
 
-  const cardStyle: React.CSSProperties = {
+  const filterBarStyle: React.CSSProperties = {
     background: theme.cardBg,
     backdropFilter: 'blur(32px)',
     WebkitBackdropFilter: 'blur(32px)',
@@ -90,32 +110,21 @@ function ProductsContent() {
           className="px-4 md:px-8 lg:px-12 py-2.5 flex items-center gap-2"
           style={{ background: theme.inputBg, borderBottom: `1px solid ${theme.cardBorder}` }}
         >
-          <span className="text-xs font-semibold uppercase tracking-widest flex-shrink-0" style={{ color: theme.textSecondary }}>
-            Megrendelő
-          </span>
+          <span className="text-xs font-semibold uppercase tracking-widest flex-shrink-0" style={{ color: theme.textSecondary }}>Megrendelő</span>
           <span className="text-sm font-bold truncate" style={{ color: theme.textPrimary }}>{partnerName}</span>
-          {partnerCity && (
-            <span className="text-xs flex-shrink-0" style={{ color: theme.textSecondary }}>— {partnerCity}</span>
-          )}
+          {partnerCity && <span className="text-xs flex-shrink-0" style={{ color: theme.textSecondary }}>— {partnerCity}</span>}
         </div>
       )}
 
-      {/* Filter bar — always shown for search, city chips only in regular mode */}
-      <div
-        className="px-4 md:px-8 lg:px-12 pt-2 pb-3 space-y-2 sticky top-0 z-10"
-        style={cardStyle}
-      >
+      {/* Filter bar */}
+      <div className="px-4 md:px-8 lg:px-12 pt-2 pb-3 space-y-2 sticky top-0 z-10" style={filterBarStyle}>
         <input
           type="search"
           placeholder="Keresés termékek között..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full px-4 py-3 md:py-3.5 rounded-xl text-base focus:outline-none"
-          style={{
-            background: theme.inputBg,
-            border: `1px solid ${theme.inputBorder}`,
-            color: theme.textPrimary,
-          }}
+          style={{ background: theme.inputBg, border: `1px solid ${theme.inputBorder}`, color: theme.textPrimary }}
         />
         {!partnerId && (
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
@@ -128,19 +137,15 @@ function ProductsContent() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" style={{ paddingBottom: totalItems > 0 ? '80px' : '0' }}>
         {loading ? (
-          <div className="flex items-center justify-center h-40" style={{ color: theme.textSecondary }}>
-            Betöltés...
-          </div>
+          <div className="flex items-center justify-center h-40" style={{ color: theme.textSecondary }}>Betöltés...</div>
         ) : isSmartMode ? (
           <SmartSections sections={sections} onSelect={setSelected} theme={theme} />
         ) : (
           <div className="px-4 md:px-8 lg:px-12 py-4">
             {products.length === 0 ? (
-              <div className="flex items-center justify-center h-40" style={{ color: theme.textSecondary }}>
-                Nincs találat
-              </div>
+              <div className="flex items-center justify-center h-40" style={{ color: theme.textSecondary }}>Nincs találat</div>
             ) : (
               <ProductGrid products={products} onSelect={setSelected} theme={theme} />
             )}
@@ -148,7 +153,41 @@ function ProductsContent() {
         )}
       </div>
 
-      {selected && <ProductModal product={selected} onClose={() => setSelected(null)} theme={theme} />}
+      {/* Cart bar */}
+      {totalItems > 0 && (
+        <div
+          className="fixed bottom-0 left-0 right-0 z-20 px-4 py-3"
+          style={{
+            background: theme.cardBg,
+            backdropFilter: 'blur(32px)',
+            WebkitBackdropFilter: 'blur(32px)',
+            borderTop: `1px solid ${theme.cardBorder}`,
+            paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+          }}
+        >
+          <button
+            onClick={() => router.push('/cart')}
+            className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl font-semibold text-base"
+            style={{ background: theme.buttonBg, color: theme.buttonText }}
+          >
+            <span className="flex items-center gap-2">
+              <ShoppingCart size={18} strokeWidth={2} />
+              {totalItems} termék
+            </span>
+            <span>€{subtotal.toFixed(2)} →</span>
+          </button>
+        </div>
+      )}
+
+      {/* Product modal */}
+      {selected && (
+        <ProductModal
+          product={selected}
+          onClose={() => setSelected(null)}
+          theme={theme}
+          onAdded={() => setSelected(null)}
+        />
+      )}
     </div>
   )
 }
@@ -163,48 +202,24 @@ export default function ProductsPage() {
 
 // --- Smart sections ---
 
-function SmartSections({ sections, onSelect, theme }: {
-  sections: Section[]
-  onSelect: (p: Product) => void
-  theme: Theme
-}) {
-  if (sections.length === 0) {
+function SmartSections({ sections, onSelect, theme }: { sections: Section[]; onSelect: (p: Product) => void; theme: Theme }) {
+  if (!sections.length) {
     return (
       <div className="flex flex-col items-center justify-center h-60 gap-2">
-        <p className="text-base font-medium" style={{ color: theme.textPrimary }}>Nincsenek termékadatok</p>
-        <p className="text-sm" style={{ color: theme.textSecondary }}>Ennek a partnernek még nincs rendelési előzménye</p>
+        <p className="text-base font-medium" style={{ color: theme.textPrimary }}>Nincs rendelési előzmény</p>
+        <p className="text-sm" style={{ color: theme.textSecondary }}>Válassz a termékekből az első megrendeléshez</p>
       </div>
     )
   }
-
   return (
-    <div className="pb-8">
+    <div className="pb-4">
       {sections.map((section, i) => (
         <div key={section.type}>
-          {/* Section separator (not before first) */}
-          {i > 0 && (
-            <div
-              className="mx-4 md:mx-8 lg:mx-12 my-6"
-              style={{ height: '1px', background: theme.cardBorder }}
-            />
-          )}
-
-          {/* Section header */}
+          {i > 0 && <div className="mx-4 md:mx-8 lg:mx-12 my-5" style={{ height: '1px', background: theme.cardBorder }} />}
           <div className="px-4 md:px-8 lg:px-12 pt-5 pb-3 flex items-center gap-3">
-            <span
-              className="text-xs font-bold uppercase tracking-widest"
-              style={{ color: theme.textSecondary }}
-            >
-              {section.label}
-            </span>
-            <span
-              className="text-xs px-2 py-0.5 rounded-full font-semibold"
-              style={{ background: theme.inputBg, color: theme.textSecondary }}
-            >
-              {section.products.length}
-            </span>
+            <span className="text-xs font-bold uppercase tracking-widest" style={{ color: theme.textSecondary }}>{section.label}</span>
+            <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: theme.inputBg, color: theme.textSecondary }}>{section.products.length}</span>
           </div>
-
           <div className="px-4 md:px-8 lg:px-12">
             <ProductGrid products={section.products} onSelect={onSelect} theme={theme} showOrderBadge={section.type === 'previous'} />
           </div>
@@ -217,10 +232,7 @@ function SmartSections({ sections, onSelect, theme }: {
 // --- Product grid ---
 
 function ProductGrid({ products, onSelect, theme, showOrderBadge = false }: {
-  products: Product[]
-  onSelect: (p: Product) => void
-  theme: Theme
-  showOrderBadge?: boolean
+  products: Product[]; onSelect: (p: Product) => void; theme: Theme; showOrderBadge?: boolean
 }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
@@ -233,18 +245,14 @@ function ProductGrid({ products, onSelect, theme, showOrderBadge = false }: {
 
 // --- City chip ---
 
-function CityChip({ label, active, onClick, theme }: {
-  label: string; active: boolean; onClick: () => void; theme: Theme
-}) {
+function CityChip({ label, active, onClick, theme }: { label: string; active: boolean; onClick: () => void; theme: Theme }) {
   return (
     <button
       onClick={onClick}
       className="flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition min-h-[36px]"
-      style={
-        active
-          ? { background: theme.textPrimary, color: theme.buttonText }
-          : { background: theme.inputBg, color: theme.textSecondary, border: `1px solid ${theme.cardBorder}` }
-      }
+      style={active
+        ? { background: theme.textPrimary, color: theme.buttonText }
+        : { background: theme.inputBg, color: theme.textSecondary, border: `1px solid ${theme.cardBorder}` }}
     >
       {label}
     </button>
@@ -274,22 +282,13 @@ function ProductCard({ product, onClick, theme, showOrderBadge }: {
         ) : (
           <div className="w-full h-full flex items-center justify-center text-4xl opacity-20">📦</div>
         )}
-        {showOrderBadge && product.orderCount && product.orderCount > 0 && (
-          <span
-            className="absolute top-2 right-2 text-xs font-bold px-1.5 py-0.5 rounded-full"
-            style={{ background: theme.buttonBg, color: theme.buttonText }}
-          >
-            ×{product.orderCount}
-          </span>
-        )}
-        {product.city && !showOrderBadge && (
-          <span
-            className="absolute top-2 left-2 backdrop-blur-sm text-xs font-medium px-2 py-0.5 rounded-full"
-            style={{ background: theme.cardBg, color: theme.textSecondary, border: `1px solid ${theme.cardBorder}` }}
-          >
-            {product.city}
-          </span>
-        )}
+        {showOrderBadge && product.orderCount ? (
+          <span className="absolute top-2 right-2 text-xs font-bold px-1.5 py-0.5 rounded-full"
+            style={{ background: theme.buttonBg, color: theme.buttonText }}>×{product.orderCount}</span>
+        ) : product.city ? (
+          <span className="absolute top-2 left-2 text-xs font-medium px-2 py-0.5 rounded-full"
+            style={{ background: theme.cardBg, color: theme.textSecondary, border: `1px solid ${theme.cardBorder}` }}>{product.city}</span>
+        ) : null}
       </div>
       <div className="p-3 md:p-4">
         <p className="font-semibold text-sm md:text-base leading-tight line-clamp-2" style={{ color: theme.textPrimary }}>
@@ -309,80 +308,221 @@ function ProductCard({ product, onClick, theme, showOrderBadge }: {
 
 // --- Product modal ---
 
-function ProductModal({ product, onClose, theme }: { product: Product; onClose: () => void; theme: Theme }) {
+function ProductModal({ product, onClose, theme, onAdded }: {
+  product: Product; onClose: () => void; theme: Theme; onAdded: () => void
+}) {
+  const { addItem, cart } = useCart()
+  const [qtyIndex, setQtyIndex] = useState(0)
+  const [priceEntry, setPriceEntry] = useState<PriceEntry | null>(null)
+  const [loadingPrice, setLoadingPrice] = useState(false)
+  const [added, setAdded] = useState(false)
+
+  const qty = QTY_STEPS[qtyIndex]
+
+  useEffect(() => {
+    if (!product.priceListEntryId) return
+    setLoadingPrice(true)
+    fetch(`/api/pricelists/${product.priceListEntryId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setPriceEntry({ id: data.id, basePrice: data.basePrice, tiers: data.tiers ?? [] })
+      })
+      .finally(() => setLoadingPrice(false))
+  }, [product.priceListEntryId])
+
+  const basePrice = priceEntry ? getTierPrice(priceEntry.basePrice, QTY_STEPS[0], priceEntry.tiers) : product.salesPrice
+  const unitPrice = priceEntry ? getTierPrice(priceEntry.basePrice, qty, priceEntry.tiers) : product.salesPrice
+  const totalPrice = unitPrice * qty
+  const savings = (basePrice - unitPrice) * qty
+
+  // Check if already in cart
+  const inCart = cart.items.some((i) => i.productId === product.id)
+
+  function handleAdd() {
+    addItem({
+      productId: product.id,
+      name: product.nameDE || product.name,
+      sku: product.sku,
+      quantity: qty,
+      unitPrice,
+      baseUnitPrice: basePrice,
+      vatRate: product.vatRate,
+      unit: product.unit,
+      imageUrl: product.imageUrl,
+      city: product.city,
+    })
+    setAdded(true)
+    setTimeout(() => onAdded(), 600)
+  }
+
+  const displayName = product.nameDE || product.name
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6"
-      style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+      className="fixed inset-0 z-50 flex flex-col"
+      style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-xl md:max-w-2xl rounded-t-3xl sm:rounded-3xl overflow-hidden max-h-[92vh] flex flex-col"
+        className="flex flex-col h-full sm:m-4 sm:rounded-3xl overflow-hidden"
         style={{
           background: theme.cardBg,
-          backdropFilter: 'blur(40px)',
-          WebkitBackdropFilter: 'blur(40px)',
+          backdropFilter: 'blur(48px)',
+          WebkitBackdropFilter: 'blur(48px)',
           border: `1px solid ${theme.cardBorder}`,
-          boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          maxWidth: '640px',
+          margin: '0 auto',
+          width: '100%',
+          alignSelf: 'flex-end',
+          maxHeight: '95vh',
+          borderTopLeftRadius: '1.5rem',
+          borderTopRightRadius: '1.5rem',
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="aspect-video relative flex-shrink-0" style={{ background: theme.inputBg }}>
+        {/* Full image */}
+        <div className="relative flex-shrink-0" style={{ height: '42vh', background: theme.inputBg }}>
           {product.imageUrl ? (
-            <Image src={product.imageUrl} alt={product.name} fill className="object-cover" />
+            <Image src={product.imageUrl} alt={displayName} fill className="object-cover" />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-7xl opacity-20">📦</div>
+            <div className="w-full h-full flex items-center justify-center text-8xl opacity-20">📦</div>
           )}
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg"
-            style={{ background: theme.cardBg, border: `1px solid ${theme.cardBorder}`, color: theme.textPrimary }}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center"
+            style={{ background: 'rgba(0,0,0,0.45)', color: '#fff' }}
           >
-            ✕
+            <X size={18} strokeWidth={2.5} />
           </button>
+          {product.city && (
+            <span
+              className="absolute bottom-3 left-3 text-xs font-medium px-2.5 py-1 rounded-full"
+              style={{ background: theme.cardBg, color: theme.textSecondary, border: `1px solid ${theme.cardBorder}` }}
+            >
+              {product.city}
+            </span>
+          )}
         </div>
 
-        <div className="p-5 md:p-7 overflow-y-auto">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-xl md:text-2xl font-bold" style={{ color: theme.textPrimary }}>
-                {product.nameDE || product.name}
-              </h2>
+        {/* Scrollable details */}
+        <div className="flex-1 overflow-y-auto px-5 pt-4 pb-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <h2 className="text-xl font-bold leading-tight" style={{ color: theme.textPrimary }}>{displayName}</h2>
               {product.nameDE && product.name !== product.nameDE && (
                 <p className="text-sm mt-0.5" style={{ color: theme.textSecondary }}>{product.name}</p>
               )}
             </div>
             <div className="text-right flex-shrink-0">
-              <p className="text-2xl md:text-3xl font-bold" style={{ color: theme.textPrimary }}>
-                €{product.salesPrice.toFixed(2)}
-              </p>
               <p className="text-xs" style={{ color: theme.textSecondary }}>/ {product.unit} + {product.vatRate}% ÁFA</p>
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-3">
-            {product.sku && <InfoRow label="Cikkszám" value={product.sku} theme={theme} />}
-            {product.city && <InfoRow label="Helyszín" value={product.city} theme={theme} />}
-            {product.material && <InfoRow label="Anyag" value={product.material} theme={theme} />}
-            {product.productType && <InfoRow label="Típus" value={product.productType} theme={theme} />}
+          {/* Details row */}
+          <div className="flex gap-2 mt-3 flex-wrap">
+            {product.sku && (
+              <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: theme.inputBg, color: theme.textSecondary }}>
+                {product.sku}
+              </span>
+            )}
+            {product.material && (
+              <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: theme.inputBg, color: theme.textSecondary }}>
+                {product.material}
+              </span>
+            )}
+            {product.productType && (
+              <span className="text-xs px-2.5 py-1 rounded-full" style={{ background: theme.inputBg, color: theme.textSecondary }}>
+                {product.productType}
+              </span>
+            )}
           </div>
 
           {product.description && (
-            <p className="mt-5 text-sm md:text-base leading-relaxed" style={{ color: theme.textSecondary }}>
-              {product.description}
-            </p>
+            <p className="mt-3 text-sm leading-relaxed" style={{ color: theme.textSecondary }}>{product.description}</p>
           )}
         </div>
-      </div>
-    </div>
-  )
-}
 
-function InfoRow({ label, value, theme }: { label: string; value: string; theme: Theme }) {
-  return (
-    <div className="rounded-xl p-3 md:p-4" style={{ background: theme.inputBg, border: `1px solid ${theme.cardBorder}` }}>
-      <p className="text-xs font-medium" style={{ color: theme.textSecondary }}>{label}</p>
-      <p className="font-semibold mt-0.5 text-sm md:text-base" style={{ color: theme.textPrimary }}>{value}</p>
+        {/* Fixed bottom: slider + price + button */}
+        <div
+          className="flex-shrink-0 px-5 pt-4 pb-5"
+          style={{
+            borderTop: `1px solid ${theme.cardBorder}`,
+            paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))',
+          }}
+        >
+          {/* Qty label */}
+          <div className="flex items-baseline justify-between mb-2">
+            <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: theme.textSecondary }}>Mennyiség</span>
+            <span className="text-lg font-bold" style={{ color: theme.textPrimary }}>{qty} {product.unit}</span>
+          </div>
+
+          {/* Slider */}
+          <input
+            type="range"
+            min={0}
+            max={QTY_STEPS.length - 1}
+            step={1}
+            value={qtyIndex}
+            onChange={(e) => setQtyIndex(Number(e.target.value))}
+            className="w-full h-1.5 rounded-full appearance-none cursor-pointer mb-1"
+            style={{ accentColor: theme.textPrimary, background: theme.inputBg }}
+          />
+
+          {/* Step labels */}
+          <div className="flex justify-between mb-4">
+            {QTY_STEPS.map((q, i) => (
+              <button
+                key={q}
+                onClick={() => setQtyIndex(i)}
+                className="text-xs text-center transition"
+                style={{
+                  color: i === qtyIndex ? theme.textPrimary : theme.textSecondary,
+                  fontWeight: i === qtyIndex ? 700 : 400,
+                  opacity: i === qtyIndex ? 1 : 0.5,
+                }}
+              >
+                {q >= 1000 ? `${q / 1000}k` : q}
+              </button>
+            ))}
+          </div>
+
+          {/* Price display */}
+          <div
+            className="rounded-2xl px-4 py-3 mb-3"
+            style={{ background: theme.inputBg, border: `1px solid ${theme.cardBorder}` }}
+          >
+            {loadingPrice ? (
+              <p className="text-sm text-center" style={{ color: theme.textSecondary }}>Ár betöltése...</p>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs" style={{ color: theme.textSecondary }}>
+                    {qty} × €{unitPrice.toFixed(2)}
+                  </p>
+                  {savings > 0.005 && (
+                    <p className="text-xs mt-0.5 font-medium" style={{ color: theme.textSecondary }}>
+                      Megtakarítás: €{savings.toFixed(2)}
+                    </p>
+                  )}
+                </div>
+                <p className="text-2xl font-bold" style={{ color: theme.textPrimary }}>
+                  €{totalPrice.toFixed(2)}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Add to cart */}
+          <button
+            onClick={handleAdd}
+            disabled={added}
+            className="w-full py-4 rounded-2xl font-bold text-base transition disabled:opacity-70"
+            style={{ background: theme.buttonBg, color: theme.buttonText }}
+          >
+            {added ? '✓ Hozzáadva' : inCart ? 'Frissítés a kosárban' : 'Kosárba'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
