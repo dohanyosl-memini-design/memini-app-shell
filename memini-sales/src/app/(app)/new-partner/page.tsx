@@ -57,7 +57,7 @@ export default function NewPartnerPage() {
           </div>
           <div>
             <h2 className="text-2xl font-bold" style={{ color: theme.textPrimary }}>Partner mentve!</h2>
-            <p className="mt-1" style={{ color: theme.textSecondary }}>Az adatok bekerültek a CRM-be.</p>
+            <p className="mt-1" style={{ color: theme.textPrimary }}>Az adatok bekerültek a CRM-be.</p>
           </div>
           <button
             onClick={() => setSuccess(false)}
@@ -81,22 +81,22 @@ export default function NewPartnerPage() {
     <>
       <Background />
       <div
-        className="px-6 pb-10 md:px-10 lg:px-16"
+        className="min-h-screen flex flex-col items-center justify-center px-6 py-10 md:px-10"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
-        <h1 className="text-2xl md:text-3xl font-bold mb-6 mt-2" style={{ color: theme.textPrimary }}>
+        <h1 className="text-2xl md:text-3xl font-bold mb-6 w-full max-w-2xl" style={{ color: theme.textPrimary }}>
           Új partner
         </h1>
 
-        <form onSubmit={handleSubmit} className="max-w-2xl space-y-5">
+        <form onSubmit={handleSubmit} className="w-full max-w-2xl space-y-5">
           {/* Two-col on large landscape */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <Section title="Cég adatok" textSecondary={theme.textSecondary}>
-              <GlassInput label="Cégnév" value={form.companyName} onChange={(v) => update('companyName', v)} placeholder="Mustermann GmbH" style={inputStyle} textSecondary={theme.textSecondary} />
+            <Section title="Cég adatok" textPrimary={theme.textPrimary}>
+              <GlassInput label="Cégnév" value={form.companyName} onChange={(v) => update('companyName', v)} placeholder="Mustermann GmbH" style={inputStyle} textPrimary={theme.textPrimary} />
               <div className="grid grid-cols-2 gap-3">
-                <GlassInput label="Város" value={form.city} onChange={(v) => update('city', v)} placeholder="München" style={inputStyle} textSecondary={theme.textSecondary} />
+                <GlassInput label="Város" value={form.city} onChange={(v) => update('city', v)} placeholder="München" style={inputStyle} textPrimary={theme.textPrimary} />
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-wider mb-1.5" style={{ color: theme.textSecondary }}>Ország</p>
+                  <p className="text-xs font-medium uppercase tracking-wider mb-1.5" style={{ color: theme.textPrimary }}>Ország</p>
                   <select
                     value={form.country}
                     onChange={(e) => update('country', e.target.value)}
@@ -109,17 +109,17 @@ export default function NewPartnerPage() {
               </div>
             </Section>
 
-            <Section title="Kapcsolattartó" textSecondary={theme.textSecondary}>
+            <Section title="Kapcsolattartó" textPrimary={theme.textPrimary}>
               <div className="grid grid-cols-2 gap-3">
-                <GlassInput label="Keresztnév" value={form.firstName} onChange={(v) => update('firstName', v)} placeholder="Hans" style={inputStyle} textSecondary={theme.textSecondary} />
-                <GlassInput label="Vezetéknév" value={form.lastName} onChange={(v) => update('lastName', v)} placeholder="Mustermann" style={inputStyle} textSecondary={theme.textSecondary} />
+                <GlassInput label="Keresztnév" value={form.firstName} onChange={(v) => update('firstName', v)} placeholder="Hans" style={inputStyle} textPrimary={theme.textPrimary} />
+                <GlassInput label="Vezetéknév" value={form.lastName} onChange={(v) => update('lastName', v)} placeholder="Mustermann" style={inputStyle} textPrimary={theme.textPrimary} />
               </div>
-              <GlassInput label="Email" value={form.email} onChange={(v) => update('email', v)} placeholder="hans@firma.de" type="email" style={inputStyle} textSecondary={theme.textSecondary} />
-              <GlassInput label="Telefon" value={form.phone} onChange={(v) => update('phone', v)} placeholder="+49 170 1234567" type="tel" style={inputStyle} textSecondary={theme.textSecondary} />
+              <GlassInput label="Email" value={form.email} onChange={(v) => update('email', v)} placeholder="hans@firma.de" type="email" style={inputStyle} textPrimary={theme.textPrimary} />
+              <GlassInput label="Telefon" value={form.phone} onChange={(v) => update('phone', v)} placeholder="+49 170 1234567" type="tel" style={inputStyle} textPrimary={theme.textPrimary} />
             </Section>
           </div>
 
-          <Section title="Megjegyzés" textSecondary={theme.textSecondary}>
+          <Section title="Megjegyzés" textPrimary={theme.textPrimary}>
             <textarea
               value={form.notes}
               onChange={(e) => update('notes', e.target.value)}
@@ -146,23 +146,23 @@ export default function NewPartnerPage() {
   )
 }
 
-function Section({ title, children, textSecondary }: { title: string; children: React.ReactNode; textSecondary: string }) {
+function Section({ title, children, textPrimary }: { title: string; children: React.ReactNode; textPrimary: string }) {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: textSecondary }}>{title}</p>
+      <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: textPrimary }}>{title}</p>
       <div className="space-y-3">{children}</div>
     </div>
   )
 }
 
-function GlassInput({ label, value, onChange, placeholder, type = 'text', style, textSecondary }: {
+function GlassInput({ label, value, onChange, placeholder, type = 'text', style, textPrimary }: {
   label: string; value: string; onChange: (v: string) => void
   placeholder?: string; type?: string
-  style: React.CSSProperties; textSecondary: string
+  style: React.CSSProperties; textPrimary: string
 }) {
   return (
     <div>
-      <p className="text-xs font-medium uppercase tracking-wider mb-1.5" style={{ color: textSecondary }}>{label}</p>
+      <p className="text-xs font-medium uppercase tracking-wider mb-1.5" style={{ color: textPrimary }}>{label}</p>
       <input
         type={type}
         value={value}
