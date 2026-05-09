@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { useTheme } from '@/contexts/ThemeContext'
+import { Background } from '@/components/Background'
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -12,6 +13,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex flex-col min-h-screen">
+      <Background />
       {!isHome && (
         <header
           className="flex items-end px-5 pb-3 md:px-10 lg:px-16"
