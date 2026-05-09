@@ -442,74 +442,75 @@ function ProductModal({ product, onClose, theme, onAdded }: {
           )}
         </div>
 
-        {/* Fixed bottom: slider + price + button */}
+        {/* Fixed bottom: price + slider + button */}
         <div
-          className="flex-shrink-0 px-5 pt-4 pb-5"
+          className="flex-shrink-0 px-5 pt-4"
           style={{
             borderTop: `1px solid ${theme.cardBorder}`,
             paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))',
           }}
         >
-          {/* Qty label */}
-          <div className="flex items-baseline justify-between mb-2">
-            <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: theme.textSecondary }}>Mennyiség</span>
-            <span className="text-lg font-bold" style={{ color: theme.textPrimary }}>{qty} {product.unit}</span>
-          </div>
+          {/* Price display — big and prominent */}
+          {loadingPrice ? (
+            <p className="text-sm text-center mb-4" style={{ color: theme.textSecondary }}>Ár betöltése...</p>
+          ) : (
+            <div className="mb-4">
+              {/* Unit price — large */}
+              <div className="flex items-baseline gap-2 mb-1">
+                <span className="text-5xl font-black tracking-tight" style={{ color: theme.textPrimary }}>
+                  €{unitPrice.toFixed(2)}
+                </span>
+                <span className="text-base font-medium" style={{ color: theme.textSecondary }}>/ {product.unit}</span>
+              </div>
+              {/* Total + savings row */}
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold" style={{ color: theme.textSecondary }}>
+                  {qty} {product.unit} = <span style={{ color: theme.textPrimary }}>€{totalPrice.toFixed(2)}</span>
+                </span>
+                {savings > 0.005 && (
+                  <span
+                    className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                    style={{ background: theme.inputBg, color: theme.textSecondary, border: `1px solid ${theme.cardBorder}` }}
+                  >
+                    −€{savings.toFixed(2)} megtakarítás
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Slider */}
-          <input
-            type="range"
-            min={0}
-            max={QTY_STEPS.length - 1}
-            step={1}
-            value={qtyIndex}
-            onChange={(e) => setQtyIndex(Number(e.target.value))}
-            className="w-full h-1.5 rounded-full appearance-none cursor-pointer mb-1"
-            style={{ accentColor: theme.textPrimary, background: theme.inputBg }}
-          />
-
-          {/* Step labels */}
-          <div className="flex justify-between mb-4">
-            {QTY_STEPS.map((q, i) => (
-              <button
-                key={q}
-                onClick={() => setQtyIndex(i)}
-                className="text-xs text-center transition"
-                style={{
-                  color: i === qtyIndex ? theme.textPrimary : theme.textSecondary,
-                  fontWeight: i === qtyIndex ? 700 : 400,
-                  opacity: i === qtyIndex ? 1 : 0.5,
-                }}
-              >
-                {q >= 1000 ? `${q / 1000}k` : q}
-              </button>
-            ))}
-          </div>
-
-          {/* Price display */}
-          <div
-            className="rounded-2xl px-4 py-3 mb-3"
-            style={{ background: theme.inputBg, border: `1px solid ${theme.cardBorder}` }}
-          >
-            {loadingPrice ? (
-              <p className="text-sm text-center" style={{ color: theme.textSecondary }}>Ár betöltése...</p>
-            ) : (
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs" style={{ color: theme.textSecondary }}>
-                    {qty} × €{unitPrice.toFixed(2)}
-                  </p>
-                  {savings > 0.005 && (
-                    <p className="text-xs mt-0.5 font-medium" style={{ color: theme.textSecondary }}>
-                      Megtakarítás: €{savings.toFixed(2)}
-                    </p>
-                  )}
-                </div>
-                <p className="text-2xl font-bold" style={{ color: theme.textPrimary }}>
-                  €{totalPrice.toFixed(2)}
-                </p>
-              </div>
-            )}
+          <div className="mb-1">
+            <div className="flex items-baseline justify-between mb-2">
+              <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: theme.textSecondary }}>Mennyiség</span>
+              <span className="text-sm font-bold" style={{ color: theme.textPrimary }}>{qty} {product.unit}</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={QTY_STEPS.length - 1}
+              step={1}
+              value={qtyIndex}
+              onChange={(e) => setQtyIndex(Number(e.target.value))}
+              className="w-full h-1.5 rounded-full appearance-none cursor-pointer mb-1"
+              style={{ accentColor: theme.textPrimary, background: theme.inputBg }}
+            />
+            <div className="flex justify-between mb-4">
+              {QTY_STEPS.map((q, i) => (
+                <button
+                  key={q}
+                  onClick={() => setQtyIndex(i)}
+                  className="text-xs text-center transition"
+                  style={{
+                    color: theme.textPrimary,
+                    fontWeight: i === qtyIndex ? 700 : 400,
+                    opacity: i === qtyIndex ? 1 : 0.4,
+                  }}
+                >
+                  {q >= 1000 ? `${q / 1000}k` : q}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Add to cart */}
