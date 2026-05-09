@@ -19,25 +19,51 @@ model User {
 }
 
 model Product {
-  id              String   @id @default(cuid())
+  id              String      @id @default(cuid())
   name            String
   nameDE          String?
-  sku             String   @unique
+  sku             String      @unique
   description     String?
   material        String?
   productType     String?
   site            String?
   city            String?
-  costPrice       Float    @default(0)
-  salesPrice      Float    @default(0)
-  stock           Int      @default(0)
-  unit            String   @default("db")
-  vatRate         Float    @default(19)
-  active          Boolean  @default(true)
+  costPrice       Float       @default(0)
+  salesPrice      Float       @default(0)
+  stock           Int         @default(0)
+  unit            String      @default("db")
+  vatRate         Float       @default(19)
+  active          Boolean     @default(true)
   imageUrl        String?
   priceListEntryId String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  orderItems      OrderItem[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model Order {
+  id        String      @id @default(cuid())
+  number    String      @unique
+  date      DateTime    @default(now())
+  status    String      @default("pending")
+  companyId String?
+  contactId String?
+  items     OrderItem[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  description String
+  quantity    Float
+  unitPrice   Float
+  vatRate     Float    @default(19)
+  total       Float
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id])
 }
 
 model PriceListEntry {
