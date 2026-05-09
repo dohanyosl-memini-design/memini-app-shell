@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("user")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id              String   @id @default(cuid())
+  name            String
+  nameDE          String?
+  sku             String   @unique
+  description     String?
+  material        String?
+  productType     String?
+  site            String?
+  city            String?
+  costPrice       Float    @default(0)
+  salesPrice      Float    @default(0)
+  stock           Int      @default(0)
+  unit            String   @default("db")
+  vatRate         Float    @default(19)
+  active          Boolean  @default(true)
+  imageUrl        String?
+  priceListEntryId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model PriceListEntry {
+  id        String   @id @default(cuid())
+  name      String
+  hordozo   String?
+  costPrice Float    @default(0)
+  basePrice Float    @default(0)
+  tiers     Json     @default("[]")
+  notes     String?
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Contact {
+  id        String   @id @default(cuid())
+  firstName String
+  lastName  String
+  email     String?
+  phone     String?
+  status    String   @default("lead")
+  notes     String?
+  companyId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Company {
+  id             String    @id @default(cuid())
+  name           String
+  partnerType    String?
+  industry       String?
+  website        String?
+  phone          String?
+  email          String?
+  address        String?
+  city           String?
+  region         String?
+  country        String?   @default("DE")
+  vatId          String?
+  customerNumber String?
+  classification String?   @default("D")
+  language       String?   @default("DE")
+  channel        String?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
