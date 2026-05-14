@@ -487,8 +487,8 @@ function ProductModal({ product, onClose, theme, onAdded }: {
                 </span>
                 {savings > 0.005 && (
                   <span
-                    className="text-sm font-bold px-2.5 py-0.5 rounded-full"
-                    style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}
+                    className="text-3xl font-black tracking-tight"
+                    style={{ color: '#4ade80' }}
                   >
                     −€{savings.toFixed(2)} megtakarítás
                   </span>
