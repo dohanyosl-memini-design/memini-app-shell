@@ -235,7 +235,7 @@ function ProductGrid({ products, onSelect, theme, showOrderBadge = false }: {
   products: Product[]; onSelect: (p: Product) => void; theme: Theme; showOrderBadge?: boolean
 }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
       {products.map((p) => (
         <ProductCard key={p.id} product={p} onClick={() => onSelect(p)} theme={theme} showOrderBadge={showOrderBadge} />
       ))}
@@ -359,21 +359,18 @@ function ProductModal({ product, onClose, theme, onAdded }: {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-end"
       style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}
       onClick={onClose}
     >
       <div
-        className="flex flex-col h-full sm:m-4 sm:rounded-3xl overflow-hidden"
+        className="flex flex-col overflow-hidden w-full"
         style={{
           background: theme.cardBg,
           backdropFilter: 'blur(48px)',
           WebkitBackdropFilter: 'blur(48px)',
           border: `1px solid ${theme.cardBorder}`,
           maxWidth: '640px',
-          margin: '0 auto',
-          width: '100%',
-          alignSelf: 'flex-end',
           maxHeight: '95vh',
           borderTopLeftRadius: '1.5rem',
           borderTopRightRadius: '1.5rem',
@@ -381,7 +378,7 @@ function ProductModal({ product, onClose, theme, onAdded }: {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Full image */}
-        <div className="relative flex-shrink-0" style={{ height: '42vh', background: theme.inputBg }}>
+        <div className="relative flex-shrink-0" style={{ height: '38vh', background: theme.inputBg }}>
           {product.imageUrl ? (
             <Image src={product.imageUrl} alt={displayName} fill className="object-cover" />
           ) : (
@@ -405,7 +402,7 @@ function ProductModal({ product, onClose, theme, onAdded }: {
         </div>
 
         {/* Scrollable details */}
-        <div className="flex-1 overflow-y-auto px-5 pt-4 pb-2">
+        <div className="overflow-y-auto px-5 pt-3 pb-2">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
               <h2 className="text-xl font-bold leading-tight" style={{ color: theme.textPrimary }}>{displayName}</h2>
@@ -469,8 +466,8 @@ function ProductModal({ product, onClose, theme, onAdded }: {
                 </span>
                 {savings > 0.005 && (
                   <span
-                    className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                    style={{ background: theme.inputBg, color: theme.textSecondary, border: `1px solid ${theme.cardBorder}` }}
+                    className="text-sm font-bold px-2.5 py-0.5 rounded-full"
+                    style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)' }}
                   >
                     −€{savings.toFixed(2)} megtakarítás
                   </span>
