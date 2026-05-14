@@ -37,7 +37,7 @@ interface PriceEntry {
   tiers: { qty: number; m: number }[]
 }
 
-const QTY_STEPS = [50, 100, 200, 300, 500, 1000, 2000]
+const QTY_STEPS = [50, 100, 150, 200, 250, 300, 400, 500, 1000, 2000]
 
 function getTierPrice(basePrice: number, qty: number, tiers: { qty: number; m: number }[]): number {
   if (!tiers.length) return basePrice
@@ -312,12 +312,33 @@ function ProductModal({ product, onClose, theme, onAdded }: {
   product: Product; onClose: () => void; theme: Theme; onAdded: () => void
 }) {
   const { addItem, cart } = useCart()
-  const [qtyIndex, setQtyIndex] = useState(0)
+  const [qty, setQty] = useState(QTY_STEPS[0])
+  const [inputVal, setInputVal] = useState(String(QTY_STEPS[0]))
   const [priceEntry, setPriceEntry] = useState<PriceEntry | null>(null)
   const [loadingPrice, setLoadingPrice] = useState(false)
   const [added, setAdded] = useState(false)
 
-  const qty = QTY_STEPS[qtyIndex]
+  // Nearest step index for slider position
+  const sliderIndex = QTY_STEPS.reduce((best, step, i) =>
+    Math.abs(step - qty) < Math.abs(QTY_STEPS[best] - qty) ? i : best, 0)
+
+  function handleSlider(i: number) {
+    const v = QTY_STEPS[i]
+    setQty(v)
+    setInputVal(String(v))
+  }
+
+  function handleInput(val: string) {
+    setInputVal(val)
+    const n = parseInt(val, 10)
+    if (!isNaN(n) && n > 0) setQty(n)
+  }
+
+  function handleInputBlur() {
+    const n = parseInt(inputVal, 10)
+    if (isNaN(n) || n <= 0) setInputVal(String(qty))
+    else { setQty(n); setInputVal(String(n)) }
+  }
 
   useEffect(() => {
     if (!product.priceListEntryId) return
@@ -478,17 +499,28 @@ function ProductModal({ product, onClose, theme, onAdded }: {
 
           {/* Slider */}
           <div className="mb-1">
-            <div className="flex items-baseline justify-between mb-2">
+            <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: theme.textSecondary }}>Mennyiség</span>
-              <span className="text-sm font-bold" style={{ color: theme.textPrimary }}>{qty} {product.unit}</span>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  value={inputVal}
+                  onChange={(e) => handleInput(e.target.value)}
+                  onBlur={handleInputBlur}
+                  min={1}
+                  className="w-20 text-right text-base font-bold bg-transparent focus:outline-none border-b-2 pb-0.5"
+                  style={{ color: theme.textPrimary, borderColor: theme.cardBorder }}
+                />
+                <span className="text-sm" style={{ color: theme.textSecondary }}>{product.unit}</span>
+              </div>
             </div>
             <input
               type="range"
               min={0}
               max={QTY_STEPS.length - 1}
               step={1}
-              value={qtyIndex}
-              onChange={(e) => setQtyIndex(Number(e.target.value))}
+              value={sliderIndex}
+              onChange={(e) => handleSlider(Number(e.target.value))}
               className="w-full h-1.5 rounded-full appearance-none cursor-pointer mb-1"
               style={{ accentColor: theme.textPrimary, background: theme.inputBg }}
             />
@@ -496,12 +528,13 @@ function ProductModal({ product, onClose, theme, onAdded }: {
               {QTY_STEPS.map((q, i) => (
                 <button
                   key={q}
-                  onClick={() => setQtyIndex(i)}
-                  className="text-xs text-center transition"
+                  onClick={() => handleSlider(i)}
+                  className="text-center transition"
                   style={{
+                    fontSize: '10px',
                     color: theme.textPrimary,
-                    fontWeight: i === qtyIndex ? 700 : 400,
-                    opacity: i === qtyIndex ? 1 : 0.4,
+                    fontWeight: qty === q ? 700 : 400,
+                    opacity: qty === q ? 1 : 0.4,
                   }}
                 >
                   {q >= 1000 ? `${q / 1000}k` : q}
