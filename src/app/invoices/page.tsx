@@ -348,7 +348,7 @@ export default function InvoicesPage() {
                             <button onClick={() => setPreviewInvoice(invoice)} title="Előnézet" className="text-gray-400 hover:text-blue-600 transition-colors">
                               <Eye size={15} />
                             </button>
-                            {(invoice.status === 'open' || invoice.status === 'sent') && !isStornoDoc && (
+                            {invoice.status !== 'paid' && invoice.status !== 'cancelled' && !isStornoDoc && (
                               <button onClick={() => setEditInvoice(invoice)} title="Szerkesztés" className="text-gray-400 hover:text-blue-600 transition-colors">
                                 <Edit2 size={15} />
                               </button>
