@@ -7,6 +7,7 @@ import { format, addDays } from 'date-fns'
 interface Contact { id: string; firstName: string; lastName: string; companyId: string | null }
 interface Company { id: string; name: string; address: string | null; zip: string | null; city: string | null; country: string | null; vatId: string | null; customerNumber: string | null }
 interface Product { id: string; name: string; nameDE: string | null; sku: string; material: string | null; salesPrice: number; vatRate: number; city: string | null }
+interface Carrier { id: string; code: string; nameDE: string | null }
 interface PriceTier { qty: number; m: number }
 interface PriceEntry { id: string; hordozo: string | null; basePrice: number; tiers: PriceTier[] }
 
@@ -69,6 +70,7 @@ export default function InvoiceForm({ onSave, onCancel, invoice }: { onSave: () 
   const [allContacts, setAllContacts] = useState<Contact[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [carriers, setCarriers] = useState<Carrier[]>([])
   const [pricelist, setPricelist] = useState<PriceEntry[]>([])
   const [previousProductIds, setPreviousProductIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
@@ -106,9 +108,10 @@ export default function InvoiceForm({ onSave, onCancel, invoice }: { onSave: () 
       fetch('/api/companies').then(r => r.json()),
       fetch('/api/products').then(r => r.json()),
       fetch('/api/pricelist').then(r => r.json()),
+      fetch('/api/carriers').then(r => r.json()),
       fetch('/api/invoices/next-number').then(r => r.json()),
-    ]).then(([c, co, p, pl, nn]) => {
-      setAllContacts(c); setCompanies(co); setProducts(p); setPricelist(pl)
+    ]).then(([c, co, p, pl, ca, nn]) => {
+      setAllContacts(c); setCompanies(co); setProducts(p); setPricelist(pl); setCarriers(ca)
       if (!invoice) setForm(f => ({ ...f, invoiceNumber: nn.number }))
     })
   }, [invoice])
@@ -190,7 +193,11 @@ export default function InvoiceForm({ onSave, onCancel, invoice }: { onSave: () 
       if (value) {
         const product = products.find(p => p.id === value)
         if (product) {
-          item.description = product.nameDE || product.name
+          const carrier = carriers.find(c => c.code === product.material)
+          const line1 = product.nameDE || product.name
+          const line2parts = [`${product.sku} / ${carrier?.code ?? product.material ?? ''}`]
+          if (carrier?.nameDE) line2parts.push(`(${carrier.nameDE})`)
+          item.description = [line1, line2parts.join(' ')].join('\n')
           item.vatRate = product.vatRate
           const calc = calcTierPrice(product.material, item.quantity, pricelist)
           item.unitPrice = calc ? calc.price : product.salesPrice

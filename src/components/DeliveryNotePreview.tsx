@@ -180,10 +180,15 @@ export default function DeliveryNotePreview({ deliveryNote }: { deliveryNote: De
             </tr>
           </thead>
           <tbody>
-            {productItems.map((item) => (
+            {productItems.map((item) => {
+              const [line1, line2] = item.description.split('\n')
+              return (
               <tr key={item.id}>
-                <td style={{ border: '1px solid #333', padding: '8px 10px', fontStyle: 'italic', fontWeight: 700 }}>
-                  {item.description}
+                <td style={{ border: '1px solid #333', padding: '8px 10px' }}>
+                  <p style={{ fontStyle: 'italic', fontWeight: 700, margin: 0 }}>{line1}</p>
+                  {line2 && (
+                    <p style={{ margin: '2px 0 0 0', fontSize: '10px', color: '#666', fontWeight: 400, fontStyle: 'normal' }}>{line2}</p>
+                  )}
                 </td>
                 <td style={{ border: '1px solid #333', padding: '8px 10px', textAlign: 'center' }}>
                   {item.quantity}
@@ -195,7 +200,8 @@ export default function DeliveryNotePreview({ deliveryNote }: { deliveryNote: De
                   {fmtDE(item.quantity * item.unitPrice)}
                 </td>
               </tr>
-            ))}
+              )
+            })}
 
             {hasDiscounts && (
               <tr>
