@@ -5,7 +5,7 @@ import { Plus, Trash2, Tag, Percent, Euro } from 'lucide-react'
 import { format, addDays } from 'date-fns'
 
 interface Contact { id: string; firstName: string; lastName: string }
-interface Company { id: string; name: string }
+interface Company { id: string; name: string; address: string | null; zip: string | null; city: string | null; country: string | null }
 interface Product { id: string; name: string; nameDE: string | null; sku: string; material: string | null; salesPrice: number; vatRate: number }
 interface PriceTier { qty: number; m: number }
 interface PriceEntry { id: string; hordozo: string | null; basePrice: number; tiers: PriceTier[] }
@@ -57,6 +57,11 @@ interface ExistingInvoice {
   companyId?: string | null
   contact?: { id?: string } | null
   company?: { id?: string } | null
+  billingName?: string | null
+  billingAddress?: string | null
+  billingZip?: string | null
+  billingCity?: string | null
+  billingCountry?: string | null
   items: { description: string; quantity: number; unitPrice: number; vatRate: number; productId?: string | null; isDiscount: boolean }[]
 }
 
@@ -79,6 +84,11 @@ export default function InvoiceForm({ onSave, onCancel, invoice }: { onSave: () 
     deliveryInfo: invoice?.deliveryInfo || '',
     currency: invoice?.currency || 'EUR',
     notes: invoice?.notes || '',
+    billingName: invoice?.billingName || '',
+    billingAddress: invoice?.billingAddress || '',
+    billingZip: invoice?.billingZip || '',
+    billingCity: invoice?.billingCity || '',
+    billingCountry: invoice?.billingCountry || '',
   })
 
   const [items, setItems] = useState<Item[]>(
@@ -265,12 +275,47 @@ export default function InvoiceForm({ onSave, onCancel, invoice }: { onSave: () 
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Cég</label>
-          <select value={form.companyId} onChange={e => setForm({ ...form, companyId: e.target.value })}
+          <select value={form.companyId} onChange={e => {
+            const co = companies.find(c => c.id === e.target.value)
+            setForm({ ...form,
+              companyId: e.target.value,
+              billingName: co?.name || '',
+              billingAddress: co?.address || '',
+              billingZip: co?.zip || '',
+              billingCity: co?.city || '',
+              billingCountry: co?.country || '',
+            })
+          }}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
             <option value="">Válassz céget</option>
             {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
+
+        {/* Számlázási cím — auto-fill cégtől, szerkeszthető */}
+        {form.companyId && (
+          <div className="col-span-2 bg-gray-50 rounded-lg p-3 space-y-2 border border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Számlázási cím</p>
+            <input type="text" placeholder="Cégnév" value={form.billingName}
+              onChange={e => setForm({ ...form, billingName: e.target.value })}
+              className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <input type="text" placeholder="Utca, házszám" value={form.billingAddress}
+              onChange={e => setForm({ ...form, billingAddress: e.target.value })}
+              className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <div className="flex gap-2">
+              <input type="text" placeholder="PLZ" value={form.billingZip}
+                onChange={e => setForm({ ...form, billingZip: e.target.value })}
+                className="w-24 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="text" placeholder="Város" value={form.billingCity}
+                onChange={e => setForm({ ...form, billingCity: e.target.value })}
+                className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="text" placeholder="Ország" value={form.billingCountry}
+                onChange={e => setForm({ ...form, billingCountry: e.target.value })}
+                className="w-16 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+        )}
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Kiállítás dátuma</label>
           <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })}

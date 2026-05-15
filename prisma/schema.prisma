@@ -187,6 +187,11 @@ model Invoice {
   notes        String?
   deliveryInfo String?
   stornoOf     String?
+  billingName    String?
+  billingAddress String?
+  billingZip     String?
+  billingCity    String?
+  billingCountry String?
   contactId    String?
   contact   Contact?      @relation(fields: [contactId], references: [id])
   companyId String?
