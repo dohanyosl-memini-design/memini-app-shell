@@ -77,6 +77,7 @@ interface Company {
   phone?: string | null
   email?: string | null
   address?: string | null
+  zip?: string | null
   city?: string | null
   region?: string | null
   country?: string | null
@@ -104,6 +105,7 @@ export default function CompanyForm({ company, onSave, onCancel }: CompanyFormPr
     phone: company?.phone || '',
     email: company?.email || '',
     address: company?.address || '',
+    zip: company?.zip || '',
     city: company?.city || '',
     region: company?.region || '',
     country: company?.country || 'DE',
@@ -257,6 +259,16 @@ export default function CompanyForm({ company, onSave, onCancel }: CompanyFormPr
             </div>
           </div>
           <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">PLZ</label>
+              <input
+                type="text"
+                value={form.zip}
+                onChange={(e) => setForm({ ...form, zip: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="89073"
+              />
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Város</label>
               <input

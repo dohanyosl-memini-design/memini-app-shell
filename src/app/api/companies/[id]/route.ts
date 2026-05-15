@@ -31,6 +31,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       phone: body.phone || null,
       email: body.email || null,
       address: body.address || null,
+      zip: body.zip || null,
       city: body.city || null,
       region: body.region || null,
       country: body.country || 'DE',

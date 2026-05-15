@@ -49,6 +49,7 @@ model Company {
   phone          String?
   email          String?
   address        String?
+  zip            String?
   city           String?
   region         String?
   country        String?    @default("DE")
