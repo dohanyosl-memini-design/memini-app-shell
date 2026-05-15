@@ -226,7 +226,26 @@ export default function OrderForm({ order, defaultCompanyId, onSave, onCancel }:
     }
     const method = order ? 'PUT' : 'POST'
     const url = order ? `/api/orders/${order.id}` : '/api/orders'
-    await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const savedOrder = await res.json()
+
+    // Gyártási feladatok hiányos tételekhez
+    const shortageItems = items.filter(item => item.productId && item.stock < item.quantity && item.stock < 999)
+    for (const item of shortageItems) {
+      const shortage = item.quantity - item.stock
+      await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `Gyártás: ${item.description} – ${shortage} db`,
+          description: `Rendelés: #${savedOrder.number} · Megrendelve: ${item.quantity} db · Raktáron: ${item.stock} db · Hiány: ${shortage} db`,
+          priority: 'high',
+          dueDate: deliveryDate || null,
+          companyId: companyId || null,
+        }),
+      })
+    }
+
     setLoading(false)
     onSave()
   }
@@ -456,7 +475,7 @@ export default function OrderForm({ order, defaultCompanyId, onSave, onCancel }:
               const lineTotal = item.quantity * item.unitPrice * (1 + item.vatRate / 100)
               const overStock = item.stock < item.quantity && item.stock < 999
               return (
-                <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-gray-50 rounded-lg p-2">
+                <div key={idx} className={`grid grid-cols-12 gap-2 items-center rounded-lg p-2 ${overStock ? 'bg-red-50 border border-red-200' : 'bg-gray-50'}`}>
                   <div className="col-span-12 sm:col-span-4">
                     <input
                       type="text"
@@ -480,8 +499,8 @@ export default function OrderForm({ order, defaultCompanyId, onSave, onCancel }:
                       className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                     />
                     {overStock && (
-                      <p className="text-xs text-orange-500 flex items-center gap-0.5 mt-0.5">
-                        <AlertTriangle size={10} /> Csak {item.stock} db van
+                      <p className="text-xs text-red-600 flex items-center gap-0.5 mt-0.5 font-medium">
+                        <AlertTriangle size={10} /> Csak {item.stock} db · hiány: {item.quantity - item.stock} db
                       </p>
                     )}
                   </div>
@@ -552,6 +571,22 @@ export default function OrderForm({ order, defaultCompanyId, onSave, onCancel }:
             className="w-full px-3 py-2 border border-amber-200 bg-amber-50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" />
         </div>
       </div>
+
+      {items.some(item => item.productId && item.stock < item.quantity && item.stock < 999) && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-start gap-2">
+          <AlertTriangle size={15} className="text-red-600 shrink-0 mt-0.5" />
+          <div className="text-sm text-red-700">
+            <p className="font-semibold mb-1">Elégtelen készlet – gyártási feladatok automatikusan létrejönnek:</p>
+            <ul className="space-y-0.5">
+              {items.filter(item => item.productId && item.stock < item.quantity && item.stock < 999).map((item, i) => (
+                <li key={i} className="text-xs">
+                  · <strong>{item.description}</strong> — hiány: {item.quantity - item.stock} db (raktáron: {item.stock} db)
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
 
       <div className="flex justify-end gap-3 pt-2">
         <button type="button" onClick={onCancel}
