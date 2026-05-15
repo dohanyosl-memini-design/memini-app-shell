@@ -20,9 +20,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar session={session} />
       {/* pb-16 on mobile reserves space for the fixed bottom nav */}
       <main className="flex-1 overflow-auto pb-16 md:pb-0">
-        <div className="max-w-screen-2xl mx-auto">
-          {children}
-        </div>
+        {children}
       </main>
     </div>
   )
