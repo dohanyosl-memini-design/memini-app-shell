@@ -10,10 +10,12 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:seed": "node prisma/seed.js",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "mcp": "tsx mcp/server.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@prisma/client": "^5.14.0",
     "@types/bcryptjs": "^2.4.6",
     "@vercel/blob": "^2.3.3",
@@ -25,7 +27,8 @@
     "next-auth": "^4.24.14",
     "react": "^18",
     "react-dom": "^18",
-    "recharts": "^2.12.7"
+    "recharts": "^2.12.7",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^20",
