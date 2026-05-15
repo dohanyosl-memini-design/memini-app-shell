@@ -205,9 +205,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-        {/* Sales pipeline */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-base font-semibold text-gray-900 mb-4">Sales pipeline</h2>
           <div className="space-y-2.5">
             {activeDeals.map((stage) => (
@@ -233,81 +231,6 @@ export default function Dashboard() {
             ))}
             {activeDeals.length === 0 && <p className="text-gray-400 text-sm">Nincs aktív deal</p>}
           </div>
-        </div>
-
-        {/* Top termékek készlet */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-base font-semibold text-gray-900 mb-4">Termék készletek</h2>
-          <div className="space-y-2.5">
-            {stats.topProducts.map((p) => (
-              <div key={p.sku} className="flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-800 truncate font-medium">{p.name}</p>
-                  <p className="text-xs text-gray-400 font-mono">{p.sku}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-sm font-bold text-gray-900">{p.stock} db</p>
-                  <p className="text-xs text-gray-400">€{p.salesPrice}/db</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Partner áttekintés */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* ABC besorolás */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-base font-semibold text-gray-900 mb-4">Partner besorolás (ABC)</h2>
-          <div className="space-y-2.5">
-            {(['A', 'B', 'C', 'D'] as const).map((cls) => {
-              const entry = stats.partnersByClassification.find((x) => x.classification === cls)
-              const count = entry?._count || 0
-              const total = stats.partnersByClassification.reduce((s, x) => s + x._count, 0)
-              const colors = {
-                A: { bar: 'bg-yellow-400', badge: 'bg-yellow-100 text-yellow-700', label: 'Kiemelt' },
-                B: { bar: 'bg-blue-400', badge: 'bg-blue-100 text-blue-700', label: 'Rendszeres' },
-                C: { bar: 'bg-gray-300', badge: 'bg-gray-100 text-gray-600', label: 'Alkalmi' },
-                D: { bar: 'bg-slate-200', badge: 'bg-slate-100 text-slate-500', label: 'Potenciális' },
-              }
-              const c = colors[cls]
-              return (
-                <div key={cls} className="flex items-center gap-3">
-                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded w-6 text-center ${c.badge}`}>{cls}</span>
-                  <span className="text-sm text-gray-500 w-20 shrink-0">{c.label}</span>
-                  <div className="flex-1 bg-gray-100 rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full ${c.bar}`}
-                      style={{ width: `${total > 0 ? (count / total) * 100 : 0}%` }}
-                    />
-                  </div>
-                  <span className="text-sm font-semibold text-gray-700 w-8 text-right">{count}</span>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Partner típus */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-base font-semibold text-gray-900 mb-4">Partner típusok</h2>
-          <div className="space-y-2">
-            {stats.partnersByType
-              .filter((x) => x.partnerType)
-              .sort((a, b) => b._count - a._count)
-              .slice(0, 8)
-              .map((x) => (
-                <div key={x.partnerType} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 truncate">{x.partnerType}</span>
-                  <span className="font-semibold text-gray-900 ml-2 shrink-0">{x._count}</span>
-                </div>
-              ))}
-            {stats.partnersByType.filter((x) => x.partnerType).length === 0 && (
-              <p className="text-gray-400 text-sm">Nincs típus megadva</p>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   )
