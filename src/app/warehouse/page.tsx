@@ -1,13 +1,16 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, ArrowUpDown, X, ArrowDown, ArrowUp, RefreshCw, FileText, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, ArrowUpDown, X, ArrowDown, ArrowUp, RefreshCw, FileText, ChevronDown, ChevronUp, Settings } from 'lucide-react'
 import Image from 'next/image'
 import Modal from '@/components/Modal'
 import ProductForm from '@/components/ProductForm'
 import StockMovementForm from '@/components/StockMovementForm'
+import CarrierSettingsModal from '@/components/CarrierSettingsModal'
 import { format } from 'date-fns'
 import { hu } from 'date-fns/locale'
+
+interface Carrier { id: string; code: string; name: string; nameDE: string | null; group: string | null }
 
 interface Product {
   id: string
@@ -43,19 +46,13 @@ interface StockMovement {
   product: { id: string; name: string; sku: string; nameDE: string | null }
 }
 
-const HORDOZO_CONFIG: Record<string, { label: string; color: string }> = {
-  ko_grafitoptik_normal: { label: 'Kő GO normál',      color: 'bg-stone-100 text-stone-700' },
-  ko_grafitoptik_nagy:   { label: 'Kő GO nagy',        color: 'bg-stone-100 text-stone-700' },
-  ko_aquarel_normal:     { label: 'Kő Aq. normál',     color: 'bg-teal-100 text-teal-700' },
-  ko_aquarel_nagy:       { label: 'Kő Aq. nagy',       color: 'bg-teal-100 text-teal-700' },
-  belyeg_1_normal:       { label: 'Bélyeg 1r. normál', color: 'bg-blue-100 text-blue-700' },
-  belyeg_1_kicsi:        { label: 'Bélyeg 1r. kicsi',  color: 'bg-blue-100 text-blue-700' },
-  belyeg_2:              { label: 'Bélyeg kétrétegű',  color: 'bg-indigo-100 text-indigo-700' },
-  faszelet_go:           { label: 'Faszelet GO',       color: 'bg-amber-100 text-amber-700' },
-  fa_nagybetus:          { label: 'Fa Nagybetűs',      color: 'bg-amber-100 text-amber-700' },
-  templomablak_kicsi:    { label: 'Templomablak K.',   color: 'bg-purple-100 text-purple-700' },
-  templomablak_nagy:     { label: 'Templomablak N.',   color: 'bg-purple-100 text-purple-700' },
+const GROUP_COLORS: Record<string, string> = {
+  'Kő':           'bg-stone-100 text-stone-700',
+  'Bélyeg':       'bg-blue-100 text-blue-700',
+  'Fa':           'bg-amber-100 text-amber-700',
+  'Templomablak': 'bg-purple-100 text-purple-700',
 }
+const DEFAULT_BADGE_COLOR = 'bg-gray-100 text-gray-700'
 
 const MOVEMENT_CONFIG = {
   in:         { label: 'Bevételezés', color: 'bg-green-100 text-green-700',  icon: ArrowDown  },
@@ -69,12 +66,14 @@ export default function WarehousePage() {
 
   // Products state
   const [products, setProducts] = useState<Product[]>([])
+  const [carriers, setCarriers] = useState<Carrier[]>([])
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [search, setSearch] = useState('')
   const [materialFilter, setMaterialFilter] = useState('')
   const [cabinetFilter, setCabinetFilter] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [showStockModal, setShowStockModal] = useState(false)
+  const [showCarrierSettings, setShowCarrierSettings] = useState(false)
   const [editProduct, setEditProduct] = useState<Product | null>(null)
   const [stockProduct, setStockProduct] = useState<Product | null>(null)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
@@ -92,6 +91,11 @@ export default function WarehousePage() {
   const [logTypeFilter, setLogTypeFilter] = useState('')
   const [lowStockOpen, setLowStockOpen] = useState(false)
   const [expandedCities, setExpandedCities] = useState<Set<string>>(new Set())
+
+  const fetchCarriers = useCallback(async () => {
+    const res = await fetch('/api/carriers')
+    setCarriers(await res.json())
+  }, [])
 
   const fetchProducts = useCallback(async () => {
     setLoadingProducts(true)
@@ -114,6 +118,7 @@ export default function WarehousePage() {
   }, [])
 
   useEffect(() => { fetchProducts() }, [fetchProducts])
+  useEffect(() => { fetchCarriers() }, [fetchCarriers])
   useEffect(() => { if (tab === 'log') fetchMovements() }, [tab, fetchMovements])
 
   async function handleDelete(id: string) {
@@ -180,13 +185,22 @@ export default function WarehousePage() {
           <h1 className="text-2xl font-bold text-gray-900">Raktár & Termékek</h1>
           <p className="text-gray-500 mt-1">{products.length} aktív termék · Készletérték: €{totalStockValue.toFixed(0)}</p>
         </div>
-        <button
-          onClick={() => { setEditProduct(null); setShowModal(true) }}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={18} />
-          Új termék
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowCarrierSettings(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Settings size={16} />
+            Hordozó beállítások
+          </button>
+          <button
+            onClick={() => { setEditProduct(null); setShowModal(true) }}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={18} />
+            Új termék
+          </button>
+        </div>
       </div>
 
       {/* KPI sáv */}
@@ -273,10 +287,16 @@ export default function WarehousePage() {
               className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Minden hordozó</option>
-              <option value="ko">Kő</option>
-              <option value="belyeg">Bélyeg</option>
-              <option value="fa">Fa / Faszelet</option>
-              <option value="templomablak">Templomablak</option>
+              {Array.from(new Set(carriers.map(c => c.group).filter(Boolean))).map(group => (
+                <optgroup key={group!} label={group!}>
+                  {carriers.filter(c => c.group === group).map(c => (
+                    <option key={c.code} value={c.code}>{c.name}</option>
+                  ))}
+                </optgroup>
+              ))}
+              {carriers.filter(c => !c.group).map(c => (
+                <option key={c.code} value={c.code}>{c.name}</option>
+              ))}
             </select>
             {/* Szekrény szűrő — dinamikusan a meglévő értékekből */}
             {Array.from(new Set(products.map(p => p.locationCabinet).filter(Boolean))).length > 0 && (
@@ -338,7 +358,8 @@ export default function WarehousePage() {
                       )
                     })()}
                     {(!showCityHeaders || expandedCities.has(city)) && groupItems.map((product) => {
-                  const hordozo = HORDOZO_CONFIG[product.material || '']
+                  const carrierInfo = carriers.find(c => c.code === product.material)
+                  const badgeColor = carrierInfo?.group ? (GROUP_COLORS[carrierInfo.group] ?? DEFAULT_BADGE_COLOR) : DEFAULT_BADGE_COLOR
                   const isLow = product.stock <= product.minStock
                   const margin = product.salesPrice > 0
                     ? ((product.salesPrice - product.costPrice) / product.salesPrice * 100).toFixed(0)
@@ -379,8 +400,8 @@ export default function WarehousePage() {
                           {product.city && <p className="text-xs text-gray-400">{product.city}</p>}
                         </td>
                         <td className="px-5 py-3.5">
-                          {hordozo
-                            ? <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${hordozo.color}`}>{hordozo.label}</span>
+                          {carrierInfo
+                            ? <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeColor}`}>{carrierInfo.name}</span>
                             : <span className="text-xs text-gray-400">{product.material || '–'}</span>}
                         </td>
                         <td className="px-5 py-3.5 text-right text-sm text-gray-600">€{product.costPrice.toFixed(2)}</td>
@@ -559,6 +580,12 @@ export default function WarehousePage() {
             )}
           </div>
         </>
+      )}
+
+      {showCarrierSettings && (
+        <Modal title="Hordozó beállítások" onClose={() => { setShowCarrierSettings(false); fetchCarriers() }} size="lg">
+          <CarrierSettingsModal onClose={() => { setShowCarrierSettings(false); fetchCarriers() }} />
+        </Modal>
       )}
 
       {showModal && (

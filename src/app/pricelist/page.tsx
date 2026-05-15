@@ -5,6 +5,7 @@ import { Plus, Edit2, Trash2, Euro, ChevronDown, ChevronUp, Download } from 'luc
 import Modal from '@/components/Modal'
 
 interface Tier { qty: number; m: number }
+interface Carrier { id: string; code: string; name: string; nameDE: string | null; group: string | null }
 
 interface PriceEntry {
   id: string
@@ -17,27 +18,6 @@ interface PriceEntry {
   sortOrder: number
 }
 
-const HORDOZO_LABELS: Record<string, string> = {
-  ko_grafitoptik_normal: 'Kő Grafitoptik GO – normál',
-  ko_grafitoptik_nagy:   'Kő Grafitoptik GO – nagy',
-  ko_aquarel_normal:     'Kő Aquarelle – normál',
-  ko_aquarel_nagy:       'Kő Aquarelle – nagy',
-  belyeg_1_normal:       'Bélyeg egyrétegű – normál',
-  belyeg_1_kicsi:        'Bélyeg egyrétegű – kicsi',
-  belyeg_2:              'Bélyeg kétrétegű',
-  faszelet_go:           'Faszelet Grafitoptik GO',
-  fa_nagybetus:          'Fa Nagybetűs',
-  templomablak_kicsi:    'Templomablak – kicsi',
-  templomablak_nagy:     'Templomablak – nagy',
-}
-
-const HORDOZO_GROUPS = [
-  { group: 'Kő', keys: ['ko_grafitoptik_normal','ko_grafitoptik_nagy','ko_aquarel_normal','ko_aquarel_nagy'] },
-  { group: 'Bélyeg', keys: ['belyeg_1_normal','belyeg_1_kicsi','belyeg_2'] },
-  { group: 'Fa', keys: ['faszelet_go','fa_nagybetus'] },
-  { group: 'Templomablak', keys: ['templomablak_kicsi','templomablak_nagy'] },
-]
-
 const DEFAULT_TIERS: Tier[] = [
   {qty:50,m:1},{qty:100,m:0.985},{qty:200,m:0.97},{qty:300,m:0.96},{qty:500,m:0.94},{qty:1000,m:0.92},{qty:2000,m:0.9}
 ]
@@ -46,10 +26,11 @@ function fmt(n: number) {
   return n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-function PriceEntryForm({ entry, onSave, onCancel }: {
+function PriceEntryForm({ entry, onSave, onCancel, carriers }: {
   entry: PriceEntry | null
   onSave: () => void
   onCancel: () => void
+  carriers: Carrier[]
 }) {
   const [loading, setLoading] = useState(false)
   const [name, setName] = useState(entry?.name || '')
@@ -102,10 +83,15 @@ function PriceEntryForm({ entry, onSave, onCancel }: {
         <select value={hordozo} onChange={e => setHordozo(e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="">Egyéb / nincs megadva</option>
-          {HORDOZO_GROUPS.map(g => (
-            <optgroup key={g.group} label={g.group}>
-              {g.keys.map(k => <option key={k} value={k}>{HORDOZO_LABELS[k]}</option>)}
+          {Array.from(new Set(carriers.map(c => c.group).filter(Boolean))).map(group => (
+            <optgroup key={group!} label={group!}>
+              {carriers.filter(c => c.group === group).map(c => (
+                <option key={c.code} value={c.code}>{c.name}</option>
+              ))}
             </optgroup>
+          ))}
+          {carriers.filter(c => !c.group).map(c => (
+            <option key={c.code} value={c.code}>{c.name}</option>
           ))}
         </select>
       </div>
@@ -188,6 +174,7 @@ function PriceEntryForm({ entry, onSave, onCancel }: {
 
 export default function PriceListPage() {
   const [entries, setEntries] = useState<PriceEntry[]>([])
+  const [carriers, setCarriers] = useState<Carrier[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editEntry, setEditEntry] = useState<PriceEntry | null>(null)
@@ -202,6 +189,9 @@ export default function PriceListPage() {
   }, [])
 
   useEffect(() => { fetchEntries() }, [fetchEntries])
+  useEffect(() => {
+    fetch('/api/carriers').then(r => r.json()).then(setCarriers).catch(() => {})
+  }, [])
 
   async function handleDelete(id: string) {
     if (!confirm('Törli ezt a sort?')) return
@@ -220,14 +210,17 @@ export default function PriceListPage() {
     setSeeding(false)
   }
 
-  // Group entries by hordozo group
+  // Group entries by carrier group
   const grouped: { group: string; items: PriceEntry[] }[] = []
   const assigned = new Set<string>()
+  const carrierGroups = Array.from(new Set(carriers.map(c => c.group).filter(Boolean))) as string[]
+  const codesForGroup = (group: string) => carriers.filter(c => c.group === group).map(c => c.code)
 
-  for (const g of HORDOZO_GROUPS) {
-    const items = entries.filter(e => e.hordozo && g.keys.includes(e.hordozo))
+  for (const group of carrierGroups) {
+    const codes = codesForGroup(group)
+    const items = entries.filter(e => e.hordozo && codes.includes(e.hordozo))
     if (items.length > 0) {
-      grouped.push({ group: g.group, items })
+      grouped.push({ group, items })
       items.forEach(e => assigned.add(e.id))
     }
   }
@@ -368,6 +361,7 @@ export default function PriceListPage() {
             entry={editEntry}
             onSave={() => { setShowModal(false); fetchEntries() }}
             onCancel={() => setShowModal(false)}
+            carriers={carriers}
           />
         </Modal>
       )}

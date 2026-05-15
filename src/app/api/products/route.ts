@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
           { site: { contains: search } },
         ],
       } : {}),
-      ...(material ? { material: { startsWith: material } } : {}),
+      ...(material ? { material: { equals: material } } : {}),
     },
     orderBy: { name: 'asc' },
   })
