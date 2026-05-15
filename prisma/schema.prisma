@@ -20,24 +20,25 @@ model User {
 }
 
 model Contact {
-  id         String     @id @default(cuid())
-  salutation String?
-  firstName  String
-  lastName   String
-  email      String?
-  phone      String?
-  status     String     @default("lead")
-  notes      String?
-  companyId  String?
-  company    Company?   @relation(fields: [companyId], references: [id])
-  deals      Deal[]
-  tasks      Task[]
-  activities Activity[]
-  invoices   Invoice[]
-  quotes     Quote[]
-  orders     Order[]
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  id            String         @id @default(cuid())
+  salutation    String?
+  firstName     String
+  lastName      String
+  email         String?
+  phone         String?
+  status        String         @default("lead")
+  notes         String?
+  companyId     String?
+  company       Company?       @relation(fields: [companyId], references: [id])
+  deals         Deal[]
+  tasks         Task[]
+  activities    Activity[]
+  invoices      Invoice[]
+  quotes        Quote[]
+  orders        Order[]
+  deliveryNotes DeliveryNote[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 }
 
 model Company {
@@ -67,6 +68,7 @@ model Company {
   quotes         Quote[]
   orders         Order[]
   tasks          Task[]
+  deliveryNotes  DeliveryNote[]
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 }
@@ -158,10 +160,11 @@ model Product {
   active       Boolean         @default(true)
   imageUrl     String?
   priceListEntryId String?
-  movements    StockMovement[]
-  invoiceItems InvoiceItem[]
-  quoteItems   QuoteItem[]
-  orderItems   OrderItem[]
+  movements         StockMovement[]
+  invoiceItems      InvoiceItem[]
+  quoteItems        QuoteItem[]
+  orderItems        OrderItem[]
+  deliveryNoteItems DeliveryNoteItem[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 }
@@ -333,6 +336,45 @@ model RecurringExpense {
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model DeliveryNote {
+  id             String             @id @default(cuid())
+  number         String             @unique
+  date           DateTime           @default(now())
+  deliveryInfo   String?
+  status         String             @default("draft")
+  notes          String?
+  billingName    String?
+  billingAddress String?
+  billingZip     String?
+  billingCity    String?
+  billingCountry String?
+  contactId      String?
+  contact        Contact?           @relation(fields: [contactId], references: [id])
+  companyId      String?
+  company        Company?           @relation(fields: [companyId], references: [id])
+  items          DeliveryNoteItem[]
+  subtotal       Float              @default(0)
+  vatAmount      Float              @default(0)
+  total          Float              @default(0)
+  currency       String             @default("EUR")
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+}
+
+model DeliveryNoteItem {
+  id             String       @id @default(cuid())
+  description    String
+  quantity       Float
+  unitPrice      Float
+  vatRate        Float        @default(19)
+  total          Float
+  isDiscount     Boolean      @default(false)
+  deliveryNoteId String
+  deliveryNote   DeliveryNote @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
+  productId      String?
+  product        Product?     @relation(fields: [productId], references: [id])
 }
 
 model PriceListEntry {
