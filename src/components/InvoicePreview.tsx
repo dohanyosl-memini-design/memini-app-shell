@@ -202,13 +202,17 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
           <tbody>
             {/* Termék sorok */}
             {productItems.map((item) => {
-              const [line1, line2] = item.description.split('\n')
+              const [line1, line2raw] = item.description.split('\n')
+              const [line2Bold, line2Paren] = line2raw ? line2raw.split('\t') : ['', '']
               return (
               <tr key={item.id}>
                 <td style={{ border: '1px solid #333', padding: '8px 10px' }}>
-                  <p style={{ fontStyle: 'italic', fontWeight: 700, margin: 0 }}>{line1}</p>
-                  {line2 && (
-                    <p style={{ margin: '2px 0 0 0', fontSize: '10px', color: '#666', fontWeight: 400, fontStyle: 'normal' }}>{line2}</p>
+                  <p style={{ fontWeight: 700, margin: 0 }}>{line1}</p>
+                  {line2raw && (
+                    <p style={{ margin: '2px 0 0 0', fontSize: '10px', fontStyle: 'normal' }}>
+                      <span style={{ fontWeight: 700 }}>{line2Bold}</span>
+                      {line2Paren && <span style={{ color: '#666', fontWeight: 400 }}> ({line2Paren})</span>}
+                    </p>
                   )}
                 </td>
                 <td style={{ border: '1px solid #333', padding: '8px 10px', textAlign: 'center' }}>

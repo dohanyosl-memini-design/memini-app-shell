@@ -194,10 +194,10 @@ export default function InvoiceForm({ onSave, onCancel, invoice }: { onSave: () 
         const product = products.find(p => p.id === value)
         if (product) {
           const carrier = carriers.find(c => c.code === product.material)
-          const line1 = product.nameDE || product.name
-          const line2parts = [`${product.sku} / ${carrier?.code ?? product.material ?? ''}`]
-          if (carrier?.nameDE) line2parts.push(`(${carrier.nameDE})`)
-          item.description = [line1, line2parts.join(' ')].join('\n')
+          const line1 = carrier?.nameDE || product.nameDE || product.name
+          const line2Bold = `${product.sku} / ${carrier?.code ?? product.material ?? ''}`
+          const line2Paren = carrier?.nameDE || ''
+          item.description = [line1, line2Paren ? `${line2Bold}\t${line2Paren}` : line2Bold].join('\n')
           item.vatRate = product.vatRate
           const calc = calcTierPrice(product.material, item.quantity, pricelist)
           item.unitPrice = calc ? calc.price : product.salesPrice
