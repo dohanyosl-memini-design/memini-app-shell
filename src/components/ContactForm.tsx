@@ -9,6 +9,7 @@ interface Company {
 
 interface Contact {
   id: string
+  salutation: string | null
   firstName: string
   lastName: string
   email: string | null
@@ -29,6 +30,7 @@ export default function ContactForm({ contact, defaultCompanyId, onSave, onCance
   const [companies, setCompanies] = useState<Company[]>([])
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
+    salutation: contact?.salutation || '',
     firstName: contact?.firstName || '',
     lastName: contact?.lastName || '',
     email: contact?.email || '',
@@ -61,6 +63,26 @@ export default function ContactForm({ contact, defaultCompanyId, onSave, onCance
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Megszólítás</label>
+        <div className="flex gap-2">
+          {['', 'Hölgy', 'Úr'].map((val) => (
+            <button
+              key={val}
+              type="button"
+              onClick={() => setForm({ ...form, salutation: val })}
+              className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                form.salutation === val
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
+              }`}
+            >
+              {val === '' ? '—' : val}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Keresztnév *</label>

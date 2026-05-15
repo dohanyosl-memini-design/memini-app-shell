@@ -8,6 +8,7 @@ import ContactForm from '@/components/ContactForm'
 
 interface Contact {
   id: string
+  salutation: string | null
   firstName: string
   lastName: string
   email: string | null
@@ -148,6 +149,7 @@ export default function ContactsPage() {
                         </div>
                         <div>
                           <div className="font-medium text-gray-900">
+                            {contact.salutation && <span className="text-gray-400 text-xs mr-1">{contact.salutation}</span>}
                             {contact.firstName} {contact.lastName}
                           </div>
                         </div>

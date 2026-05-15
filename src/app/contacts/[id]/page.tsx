@@ -77,6 +77,7 @@ interface Task {
 
 interface Contact {
   id: string
+  salutation: string | null
   firstName: string
   lastName: string
   email: string | null

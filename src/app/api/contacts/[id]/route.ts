@@ -25,6 +25,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   const contact = await prisma.contact.update({
     where: { id: params.id },
     data: {
+      salutation: body.salutation || null,
       firstName: body.firstName,
       lastName: body.lastName,
       email: body.email || null,
