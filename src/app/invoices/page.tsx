@@ -40,6 +40,7 @@ interface Invoice {
     id: string
     name: string
     address: string | null
+    zip: string | null
     city: string | null
     vatId: string | null
     phone: string | null

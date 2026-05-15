@@ -26,10 +26,16 @@ interface Invoice {
   total: number
   paidAt: string | null
   notes: string | null
+  billingName?: string | null
+  billingAddress?: string | null
+  billingZip?: string | null
+  billingCity?: string | null
+  billingCountry?: string | null
   contact: { firstName: string; lastName: string } | null
   company: {
     name: string
     address: string | null
+    zip: string | null
     city: string | null
     vatId: string | null
     phone: string | null
@@ -95,24 +101,31 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
 
         {/* ── Empfänger bal + Rechnungsdetails jobb ── */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '28px' }}>
-          {/* Bal: címzett */}
+          {/* Bal: címzett — billing fields first, company as fallback */}
           <div style={{ lineHeight: 1.6, fontSize: '12px' }}>
-            {invoice.company ? (
-              <>
-                <p style={{ fontWeight: 700, fontSize: '13px' }}>{invoice.company.name}</p>
-                {invoice.contact && (
-                  <p>{invoice.contact.firstName} {invoice.contact.lastName}</p>
-                )}
-                <div style={{ marginTop: '8px' }}>
-                  {invoice.company.address && <p>{invoice.company.address},</p>}
-                  {invoice.company.city && <p>{invoice.company.city}</p>}
-                  {invoice.company.phone && <p>Tel.: {invoice.company.phone}</p>}
-                  {invoice.company.email && <p>E-Mail: {invoice.company.email}</p>}
-                </div>
-              </>
-            ) : invoice.contact ? (
-              <p style={{ fontWeight: 700 }}>{invoice.contact.firstName} {invoice.contact.lastName}</p>
-            ) : null}
+            {(() => {
+              const name = invoice.billingName || invoice.company?.name || null
+              const address = invoice.billingAddress || invoice.company?.address || null
+              const zip = invoice.billingZip || invoice.company?.zip || null
+              const city = invoice.billingCity || invoice.company?.city || null
+              const phone = invoice.company?.phone || null
+              const email = invoice.company?.email || null
+              if (!name && !invoice.contact) return null
+              return (
+                <>
+                  {name && <p style={{ fontWeight: 700, fontSize: '13px' }}>{name}</p>}
+                  {invoice.contact && (
+                    <p>{invoice.contact.firstName} {invoice.contact.lastName}</p>
+                  )}
+                  <div style={{ marginTop: '8px' }}>
+                    {address && <p>{address}</p>}
+                    {(zip || city) && <p>{[zip, city].filter(Boolean).join(' ')}</p>}
+                    {phone && <p>Tel.: {phone}</p>}
+                    {email && <p>E-Mail: {email}</p>}
+                  </div>
+                </>
+              )
+            })()}
           </div>
 
           {/* Jobb: számla adatok, dőlt */}
