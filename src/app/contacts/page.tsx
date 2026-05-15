@@ -36,7 +36,7 @@ export default function ContactsPage() {
 
   const fetchContacts = useCallback(async () => {
     setLoading(true)
-    const res = await fetch(`/api/contacts?search=${encodeURIComponent(search)}`)
+    const res = await fetch(`/api/contacts?crmOnly=true&search=${encodeURIComponent(search)}`)
     const data = await res.json()
     setContacts(data)
     setLoading(false)

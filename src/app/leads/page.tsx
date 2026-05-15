@@ -203,8 +203,8 @@ function ContactCard({
           {stage.nextStage && stage.nextStage !== 'active' && (
             <button
               onClick={() => onMoveNext(contact)}
-              title={`→ ${stage.nextLabel}`}
-              className="p-1 text-gray-400 hover:text-blue-600 rounded-md hover:bg-blue-50 transition-colors"
+              title={stage.nextStage === 'meeting' ? `→ ${stage.nextLabel} (bekerül a CRM-be)` : `→ ${stage.nextLabel}`}
+              className={`p-1 rounded-md transition-colors ${stage.nextStage === 'meeting' ? 'text-gray-400 hover:text-green-600 hover:bg-green-50' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'}`}
             >
               <ArrowRight size={13} />
             </button>
@@ -272,6 +272,9 @@ function KanbanColumn({
       <div className="flex items-center gap-2 px-4 py-3 border-b border-black/5">
         <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${stage.dot}`} />
         <span className="text-sm font-semibold text-gray-700">{stage.label}</span>
+        {stage.id === 'meeting' && (
+          <span className="text-[10px] font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">CRM</span>
+        )}
         <span className="ml-auto text-xs font-medium text-gray-400 bg-white rounded-full px-2 py-0.5">
           {contacts.length}
         </span>

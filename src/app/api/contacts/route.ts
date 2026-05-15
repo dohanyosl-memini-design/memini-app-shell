@@ -1,20 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+const PIPELINE_ONLY_STATUSES = ['lead', 'contacted']
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const search = searchParams.get('search') || ''
+  const crmOnly = searchParams.get('crmOnly') === 'true'
 
   const contacts = await prisma.contact.findMany({
-    where: search
-      ? {
-          OR: [
-            { firstName: { contains: search } },
-            { lastName: { contains: search } },
-            { email: { contains: search } },
-          ],
-        }
-      : {},
+    where: {
+      ...(crmOnly ? { status: { notIn: PIPELINE_ONLY_STATUSES } } : {}),
+      ...(search ? {
+        OR: [
+          { firstName: { contains: search } },
+          { lastName: { contains: search } },
+          { email: { contains: search } },
+        ],
+      } : {}),
+    },
     include: { company: true },
     orderBy: { createdAt: 'desc' },
   })
