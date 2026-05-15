@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import {
-  Users, Building2, TrendingUp, CheckSquare,
-  FileText, AlertTriangle, TrendingDown,
-  Clock, Euro,
+  Building2, TrendingUp, FileText, AlertTriangle, TrendingDown,
+  Clock, Euro, CheckSquare, CheckCircle2, Circle,
 } from 'lucide-react'
 import { format, isToday, isTomorrow, isPast } from 'date-fns'
 import { hu } from 'date-fns/locale'
@@ -55,65 +54,65 @@ function fmtEur(v: number) {
   return `€${v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-function buildMonthlyChart(transactions: Stats['allTransactions']) {
+function buildYearlyChart(transactions: Stats['allTransactions']) {
+  const currentYear = new Date().getFullYear()
   const months: Record<string, { month: string; Bevétel: number; Kiadás: number }> = {}
+
+  for (let m = 0; m < 12; m++) {
+    const date = new Date(currentYear, m, 1)
+    const key = format(date, 'yyyy-MM')
+    months[key] = { month: format(date, 'MMM', { locale: hu }), Bevétel: 0, Kiadás: 0 }
+  }
+
   transactions.forEach((t) => {
     const key = format(new Date(t.date), 'yyyy-MM')
-    const label = format(new Date(t.date), 'MMM', { locale: hu })
-    if (!months[key]) months[key] = { month: label, Bevétel: 0, Kiadás: 0 }
-    if (t.type === 'income') months[key].Bevétel += t.amount
-    else months[key].Kiadás += t.amount
+    if (months[key]) {
+      if (t.type === 'income') months[key].Bevétel += t.amount
+      else months[key].Kiadás += t.amount
+    }
   })
-  return Object.values(months).slice(-6)
+
+  return Object.values(months)
 }
 
-function dueBadge(dateStr: string | null) {
-  if (!dateStr) return null
-  const d = new Date(dateStr)
-  if (isToday(d)) return { text: 'Ma', red: true }
-  if (isTomorrow(d)) return { text: 'Holnap', red: false }
-  if (isPast(d)) return { text: 'Lejárt', red: true }
-  return { text: format(d, 'MMM d.', { locale: hu }), red: false }
+const PRIORITY_COLOR: Record<string, string> = {
+  high: 'text-red-500',
+  medium: 'text-amber-500',
+  low: 'text-gray-300',
 }
-
-const PRIORITY_ICON: Record<string, string> = { high: '🔴', medium: '🟡', low: '⚪' }
 
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [doneTaskIds, setDoneTaskIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     fetch('/api/stats').then((r) => r.json()).then((d) => { setStats(d); setLoading(false) })
   }, [])
 
   if (loading) {
-    return (
-      <div className="p-6 flex items-center justify-center h-64 text-gray-400">
-        Betöltés...
-      </div>
-    )
+    return <div className="p-6 flex items-center justify-center h-64 text-gray-400">Betöltés...</div>
   }
   if (!stats) return null
 
   const monthBalance = stats.monthlyIncome - stats.monthlyExpenses
-  const chartData = buildMonthlyChart(stats.allTransactions)
+  const chartData = buildYearlyChart(stats.allTransactions)
   const activeDeals = stats.dealsByStage.filter((s) => !['closed_won', 'closed_lost'].includes(s.stage))
   const pipelineValue = activeDeals.reduce((s, d) => s + (d._sum.value || 0), 0)
 
-  const kpis = [
-    { label: 'Nyitott számlák', value: fmtEur(stats.openInvoicesTotal), sub: `${stats.openInvoicesCount} db`, icon: FileText, color: 'bg-blue-500', alert: stats.overdueInvoices > 0 ? `${stats.overdueInvoices} lejárt` : null },
-    { label: 'Havi bevétel', value: fmtEur(stats.monthlyIncome), sub: stats.lastMonthIncome > 0 ? `Előző hó: ${fmtEur(stats.lastMonthIncome)}` : '', icon: Euro, color: 'bg-green-500', alert: null },
-    { label: 'Havi kiadás', value: fmtEur(stats.monthlyExpenses), sub: `Egyenleg: ${fmtEur(monthBalance)}`, icon: TrendingDown, color: 'bg-red-500', alert: null },
-    { label: 'Pipeline értéke', value: fmtEur(pipelineValue), sub: `${stats.totalDeals} aktív deal`, icon: TrendingUp, color: 'bg-purple-500', alert: null },
-    { label: 'Ügyfelek', value: stats.totalContacts, sub: `${stats.totalCompanies} partner cég`, icon: Users, color: 'bg-indigo-500', alert: null },
-    { label: 'Nyitott feladatok', value: stats.pendingTasks, sub: '', icon: CheckSquare, color: 'bg-amber-500', alert: null },
-  ]
+  const todayTasks = stats.upcomingTasks.filter((t) => t.dueDate && isToday(new Date(t.dueDate)))
+  const upcomingOther = stats.upcomingTasks.filter((t) => !t.dueDate || !isToday(new Date(t.dueDate)))
 
   return (
-    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-500 mt-1">Memini Design · Ulm, Deutschland · {format(new Date(), 'yyyy. MMMM d.', { locale: hu })}</p>
+    <div className="p-4 md:p-6 space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-500 mt-0.5 text-sm">
+            Memini Design · Ulm, Deutschland · {format(new Date(), 'yyyy. MMMM d., EEEE', { locale: hu })}
+          </p>
+        </div>
       </div>
 
       {/* Figyelmeztetések */}
@@ -121,13 +120,13 @@ export default function Dashboard() {
         <div className="space-y-2">
           {stats.overdueInvoices > 0 && (
             <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
-              <AlertTriangle size={16} />
+              <AlertTriangle size={15} className="shrink-0" />
               <span><strong>{stats.overdueInvoices} lejárt számla</strong> vár fizetésre — ellenőrizd a Számlák menüben!</span>
             </div>
           )}
-{stats.dormantCompanies.length > 0 && (
+          {stats.dormantCompanies.length > 0 && (
             <div className="flex items-start gap-3 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 text-sm text-orange-700">
-              <Building2 size={16} className="mt-0.5 shrink-0" />
+              <Building2 size={15} className="mt-0.5 shrink-0" />
               <div>
                 <strong>{stats.dormantCompanies.length} szunnyadó partner</strong> — több mint 90 napja nem rendelt:{' '}
                 {stats.dormantCompanies.slice(0, 4).map((c) => c.name).join(', ')}
@@ -138,99 +137,237 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* KPI kártyák */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-        {kpis.map(({ label, value, sub, icon: Icon, color, alert }) => (
-          <div key={label} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div className={`w-9 h-9 ${color} rounded-lg flex items-center justify-center`}>
-                <Icon size={18} className="text-white" />
-              </div>
-              {alert && (
-                <span className="text-xs bg-red-100 text-red-600 font-medium px-2 py-0.5 rounded-full">{alert}</span>
-              )}
-            </div>
-            <p className="text-xl font-bold text-gray-900">{value}</p>
-            <p className="text-xs text-gray-500 mt-1">{label}</p>
-            {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
-          </div>
-        ))}
-      </div>
+      {/* ── Fő 60/40 elrendezés ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-6 items-start">
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-        {/* Cashflow grafikon */}
-        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-base font-semibold text-gray-900 mb-4">Havi cashflow (utolsó 6 hónap)</h2>
-          {chartData.length > 0 ? (
+        {/* ═══ BAL OLDAL — Pénzügy (60%) ═══ */}
+        <div className="lg:col-span-3 space-y-4">
+
+          {/* Éves cashflow diagram */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <h2 className="text-sm font-semibold text-gray-700 mb-4">
+              Éves cashflow — {new Date().getFullYear()} (havi bontás)
+            </h2>
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="gradBev" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#4ade80" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#4ade80" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gradKiad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f87171" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#f87171" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis tickFormatter={(v) => `€${v}`} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <YAxis tickFormatter={(v) => `€${v}`} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={55} />
                 <Tooltip formatter={(v: number) => [`€${v.toFixed(2)}`]} contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px' }} />
-                <Area type="monotone" dataKey="Bevétel" stroke="#4ade80" fill="#dcfce7" strokeWidth={2} />
-                <Area type="monotone" dataKey="Kiadás" stroke="#f87171" fill="#fee2e2" strokeWidth={2} />
+                <Area type="monotone" dataKey="Bevétel" stroke="#4ade80" fill="url(#gradBev)" strokeWidth={2} />
+                <Area type="monotone" dataKey="Kiadás" stroke="#f87171" fill="url(#gradKiad)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
-          ) : (
-            <p className="text-gray-400 text-sm py-10 text-center">Még nincs tranzakciós adat</p>
-          )}
-        </div>
-
-        {/* Közelgő feladatok */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-base font-semibold text-gray-900 mb-4">Közelgő feladatok</h2>
-          <div className="space-y-3">
-            {stats.upcomingTasks.slice(0, 6).map((task) => {
-              const due = dueBadge(task.dueDate)
-              return (
-                <div key={task.id} className="flex items-start gap-2">
-                  <span className="text-xs mt-0.5">{PRIORITY_ICON[task.priority]}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-900 truncate font-medium">{task.title}</p>
-                    {task.contact && (
-                      <p className="text-xs text-gray-400">{task.contact.firstName} {task.contact.lastName}</p>
-                    )}
-                  </div>
-                  {due && (
-                    <span className={`text-xs shrink-0 flex items-center gap-0.5 ${due.red ? 'text-red-600' : 'text-gray-400'}`}>
-                      <Clock size={10} />{due.text}
-                    </span>
-                  )}
-                </div>
-              )
-            })}
-            {stats.upcomingTasks.length === 0 && <p className="text-gray-400 text-sm">Nincs közelgő feladat</p>}
           </div>
-        </div>
-      </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-base font-semibold text-gray-900 mb-4">Sales pipeline</h2>
-          <div className="space-y-2.5">
-            {activeDeals.map((stage) => (
-              <div key={stage.stage} className="flex items-center gap-3">
-                <div
-                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: STAGE_COLORS[stage.stage] }}
-                />
-                <span className="text-sm text-gray-600 w-24 shrink-0">{STAGE_LABELS[stage.stage]}</span>
-                <div className="flex-1 bg-gray-100 rounded-full h-2">
-                  <div
-                    className="h-2 rounded-full"
-                    style={{
-                      width: `${pipelineValue > 0 ? Math.min(((stage._sum.value || 0) / pipelineValue) * 100, 100) : 0}%`,
-                      backgroundColor: STAGE_COLORS[stage.stage],
-                    }}
-                  />
-                </div>
-                <span className="text-xs text-gray-500 shrink-0 w-28 text-right">
-                  {stage._count} deal · {fmtEur(stage._sum.value || 0)}
-                </span>
+          {/* Havi KPI-ok */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <p className="text-xs text-gray-400 mb-1">Havi bevétel</p>
+              <p className="text-lg font-bold text-green-600">{fmtEur(stats.monthlyIncome)}</p>
+              {stats.lastMonthIncome > 0 && (
+                <p className="text-xs text-gray-400 mt-0.5">Előző: {fmtEur(stats.lastMonthIncome)}</p>
+              )}
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <p className="text-xs text-gray-400 mb-1">Havi kiadás</p>
+              <p className="text-lg font-bold text-red-500">{fmtEur(stats.monthlyExpenses)}</p>
+              {stats.lastMonthExpenses > 0 && (
+                <p className="text-xs text-gray-400 mt-0.5">Előző: {fmtEur(stats.lastMonthExpenses)}</p>
+              )}
+            </div>
+            <div className={`rounded-xl shadow-sm border p-4 ${monthBalance >= 0 ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
+              <p className="text-xs text-gray-400 mb-1">Cashflow egyenleg</p>
+              <p className={`text-lg font-bold ${monthBalance >= 0 ? 'text-green-700' : 'text-red-600'}`}>{fmtEur(monthBalance)}</p>
+              <p className="text-xs text-gray-400 mt-0.5">Ez a hónap</p>
+            </div>
+          </div>
+
+          {/* Kintlévőségek */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <h2 className="text-sm font-semibold text-gray-700 mb-3">Kintlévőségek</h2>
+            <div className="flex gap-4">
+              <div className="flex-1 border border-gray-100 rounded-lg p-3 text-center">
+                <p className="text-2xl font-black text-gray-900">{fmtEur(stats.openInvoicesTotal)}</p>
+                <p className="text-xs text-gray-400 mt-0.5">Összes nyitott számla</p>
               </div>
-            ))}
-            {activeDeals.length === 0 && <p className="text-gray-400 text-sm">Nincs aktív deal</p>}
+              <div className="flex-1 border border-gray-100 rounded-lg p-3 text-center">
+                <p className="text-2xl font-black text-gray-900">{stats.openInvoicesCount}</p>
+                <p className="text-xs text-gray-400 mt-0.5">Db nyitott számla</p>
+              </div>
+              <div className={`flex-1 rounded-lg p-3 text-center ${stats.overdueInvoices > 0 ? 'border border-red-200 bg-red-50' : 'border border-gray-100'}`}>
+                <p className={`text-2xl font-black ${stats.overdueInvoices > 0 ? 'text-red-600' : 'text-gray-900'}`}>{stats.overdueInvoices}</p>
+                <p className="text-xs text-gray-400 mt-0.5">Lejárt számla</p>
+              </div>
+            </div>
           </div>
+
+          {/* Sales pipeline */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-gray-700">Sales pipeline</h2>
+              <span className="text-xs text-gray-400">{fmtEur(pipelineValue)} összesen</span>
+            </div>
+            <div className="space-y-2.5">
+              {activeDeals.map((stage) => (
+                <div key={stage.stage} className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: STAGE_COLORS[stage.stage] }} />
+                  <span className="text-xs text-gray-500 w-20 shrink-0">{STAGE_LABELS[stage.stage]}</span>
+                  <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+                    <div
+                      className="h-1.5 rounded-full"
+                      style={{
+                        width: `${pipelineValue > 0 ? Math.min(((stage._sum.value || 0) / pipelineValue) * 100, 100) : 0}%`,
+                        backgroundColor: STAGE_COLORS[stage.stage],
+                      }}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-500 shrink-0 text-right w-24">
+                    {stage._count} · {fmtEur(stage._sum.value || 0)}
+                  </span>
+                </div>
+              ))}
+              {activeDeals.length === 0 && <p className="text-gray-400 text-sm">Nincs aktív deal</p>}
+            </div>
+          </div>
+        </div>
+
+        {/* ═══ JOBB OLDAL — Feladatok (40%) ═══ */}
+        <div className="lg:col-span-2 space-y-4">
+
+          {/* Mai feladatok */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-gray-700">
+                Mai feladatok
+              </h2>
+              <span className="text-xs bg-blue-100 text-blue-600 font-semibold px-2 py-0.5 rounded-full">
+                {todayTasks.length} db
+              </span>
+            </div>
+
+            {todayTasks.length === 0 ? (
+              <div className="py-6 text-center">
+                <CheckCircle2 size={32} className="text-green-300 mx-auto mb-2" />
+                <p className="text-sm text-gray-400">Nincs mai feladat</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {todayTasks.map((task) => {
+                  const done = doneTaskIds.has(task.id)
+                  return (
+                    <div
+                      key={task.id}
+                      className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
+                        done ? 'border-gray-100 bg-gray-50 opacity-50' : 'border-gray-100 hover:border-blue-100 hover:bg-blue-50/30'
+                      }`}
+                    >
+                      <button
+                        onClick={() => setDoneTaskIds(prev => {
+                          const next = new Set(prev)
+                          if (next.has(task.id)) next.delete(task.id)
+                          else next.add(task.id)
+                          return next
+                        })}
+                        className="mt-0.5 shrink-0"
+                      >
+                        {done
+                          ? <CheckCircle2 size={16} className="text-green-500" />
+                          : <Circle size={16} className={PRIORITY_COLOR[task.priority]} />
+                        }
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium ${done ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+                          {task.title}
+                        </p>
+                        {task.contact && (
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {task.contact.firstName} {task.contact.lastName}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Közelgő feladatok */}
+          {upcomingOther.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+              <h2 className="text-sm font-semibold text-gray-700 mb-3">Közelgő feladatok</h2>
+              <div className="space-y-2">
+                {upcomingOther.slice(0, 8).map((task) => {
+                  const d = task.dueDate ? new Date(task.dueDate) : null
+                  const isOverdue = d && isPast(d) && !isToday(d)
+                  const isTomor = d && isTomorrow(d)
+                  return (
+                    <div key={task.id} className="flex items-center gap-3 py-1.5">
+                      <Circle size={14} className={`shrink-0 ${PRIORITY_COLOR[task.priority]}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-800 truncate">{task.title}</p>
+                        {task.contact && (
+                          <p className="text-xs text-gray-400">{task.contact.firstName} {task.contact.lastName}</p>
+                        )}
+                      </div>
+                      {d && (
+                        <span className={`text-xs shrink-0 flex items-center gap-0.5 font-medium ${
+                          isOverdue ? 'text-red-500' : isTomor ? 'text-amber-500' : 'text-gray-400'
+                        }`}>
+                          <Clock size={10} />
+                          {isOverdue ? 'Lejárt' : isTomor ? 'Holnap' : format(d, 'MMM d.', { locale: hu })}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Egyéb KPI-ok */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center mb-2">
+                <TrendingUp size={15} className="text-white" />
+              </div>
+              <p className="text-lg font-bold text-gray-900">{fmtEur(pipelineValue)}</p>
+              <p className="text-xs text-gray-400 mt-0.5">Pipeline érték</p>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center mb-2">
+                <CheckSquare size={15} className="text-white" />
+              </div>
+              <p className="text-lg font-bold text-gray-900">{stats.pendingTasks}</p>
+              <p className="text-xs text-gray-400 mt-0.5">Nyitott feladat</p>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center mb-2">
+                <Euro size={15} className="text-white" />
+              </div>
+              <p className="text-lg font-bold text-gray-900">{fmtEur(stats.totalRevenue)}</p>
+              <p className="text-xs text-gray-400 mt-0.5">Összes bevétel</p>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center mb-2">
+                <FileText size={15} className="text-white" />
+              </div>
+              <p className="text-lg font-bold text-gray-900">{stats.totalDeals}</p>
+              <p className="text-xs text-gray-400 mt-0.5">Összes deal</p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
