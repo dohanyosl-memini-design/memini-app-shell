@@ -147,7 +147,7 @@ export default function DeliveryNoteForm({ onSave, onCancel, deliveryNote }: { o
           const carrier = carriers.find(c => c.code === product.material)
           const line1 = carrier?.nameDE || product.nameDE || product.name
           const line2Bold = `${product.sku} / ${carrier?.code ?? product.material ?? ''}`
-          const line2Paren = carrier?.nameDE || ''
+          const line2Paren = product.nameDE || ''
           item.description = [line1, line2Paren ? `${line2Bold}\t${line2Paren}` : line2Bold].join('\n')
           item.vatRate = product.vatRate
           const calc = calcTierPrice(product.material, item.quantity, pricelist)
