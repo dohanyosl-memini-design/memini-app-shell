@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Plus, Trash2, Tag, Percent, Euro } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Plus, Trash2, Tag, Percent, Euro, MapPin } from 'lucide-react'
 import { format } from 'date-fns'
 
-interface Contact { id: string; firstName: string; lastName: string }
-interface Company { id: string; name: string; address: string | null; zip: string | null; city: string | null; country: string | null }
-interface Product { id: string; name: string; nameDE: string | null; sku: string; material: string | null; salesPrice: number; vatRate: number }
+interface Contact { id: string; firstName: string; lastName: string; companyId: string | null }
+interface Company { id: string; name: string; address: string | null; zip: string | null; city: string | null; country: string | null; vatId: string | null; customerNumber: string | null }
+interface Product { id: string; name: string; nameDE: string | null; sku: string; material: string | null; salesPrice: number; vatRate: number; city: string | null }
 interface Carrier { id: string; code: string; nameDE: string | null }
 interface PriceTier { qty: number; m: number }
 interface PriceEntry { id: string; hordozo: string | null; basePrice: number; tiers: PriceTier[] }
@@ -66,11 +66,12 @@ interface ExistingDeliveryNote {
 }
 
 export default function DeliveryNoteForm({ onSave, onCancel, deliveryNote }: { onSave: () => void; onCancel: () => void; deliveryNote?: ExistingDeliveryNote | null }) {
-  const [contacts, setContacts] = useState<Contact[]>([])
+  const [allContacts, setAllContacts] = useState<Contact[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [carriers, setCarriers] = useState<Carrier[]>([])
   const [pricelist, setPricelist] = useState<PriceEntry[]>([])
+  const [previousProductIds, setPreviousProductIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
 
   const today = format(new Date(), 'yyyy-MM-dd')
@@ -107,10 +108,52 @@ export default function DeliveryNoteForm({ onSave, onCancel, deliveryNote }: { o
       fetch('/api/pricelist').then(r => r.json()),
       fetch('/api/delivery-notes/next-number').then(r => r.json()),
     ]).then(([c, co, p, ca, pl, nn]) => {
-      setContacts(c); setCompanies(co); setProducts(p); setCarriers(ca); setPricelist(pl)
+      setAllContacts(c); setCompanies(co); setProducts(p); setCarriers(ca); setPricelist(pl)
       if (!deliveryNote) setForm(f => ({ ...f, noteNumber: nn.number }))
     })
   }, [deliveryNote])
+
+  const loadPreviousProducts = useCallback(async (companyId: string) => {
+    if (!companyId) { setPreviousProductIds(new Set()); return }
+    const res = await fetch(`/api/orders?companyId=${companyId}`)
+    const orders = await res.json()
+    const ids = new Set<string>()
+    for (const order of orders) {
+      for (const item of (order.items || [])) {
+        if (item.productId) ids.add(item.productId)
+      }
+    }
+    setPreviousProductIds(ids)
+  }, [])
+
+  useEffect(() => {
+    if (form.companyId) loadPreviousProducts(form.companyId)
+    else setPreviousProductIds(new Set())
+  }, [form.companyId, loadPreviousProducts])
+
+  const filteredContacts = form.companyId
+    ? allContacts.filter(c => c.companyId === form.companyId)
+    : allContacts
+
+  const selectedCompany = companies.find(c => c.id === form.companyId) ?? null
+
+  function getProductGroups() {
+    const prev: Product[] = []
+    const cityMatch: Product[] = []
+    const upsell: Product[] = []
+    const companyCity = selectedCompany?.city?.toLowerCase()
+
+    for (const p of products) {
+      if (previousProductIds.has(p.id)) {
+        prev.push(p)
+      } else if (companyCity && p.city?.toLowerCase() === companyCity) {
+        cityMatch.push(p)
+      } else {
+        upsell.push(p)
+      }
+    }
+    return { prev, cityMatch, upsell }
+  }
 
   const productSubtotal = items
     .filter(i => !i.isDiscount)
@@ -246,6 +289,41 @@ export default function DeliveryNoteForm({ onSave, onCancel, deliveryNote }: { o
     onSave()
   }
 
+  const { prev: prevProducts, cityMatch: cityProducts, upsell: upsellProducts } = getProductGroups()
+
+  function renderProductSelect(li: LineItem, idx: number) {
+    return (
+      <select
+        value={li.productId}
+        onChange={e => updateProduct(idx, 'productId', e.target.value)}
+        className="w-full text-xs border border-gray-200 rounded px-2 py-1 mb-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+      >
+        <option value="">— Termék választása —</option>
+        {prevProducts.length > 0 && (
+          <optgroup label={`✓ Korábban rendelt (${prevProducts.length})`}>
+            {prevProducts.map(p => (
+              <option key={p.id} value={p.id}>{p.name}{p.nameDE ? ` · ${p.nameDE}` : ''}</option>
+            ))}
+          </optgroup>
+        )}
+        {cityProducts.length > 0 && (
+          <optgroup label={`📍 ${selectedCompany?.city} – városhoz tartozó`}>
+            {cityProducts.map(p => (
+              <option key={p.id} value={p.id}>{p.name}{p.nameDE ? ` · ${p.nameDE}` : ''}</option>
+            ))}
+          </optgroup>
+        )}
+        {upsellProducts.length > 0 && (
+          <optgroup label={prevProducts.length > 0 || cityProducts.length > 0 ? '↑ Upsell – egyéb termékek' : 'Termékek'}>
+            {upsellProducts.map(p => (
+              <option key={p.id} value={p.id}>{p.name}{p.nameDE ? ` · ${p.nameDE}` : ''}</option>
+            ))}
+          </optgroup>
+        )}
+      </select>
+    )
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {/* Szállítólevél szám */}
@@ -262,38 +340,67 @@ export default function DeliveryNoteForm({ onSave, onCancel, deliveryNote }: { o
         <span className="text-xs text-green-500 whitespace-nowrap">szerkeszthető</span>
       </div>
 
-      {/* Fejléc mezők */}
+      {/* Cég + Ügyfél */}
       <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Ügyfél</label>
-          <select value={form.contactId} onChange={e => setForm({ ...form, contactId: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-            <option value="">Válassz ügyfelet</option>
-            {contacts.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
-          </select>
-        </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Cég</label>
           <select value={form.companyId} onChange={e => {
             const co = companies.find(c => c.id === e.target.value)
-            setForm({ ...form,
+            setForm(f => ({
+              ...f,
               companyId: e.target.value,
+              contactId: allContacts.find(c => c.id === f.contactId)?.companyId === e.target.value ? f.contactId : '',
               billingName: co?.name || '',
               billingAddress: co?.address || '',
               billingZip: co?.zip || '',
               billingCity: co?.city || '',
               billingCountry: co?.country || '',
-            })
+            }))
           }}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
             <option value="">Válassz céget</option>
             {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Ügyfél
+            {form.companyId && filteredContacts.length === 0 && (
+              <span className="text-gray-400 font-normal ml-1 text-xs">(nincs kapcsolt ügyfél)</span>
+            )}
+          </label>
+          <select value={form.contactId} onChange={e => setForm({ ...form, contactId: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+            <option value="">Válassz ügyfelet</option>
+            {filteredContacts.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
+          </select>
+        </div>
+
+        {/* Cég info kártya */}
+        {selectedCompany && (
+          <div className="col-span-2 bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-start gap-3">
+            <MapPin size={15} className="text-gray-400 mt-0.5 shrink-0" />
+            <div className="text-sm text-gray-700 leading-relaxed">
+              <p className="font-semibold text-gray-900">{selectedCompany.name}</p>
+              {selectedCompany.address && <p>{selectedCompany.address}</p>}
+              {(selectedCompany.zip || selectedCompany.city) && (
+                <p>{[selectedCompany.zip, selectedCompany.city].filter(Boolean).join(' ')}</p>
+              )}
+              {selectedCompany.vatId && <p className="text-xs text-gray-500 mt-0.5">USt-IdNr.: {selectedCompany.vatId}</p>}
+              {selectedCompany.customerNumber && <p className="text-xs text-gray-500">Kunden-Nr.: {selectedCompany.customerNumber}</p>}
+            </div>
+            {previousProductIds.size > 0 && (
+              <div className="ml-auto text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1.5 text-right shrink-0">
+                <p className="font-semibold">{previousProductIds.size} korábban rendelt</p>
+                <p className="text-blue-400">termék kiemelve</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Szállítási cím */}
         {form.companyId && (
-          <div className="col-span-2 bg-gray-50 rounded-lg p-3 space-y-2 border border-gray-100">
+          <div className="col-span-2 bg-white rounded-lg p-3 space-y-2 border border-gray-200">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Szállítási cím</p>
             <input type="text" placeholder="Cégnév" value={form.billingName}
               onChange={e => setForm({ ...form, billingName: e.target.value })}
@@ -400,11 +507,7 @@ export default function DeliveryNoteForm({ onSave, onCancel, deliveryNote }: { o
                 return (
                   <tr key={idx}>
                     <td className="px-3 py-2">
-                      <select value={li.productId} onChange={e => updateProduct(idx, 'productId', e.target.value)}
-                        className="w-full text-xs border border-gray-200 rounded px-2 py-1 mb-1 focus:outline-none focus:ring-1 focus:ring-blue-500">
-                        <option value="">— Termék választása —</option>
-                        {products.map(p => <option key={p.id} value={p.id}>{p.name}{p.nameDE ? ` · ${p.nameDE}` : ''}</option>)}
-                      </select>
+                      {renderProductSelect(li, idx)}
                       <input type="text" value={li.description}
                         onChange={e => updateProduct(idx, 'description', e.target.value)}
                         placeholder="Szállítólevelén megjelenő szöveg"
