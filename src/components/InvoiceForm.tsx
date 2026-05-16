@@ -6,7 +6,7 @@ import { format, addDays } from 'date-fns'
 
 interface Contact { id: string; firstName: string; lastName: string; companyId: string | null }
 interface Company { id: string; name: string; address: string | null; zip: string | null; city: string | null; country: string | null; vatId: string | null; customerNumber: string | null }
-interface Product { id: string; name: string; nameDE: string | null; sku: string; material: string | null; salesPrice: number; vatRate: number; city: string | null }
+interface Product { id: string; name: string; nameDE: string | null; sku: string; material: string | null; priceListEntryId: string | null; salesPrice: number; vatRate: number; city: string | null }
 interface Carrier { id: string; code: string; nameDE: string | null }
 interface PriceTier { qty: number; m: number }
 interface PriceEntry { id: string; hordozo: string | null; basePrice: number; tiers: PriceTier[] }
@@ -35,9 +35,7 @@ const DISCOUNT_PRESETS = [
   { label: '15% Rabatt', type: 'percent' as const, value: 15 },
 ]
 
-function calcTierPrice(hordozo: string | null, quantity: number, pricelist: PriceEntry[]): { price: number; tier: PriceTier | null } | null {
-  if (!hordozo) return null
-  const entry = pricelist.find(e => e.hordozo === hordozo)
+function calcTierPriceFromEntry(entry: PriceEntry | undefined, quantity: number): { price: number; tier: PriceTier | null } | null {
   if (!entry) return null
   const sorted = [...entry.tiers].sort((a, b) => b.qty - a.qty)
   const tier = sorted.find(t => t.qty <= quantity) ?? null
@@ -171,6 +169,15 @@ export default function InvoiceForm({ onSave, onCancel, invoice }: { onSave: () 
     return carrier?.code ?? material
   }
 
+  function findEntry(product: Product): PriceEntry | undefined {
+    if (product.priceListEntryId) {
+      const e = pricelist.find(e => e.id === product.priceListEntryId)
+      if (e) return e
+    }
+    const code = resolveCarrierCode(product.material)
+    return code ? pricelist.find(e => e.hordozo === code) : undefined
+  }
+
   function addProductItem() {
     setItems([...items, { description: '', quantity: 1, unitPrice: 0, vatRate: 19, productId: '', isDiscount: false }])
   }
@@ -205,7 +212,7 @@ export default function InvoiceForm({ onSave, onCancel, invoice }: { onSave: () 
           const line2Paren = product.nameDE || ''
           item.description = [line1, line2Paren ? `${line2Bold}\t${line2Paren}` : line2Bold].join('\n')
           item.vatRate = product.vatRate
-          const calc = calcTierPrice(resolveCarrierCode(product.material), item.quantity, pricelist)
+          const calc = calcTierPriceFromEntry(findEntry(product), item.quantity)
           item.unitPrice = calc ? calc.price : product.salesPrice
         }
       } else {
@@ -216,8 +223,8 @@ export default function InvoiceForm({ onSave, onCancel, invoice }: { onSave: () 
 
     if (field === 'quantity' && item.productId) {
       const product = products.find(p => p.id === item.productId)
-      if (product?.material) {
-        const calc = calcTierPrice(resolveCarrierCode(product.material), Number(value), pricelist)
+      if (product) {
+        const calc = calcTierPriceFromEntry(findEntry(product), Number(value))
         if (calc) item.unitPrice = calc.price
       }
     }
@@ -247,7 +254,7 @@ export default function InvoiceForm({ onSave, onCancel, invoice }: { onSave: () 
     if (!li.productId) return null
     const product = products.find(p => p.id === li.productId)
     if (!product?.material) return null
-    const calc = calcTierPrice(resolveCarrierCode(product.material), li.quantity, pricelist)
+    const calc = calcTierPriceFromEntry(findEntry(product), li.quantity)
     if (!calc) return null
     if (!calc.tier) return 'Alap ár'
     return `${calc.tier.qty}+ db · −${((1 - calc.tier.m) * 100).toFixed(1)}%`
