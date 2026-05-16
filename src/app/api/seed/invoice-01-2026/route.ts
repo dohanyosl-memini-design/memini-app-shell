@@ -40,19 +40,36 @@ export async function GET() {
         salutation: 'Frau',
         firstName: '',
         lastName: 'Ettrich',
+        email: 'i.ettrich@muensterbauamt-ulm.de',
+        phone: '+49 731 9675014',
         companyId: company.id,
         status: 'customer',
       },
     })
   }
 
-  // Invoice items from Rechnung 01/2026
+  // Exact product descriptions as on the original invoice (Rechnung 01/2026)
   const items = [
-    { description: 'Graphitoptik Steinmagnet groß', quantity: 500, unitPrice: 2.72, vatRate: 19, isDiscount: false },
-    { description: 'Graphitoptik Steinmagnet normál', quantity: 300, unitPrice: 2.59, vatRate: 19, isDiscount: false },
-    { description: 'Laserschnitt Kühlschrankmagnet', quantity: 100, unitPrice: 2.97, vatRate: 19, isDiscount: false },
-    { description: 'Mini Kühlschrankmagnet Spatz', quantity: 100, unitPrice: 1.79, vatRate: 19, isDiscount: false },
-    { description: 'Mini Kühlschrankmagnet Drachen', quantity: 100, unitPrice: 1.82, vatRate: 19, isDiscount: false },
+    {
+      description: 'Graphitoptik - Steinmagnet, (groß)\nUlm - 37 / 01 (Münster mit Spatz)',
+      quantity: 500, unitPrice: 2.72, vatRate: 19, isDiscount: false,
+    },
+    {
+      description: 'Graphitoptik - Steinmagnet,\nUlm - 39 / 01 (Münsterplatz)',
+      quantity: 300, unitPrice: 2.59, vatRate: 19, isDiscount: false,
+    },
+    {
+      description: 'Laserschnitt - Kühlschrankmagnet,\nUlm - 07 / 02 (UlmSkyline)',
+      quantity: 100, unitPrice: 2.97, vatRate: 19, isDiscount: false,
+    },
+    {
+      description: 'Mini - Kühlschrankmagnet,\nUlm - 40 / 18\nMünster mit der Spatz',
+      quantity: 100, unitPrice: 1.79, vatRate: 19, isDiscount: false,
+    },
+    {
+      description: 'Mini - Kühlschrankmagnet,\nUlm - 41 / 18\nMünster mit dem Drachen',
+      quantity: 100, unitPrice: 1.82, vatRate: 19, isDiscount: false,
+    },
   ]
 
   const subtotal = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
@@ -69,7 +86,7 @@ export async function GET() {
       subtotal: Math.round(subtotal * 100) / 100,
       vatAmount: Math.round(vatAmount * 100) / 100,
       total: Math.round(total * 100) / 100,
-      billingName: 'Evang. Gesamtkirchengemeinde Ulm / Besucherbetrieb Ulmer Münster (Münstershop)',
+      billingName: 'Evang. Gesamtkirchengemeinde Ulm\nBesucherbetrieb Ulmer Münster (Münstershop)',
       billingAddress: 'Münsterplatz 1',
       billingZip: '89073',
       billingCity: 'Ulm',
