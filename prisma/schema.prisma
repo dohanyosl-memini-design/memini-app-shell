@@ -401,3 +401,12 @@ model PriceListEntry {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model ArthurReport {
+  id        String   @id @default(cuid())
+  type      String   // daily | weekly | monthly
+  title     String
+  summary   String   @db.Text
+  drafts    Json     @default("[]")
+  createdAt DateTime @default(now())
+}

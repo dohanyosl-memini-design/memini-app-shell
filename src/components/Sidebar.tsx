@@ -19,7 +19,8 @@ const navGroups = [
     label: null,
     items: [
       { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-      { href: '/chat', label: 'AI Asszisztens', icon: Bot },
+      { href: '/chat', label: 'AI Chat', icon: Bot },
+      { href: '/arthur', label: 'Arthur', icon: Bot },
     ],
   },
   {
