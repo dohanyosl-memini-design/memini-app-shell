@@ -159,6 +159,12 @@ export default function DeliveryNoteForm({ onSave, onCancel, deliveryNote }: { o
     .filter(i => !i.isDiscount)
     .reduce((s, i) => s + (i as LineItem).quantity * (i as LineItem).unitPrice, 0)
 
+  function resolveCarrierCode(material: string | null): string | null {
+    if (!material) return null
+    const carrier = carriers.find(c => c.id === material) ?? carriers.find(c => c.code === material)
+    return carrier?.code ?? material
+  }
+
   function addProductItem() {
     setItems([...items, { description: '', quantity: 1, unitPrice: 0, vatRate: 19, productId: '', isDiscount: false }])
   }
@@ -193,7 +199,7 @@ export default function DeliveryNoteForm({ onSave, onCancel, deliveryNote }: { o
           const line2Paren = product.nameDE || ''
           item.description = [line1, line2Paren ? `${line2Bold}\t${line2Paren}` : line2Bold].join('\n')
           item.vatRate = product.vatRate
-          const calc = calcTierPrice(product.material, item.quantity, pricelist)
+          const calc = calcTierPrice(resolveCarrierCode(product.material), item.quantity, pricelist)
           item.unitPrice = calc ? calc.price : product.salesPrice
         }
       } else {
@@ -205,7 +211,7 @@ export default function DeliveryNoteForm({ onSave, onCancel, deliveryNote }: { o
     if (field === 'quantity' && item.productId) {
       const product = products.find(p => p.id === item.productId)
       if (product?.material) {
-        const calc = calcTierPrice(product.material, Number(value), pricelist)
+        const calc = calcTierPrice(resolveCarrierCode(product.material), Number(value), pricelist)
         if (calc) item.unitPrice = calc.price
       }
     }
@@ -235,7 +241,7 @@ export default function DeliveryNoteForm({ onSave, onCancel, deliveryNote }: { o
     if (!li.productId) return null
     const product = products.find(p => p.id === li.productId)
     if (!product?.material) return null
-    const calc = calcTierPrice(product.material, li.quantity, pricelist)
+    const calc = calcTierPrice(resolveCarrierCode(product.material), li.quantity, pricelist)
     if (!calc) return null
     if (!calc.tier) return 'Alap ár'
     return `${calc.tier.qty}+ db · −${((1 - calc.tier.m) * 100).toFixed(1)}%`
