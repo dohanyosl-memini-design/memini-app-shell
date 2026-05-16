@@ -44,8 +44,9 @@ export default function ChatPage() {
       })
       const data = await res.json()
       setMessages(prev => [...prev, { role: 'assistant', content: data.reply }])
-    } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Hiba történt. Kérlek próbáld újra.' }])
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setMessages(prev => [...prev, { role: 'assistant', content: `Hiba: ${msg}` }])
     } finally {
       setLoading(false)
       inputRef.current?.focus()

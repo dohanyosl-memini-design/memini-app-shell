@@ -241,44 +241,50 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
 }
 
 export async function POST(request: NextRequest) {
-  const { messages } = await request.json()
+  try {
+    const { messages } = await request.json()
 
-  const conversation: Anthropic.MessageParam[] = messages.map(
-    (m: { role: string; content: string }) => ({ role: m.role as 'user' | 'assistant', content: m.content })
-  )
+    const conversation: Anthropic.MessageParam[] = messages.map(
+      (m: { role: string; content: string }) => ({ role: m.role as 'user' | 'assistant', content: m.content })
+    )
 
-  let response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 2048,
-    system: SYSTEM,
-    tools,
-    messages: conversation,
-  })
-
-  let iterations = 0
-  while (response.stop_reason === 'tool_use' && iterations < 5) {
-    iterations++
-    const toolResults: Anthropic.ToolResultBlockParam[] = []
-
-    for (const block of response.content) {
-      if (block.type === 'tool_use') {
-        const result = await executeTool(block.name, block.input as Record<string, unknown>)
-        toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result })
-      }
-    }
-
-    conversation.push({ role: 'assistant', content: response.content })
-    conversation.push({ role: 'user', content: toolResults })
-
-    response = await client.messages.create({
+    let response = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 2048,
       system: SYSTEM,
       tools,
       messages: conversation,
     })
-  }
 
-  const text = response.content.find(b => b.type === 'text')
-  return NextResponse.json({ reply: text?.type === 'text' ? text.text : 'Nincs válasz.' })
+    let iterations = 0
+    while (response.stop_reason === 'tool_use' && iterations < 5) {
+      iterations++
+      const toolResults: Anthropic.ToolResultBlockParam[] = []
+
+      for (const block of response.content) {
+        if (block.type === 'tool_use') {
+          const result = await executeTool(block.name, block.input as Record<string, unknown>)
+          toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result })
+        }
+      }
+
+      conversation.push({ role: 'assistant', content: response.content })
+      conversation.push({ role: 'user', content: toolResults })
+
+      response = await client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2048,
+        system: SYSTEM,
+        tools,
+        messages: conversation,
+      })
+    }
+
+    const text = response.content.find(b => b.type === 'text')
+    return NextResponse.json({ reply: text?.type === 'text' ? text.text : 'Nincs válasz.' })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('Chat API hiba:', msg)
+    return NextResponse.json({ reply: `Hiba: ${msg}` }, { status: 500 })
+  }
 }
