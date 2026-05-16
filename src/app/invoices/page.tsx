@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Search, Eye, Trash2, CheckCircle, Clock, AlertCircle, FileText, Ban, Edit2, Send, Truck } from 'lucide-react'
+import { Plus, Search, Eye, Trash2, CheckCircle, Clock, AlertCircle, FileText, Ban, Edit2, Send, Truck, Receipt, Loader2 } from 'lucide-react'
 import Modal from '@/components/Modal'
 import InvoiceForm from '@/components/InvoiceForm'
 import InvoicePreview from '@/components/InvoicePreview'
@@ -127,6 +127,7 @@ export default function InvoicesPage() {
   const [showCreateDN, setShowCreateDN] = useState(false)
   const [previewDN, setPreviewDN] = useState<DeliveryNote | null>(null)
   const [editDN, setEditDN] = useState<DeliveryNote | null>(null)
+  const [generatingInvoiceId, setGeneratingInvoiceId] = useState<string | null>(null)
 
   const fetchInvoices = useCallback(async () => {
     setInvoicesLoading(true)
@@ -179,6 +180,51 @@ export default function InvoicesPage() {
   async function handleDNStatusChange(id: string, status: string) {
     await fetch(`/api/delivery-notes/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
     fetchDeliveryNotes()
+  }
+
+  async function handleGenerateInvoice(dn: DeliveryNote) {
+    setGeneratingInvoiceId(dn.id)
+    const today = new Date()
+    const due = new Date(today)
+    due.setDate(due.getDate() + 30)
+    const fmt = (d: Date) => d.toISOString().slice(0, 10)
+
+    const res = await fetch('/api/invoices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        number: '',
+        companyId: dn.companyId,
+        contactId: dn.contactId,
+        date: fmt(today),
+        dueDate: fmt(due),
+        deliveryInfo: dn.deliveryInfo || '',
+        currency: dn.currency,
+        notes: dn.notes || '',
+        billingName: dn.billingName || '',
+        billingAddress: dn.billingAddress || '',
+        billingZip: dn.billingZip || '',
+        billingCity: dn.billingCity || '',
+        billingCountry: dn.billingCountry || '',
+        items: dn.items.map(i => ({
+          description: i.description,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+          vatRate: i.vatRate,
+          isDiscount: i.isDiscount,
+          productId: null,
+        })),
+      }),
+    })
+
+    setGeneratingInvoiceId(null)
+    if (res.ok) {
+      await fetchInvoices()
+      setActiveTab('invoices')
+    } else {
+      const err = await res.json()
+      alert(err.error || 'Hiba a számlagenerálás során.')
+    }
   }
 
   async function handleDeleteDN(id: string) {
@@ -482,6 +528,17 @@ export default function InvoicesPage() {
                                 <CheckCircle size={15} />
                               </button>
                             )}
+                            <button
+                              onClick={() => handleGenerateInvoice(dn)}
+                              disabled={generatingInvoiceId === dn.id}
+                              title="Számla generálása"
+                              className="text-gray-400 hover:text-blue-700 transition-colors disabled:opacity-50"
+                            >
+                              {generatingInvoiceId === dn.id
+                                ? <Loader2 size={15} className="animate-spin" />
+                                : <Receipt size={15} />
+                              }
+                            </button>
                             <button onClick={() => handleDeleteDN(dn.id)} className="text-gray-400 hover:text-red-600 transition-colors">
                               <Trash2 size={15} />
                             </button>
