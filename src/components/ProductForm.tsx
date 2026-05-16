@@ -41,6 +41,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [imageUrl, setImageUrl] = useState<string>(product?.imageUrl || '')
   const [priceListEntries, setPriceListEntries] = useState<PriceListEntry[]>([])
   const [carriers, setCarriers] = useState<Carrier[]>([])
@@ -101,19 +102,32 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setSaveError(null)
     setLoading(true)
 
-    const method = product ? 'PUT' : 'POST'
-    const url = product ? `/api/products/${product.id}` : '/api/products'
+    try {
+      const method = product ? 'PUT' : 'POST'
+      const url = product ? `/api/products/${product.id}` : '/api/products'
 
-    await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, imageUrl: imageUrl || null, priceListEntryId: form.priceListEntryId || null }),
-    })
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, imageUrl: imageUrl || null, priceListEntryId: form.priceListEntryId || null }),
+      })
 
-    setLoading(false)
-    onSave()
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setSaveError(err.error || `Mentési hiba (${res.status})`)
+        setLoading(false)
+        return
+      }
+
+      setLoading(false)
+      onSave()
+    } catch {
+      setSaveError('Hálózati hiba – próbáld újra')
+      setLoading(false)
+    }
   }
 
   const margin = form.salesPrice && form.costPrice
@@ -410,6 +424,10 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
         />
       </div>
+
+      {saveError && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>
+      )}
 
       <div className="flex justify-end gap-3 pt-2">
         <button type="button" onClick={onCancel} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">Mégse</button>
