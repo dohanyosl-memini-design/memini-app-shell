@@ -590,7 +590,7 @@ export default function WarehousePage() {
 
       {showModal && (
         <Modal title={editProduct ? 'Termék szerkesztése' : 'Új termék'} onClose={() => setShowModal(false)} size="lg">
-          <ProductForm product={editProduct} onSave={() => { setShowModal(false); fetchProducts() }} onCancel={() => setShowModal(false)} />
+          <ProductForm key={editProduct?.id || 'new'} product={editProduct} onSave={() => { setShowModal(false); fetchProducts() }} onCancel={() => setShowModal(false)} />
         </Modal>
       )}
 
