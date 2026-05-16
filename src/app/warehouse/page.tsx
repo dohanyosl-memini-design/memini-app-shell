@@ -583,7 +583,7 @@ export default function WarehousePage() {
       )}
 
       {showCarrierSettings && (
-        <Modal title="Hordozó beállítások" onClose={() => { setShowCarrierSettings(false); fetchCarriers() }} size="lg">
+        <Modal title="Hordozó beállítások" onClose={() => { setShowCarrierSettings(false); fetchCarriers() }} size="xl">
           <CarrierSettingsModal onClose={() => { setShowCarrierSettings(false); fetchCarriers() }} />
         </Modal>
       )}
