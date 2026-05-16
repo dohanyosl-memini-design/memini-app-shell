@@ -70,7 +70,7 @@ const bottomNavItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/tasks', label: 'Feladatok', icon: CheckSquare },
   { href: '/invoices', label: 'Számlák', icon: FileText },
-  { href: '/backup', label: 'Mentés', icon: Shield },
+  { href: '/chat', label: 'AI Chat', icon: Bot },
 ]
 
 export default function Sidebar({ session }: { session?: Session | null }) {
