@@ -15,12 +15,12 @@ export async function GET(request: NextRequest) {
 
   const today = new Date()
   const todayStr = today.toLocaleDateString('de-DE')
+  const in7days = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
-  // Adatok összegyűjtése
-  const [overdueInvoices, openInvoices, recentDeliveries, pendingDeals] = await Promise.all([
+  const [overdueInvoices, openInvoices, recentDeliveries, pendingDeals, existingTasks] = await Promise.all([
     prisma.invoice.findMany({
       where: { dueDate: { lt: today }, status: { in: ['open', 'sent'] } },
-      include: { company: { select: { name: true } }, contact: { select: { firstName: true, lastName: true } } },
+      include: { company: { select: { id: true, name: true, email: true } } },
       orderBy: { dueDate: 'asc' },
     }),
     prisma.invoice.findMany({
@@ -34,80 +34,133 @@ export async function GET(request: NextRequest) {
         status: 'sent',
         date: { lte: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
       },
-      include: { company: { select: { name: true, email: true } } },
+      include: { company: { select: { id: true, name: true, email: true } } },
     }),
     prisma.deal.findMany({
       where: { stage: { notIn: ['won', 'lost'] } },
-      include: { company: { select: { name: true } } },
+      include: { company: { select: { id: true, name: true } } },
       orderBy: { updatedAt: 'asc' },
       take: 10,
+    }),
+    prisma.task.findMany({
+      where: { status: { in: ['pending', 'in_progress'] } },
+      include: {
+        company: { select: { name: true } },
+        contact: { select: { firstName: true, lastName: true } },
+      },
+      orderBy: [{ priority: 'desc' }, { dueDate: 'asc' }],
+      take: 20,
     }),
   ])
 
   const dataContext = `
 Mai dátum: ${todayStr}
 
+MEGLÉVŐ NYITOTT FELADATOK (${existingTasks.length} db):
+${existingTasks.map(t => `- [${t.priority}] ${t.title}${t.company ? ` | ${t.company.name}` : ''}${t.dueDate ? ` | határidő: ${new Date(t.dueDate).toLocaleDateString('de-DE')}` : ''} | státusz: ${t.status}`).join('\n') || 'Nincs nyitott feladat'}
+
 LEJÁRT SZÁMLÁK (${overdueInvoices.length} db):
-${overdueInvoices.map(i => `- ${i.number} | ${i.company?.name || 'Ismeretlen'} | ${i.total.toFixed(2)} € | lejárt: ${new Date(i.dueDate).toLocaleDateString('de-DE')}`).join('\n') || 'Nincs lejárt számla'}
+${overdueInvoices.map(i => `- ${i.number} | ${i.company?.name || ''} | ${i.total.toFixed(2)} € | lejárt: ${new Date(i.dueDate).toLocaleDateString('de-DE')}`).join('\n') || 'Nincs'}
 
 NYITOTT SZÁMLÁK (${openInvoices.length} db):
-${openInvoices.map(i => `- ${i.number} | ${i.company?.name || ''} | ${i.total.toFixed(2)} € | határidő: ${new Date(i.dueDate).toLocaleDateString('de-DE')}`).join('\n') || 'Nincs nyitott számla'}
+${openInvoices.map(i => `- ${i.number} | ${i.company?.name || ''} | ${i.total.toFixed(2)} € | határidő: ${new Date(i.dueDate).toLocaleDateString('de-DE')}`).join('\n') || 'Nincs'}
 
-3+ NAPJA KISZÁLLÍTOTT CSOMAGOK — follow-up szükséges (${recentDeliveries.length} db):
-${recentDeliveries.map(d => `- ${d.number} | ${d.company?.name || ''} | kiszállítva: ${new Date(d.date).toLocaleDateString('de-DE')} | email: ${d.company?.email || 'nincs'}`).join('\n') || 'Nincs ilyen'}
+3+ NAPJA KISZÁLLÍTOTT — follow-up szükséges (${recentDeliveries.length} db):
+${recentDeliveries.map(d => `- ${d.number} | ${d.company?.name || ''} | kiszállítva: ${new Date(d.date).toLocaleDateString('de-DE')}`).join('\n') || 'Nincs'}
 
-AKTÍV DEALEK / PARTNERTÁRGYALÁSOK (${pendingDeals.length} db):
-${pendingDeals.map(d => `- ${d.company?.name || ''} | státusz: ${d.stage} | utoljára módosítva: ${new Date(d.updatedAt).toLocaleDateString('de-DE')}`).join('\n') || 'Nincs aktív deal'}
+AKTÍV DEALEK (${pendingDeals.length} db):
+${pendingDeals.map(d => `- ${d.company?.name || ''} | ${d.stage} | utoljára: ${new Date(d.updatedAt).toLocaleDateString('de-DE')}`).join('\n') || 'Nincs'}
 `
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 2048,
+    max_tokens: 3000,
     messages: [{
       role: 'user',
-      content: `Te Arthur vagy, a Memini Design AI asszisztense. Laci és Gabi helyspecifikus souvenir hűtőmágneseket értékesítenek B2B partnereknek (kastélyok, múzeumok, templomok, stb.) Ulm központtal, Németországban.
+      content: `Te Arthur vagy, a Memini Design AI asszisztense.
 
-Az alábbi adatok alapján készítsd el a mai napi jelentést MAGYARUL:
+Az alábbi adatok alapján:
+1. Írj egy rövid napi összefoglalót MAGYARUL (3-5 mondat)
+2. Adj meg max 5 konkrét feladatot JSON formátumban amit létre kell hozni
+
+FONTOS: A feladatokat csak akkor javasolj ha tényleg szükséges — ne duplikáld a már meglévő feladatokat!
 
 ${dataContext}
 
-A jelentés tartalmazzon:
-1. **Mai összefoglaló** — mi a legfontosabb ma (2-3 mondat)
-2. **Azonnali teendők** — prioritás szerint, pontokban
-3. **Előkészített levelek** — ha van lejárt számla vagy kiszállított csomag, készíts VÁZLAT email szövegeket NÉMETÜL a partnereknek (csak vázlat, Laci dönt a küldésről)
-
-Az email vázlatoknál adj meg: Kinek (cég neve), Tárgy (Betreff), és a levél szövege.
-Légy konkrét, rövid, nem sablonos. A Memini Design nem nyomulós — értékalapú, emberi kommunikáció.`,
+Válaszolj PONTOSAN ebben a JSON formátumban:
+{
+  "summary": "A napi összefoglaló szövege itt...",
+  "tasks": [
+    {
+      "title": "Feladat megnevezése",
+      "description": "Részletek, context",
+      "priority": "high|medium|low",
+      "dueDays": 1,
+      "companyId": "csak ha konkrét céghez kötődik, különben null"
+    }
+  ],
+  "drafts": [
+    {
+      "to": "Cég neve",
+      "subject": "Email tárgy németül",
+      "body": "Email szövege németül"
+    }
+  ]
+}`,
     }],
   })
 
-  const text = response.content[0].type === 'text' ? response.content[0].text : ''
+  const text = response.content[0].type === 'text' ? response.content[0].text : '{}'
 
-  // Levél vázlatok kinyerése (egyszerű struktúra)
-  const drafts = []
-  if (overdueInvoices.length > 0) {
-    drafts.push({
-      type: 'payment_reminder',
-      count: overdueInvoices.length,
-      note: 'Lejárt számla emlékeztető vázlatok az összefoglalóban',
-    })
+  let parsed: {
+    summary?: string
+    tasks?: { title: string; description?: string; priority?: string; dueDays?: number; companyId?: string }[]
+    drafts?: { to: string; subject: string; body: string }[]
+  } = {}
+
+  try {
+    const match = text.match(/\{[\s\S]*\}/)
+    if (match) parsed = JSON.parse(match[0])
+  } catch {
+    parsed = { summary: text, tasks: [], drafts: [] }
   }
-  if (recentDeliveries.length > 0) {
-    drafts.push({
-      type: 'delivery_followup',
-      count: recentDeliveries.length,
-      note: 'Szállítás utáni follow-up vázlatok az összefoglalóban',
-    })
+
+  // Feladatok létrehozása az adatbázisban
+  const createdTasks: string[] = []
+  if (parsed.tasks && parsed.tasks.length > 0) {
+    for (const task of parsed.tasks) {
+      const dueDate = task.dueDays
+        ? new Date(Date.now() + task.dueDays * 24 * 60 * 60 * 1000)
+        : in7days
+
+      const created = await prisma.task.create({
+        data: {
+          title: task.title,
+          description: task.description || null,
+          priority: task.priority || 'medium',
+          dueDate,
+          status: 'pending',
+          taskType: 'arthur',
+          companyId: task.companyId || null,
+        },
+      })
+      createdTasks.push(created.title)
+    }
   }
 
   await prisma.arthurReport.create({
     data: {
       type: 'daily',
       title: `Napi jelentés – ${todayStr}`,
-      summary: text,
-      drafts,
+      summary: parsed.summary || text,
+      drafts: parsed.drafts || [],
     },
   })
 
-  return NextResponse.json({ ok: true, message: 'Napi jelentés elkészítve' })
+  return NextResponse.json({
+    ok: true,
+    message: 'Napi jelentés elkészítve',
+    tasksCreated: createdTasks.length,
+    tasks: createdTasks,
+  })
 }

@@ -5,20 +5,21 @@ import { prisma } from '@/lib/prisma'
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
   const today = new Date()
   const monthAgo = new Date(today.getFullYear(), today.getMonth() - 1, 1)
   const monthEnd = new Date(today.getFullYear(), today.getMonth(), 0)
+  const in14days = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
   const monthStr = monthAgo.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })
 
-  const [monthInvoices, allCompanies, wonDeals, topProducts] = await Promise.all([
+  const [monthInvoices, allCompanies, wonDeals, topProducts, existingTasks] = await Promise.all([
     prisma.invoice.findMany({
       where: { date: { gte: monthAgo, lte: monthEnd } },
       include: { company: { select: { name: true } } },
@@ -40,6 +41,15 @@ export async function GET(request: NextRequest) {
       orderBy: { stock: 'asc' },
       take: 10,
     }),
+    prisma.task.findMany({
+      where: { status: { in: ['pending', 'in_progress'] } },
+      include: {
+        company: { select: { name: true } },
+        contact: { select: { firstName: true, lastName: true } },
+      },
+      orderBy: [{ priority: 'desc' }, { dueDate: 'asc' }],
+      take: 20,
+    }),
   ])
 
   const totalRevenue = monthInvoices.filter(i => i.status === 'paid').reduce((s, i) => s + i.total, 0)
@@ -53,7 +63,11 @@ export async function GET(request: NextRequest) {
   const lowStock = topProducts.filter(p => p.stock !== null && p.stock < 10)
 
   const dataContext = `
+Mai dátum: ${today.toLocaleDateString('de-DE')}
 Hónap: ${monthStr}
+
+MEGLÉVŐ NYITOTT FELADATOK (${existingTasks.length} db):
+${existingTasks.map(t => `- [${t.priority}] ${t.title}${t.company ? ` | ${t.company.name}` : ''}${t.dueDate ? ` | határidő: ${new Date(t.dueDate).toLocaleDateString('de-DE')}` : ''} | státusz: ${t.status}`).join('\n') || 'Nincs nyitott feladat'}
 
 HAVI BEVÉTEL:
 - Befolyt: ${totalRevenue.toFixed(2)} €
@@ -77,31 +91,87 @@ ${lowStock.map(p => `- ${p.name} (${p.sku}): ${p.stock} db`).join('\n') || 'Ninc
       role: 'user',
       content: `Te Arthur vagy, a Memini Design AI asszisztense. A Memini Design helyspecifikus souvenir hűtőmágneseket értékesít B2B partnereknek (kastélyok, múzeumok, templomok) Ulm központtal.
 
-Az alábbi adatok alapján készítsd el a havi jelentést MAGYARUL:
+Az alábbi adatok alapján:
+1. Írj egy havi összefoglalót MAGYARUL (8-10 mondat, tartalmazza: bevétel, top partnerek, dealek, következő havi prioritások, stratégiai javaslat)
+2. Adj meg max 5 konkrét feladatot JSON formátumban amit létre kell hozni
+
+FONTOS: A feladatokat csak akkor javasolj ha tényleg szükséges — ne duplikáld a már meglévő feladatokat!
 
 ${dataContext}
 
-A jelentés tartalmazzon:
-1. **Havi összefoglaló** — mi történt, hogyan alakult a bevétel
-2. **Top partnerek értékelése** — kik teljesítettek jól, ki szorul több figyelemre
-3. **Következő hónap prioritásai** — konkrét célok és teendők
-4. **Stratégiai javaslat** — 1-2 konkrét javaslat a növekedéshez a Memini Design logikája alapján (B2B fókusz, hűtőmágnes, nagy potenciálú partnerek)
-5. **Figyelmeztetések** — alacsony készlet, lemaradó partnerek, elmaradt follow-upok
-
-Légy konkrét és üzletileg gondolkozz. Kerüld az üres frázisokat.`,
+Válaszolj PONTOSAN ebben a JSON formátumban:
+{
+  "summary": "A havi összefoglaló szövege itt...",
+  "tasks": [
+    {
+      "title": "Feladat megnevezése",
+      "description": "Részletek, context",
+      "priority": "high|medium|low",
+      "dueDays": 14,
+      "companyId": "csak ha konkrét céghez kötődik, különben null"
+    }
+  ],
+  "drafts": [
+    {
+      "to": "Cég neve",
+      "subject": "Email tárgy németül",
+      "body": "Email szövege németül"
+    }
+  ]
+}`,
     }],
   })
 
-  const text = response.content[0].type === 'text' ? response.content[0].text : ''
+  const text = response.content[0].type === 'text' ? response.content[0].text : '{}'
+
+  let parsed: {
+    summary?: string
+    tasks?: { title: string; description?: string; priority?: string; dueDays?: number; companyId?: string }[]
+    drafts?: { to: string; subject: string; body: string }[]
+  } = {}
+
+  try {
+    const match = text.match(/\{[\s\S]*\}/)
+    if (match) parsed = JSON.parse(match[0])
+  } catch {
+    parsed = { summary: text, tasks: [], drafts: [] }
+  }
+
+  const createdTasks: string[] = []
+  if (parsed.tasks && parsed.tasks.length > 0) {
+    for (const task of parsed.tasks) {
+      const dueDate = task.dueDays
+        ? new Date(Date.now() + task.dueDays * 24 * 60 * 60 * 1000)
+        : in14days
+
+      const created = await prisma.task.create({
+        data: {
+          title: task.title,
+          description: task.description || null,
+          priority: task.priority || 'medium',
+          dueDate,
+          status: 'pending',
+          taskType: 'arthur',
+          companyId: task.companyId || null,
+        },
+      })
+      createdTasks.push(created.title)
+    }
+  }
 
   await prisma.arthurReport.create({
     data: {
       type: 'monthly',
       title: `Havi jelentés – ${monthStr}`,
-      summary: text,
-      drafts: [],
+      summary: parsed.summary || text,
+      drafts: parsed.drafts || [],
     },
   })
 
-  return NextResponse.json({ ok: true, message: 'Havi jelentés elkészítve' })
+  return NextResponse.json({
+    ok: true,
+    message: 'Havi jelentés elkészítve',
+    tasksCreated: createdTasks.length,
+    tasks: createdTasks,
+  })
 }
