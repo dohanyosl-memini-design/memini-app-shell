@@ -322,23 +322,34 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
 
       <style>{`
         @media print {
-          @page { size: A4; margin: 12mm 18mm; }
-          body * { visibility: hidden !important; }
-          #invoice-print, #invoice-print * { visibility: visible !important; }
+          @page { size: A4; margin: 15mm 18mm; }
+
+          /* Break out of app shell constraints */
+          html, body {
+            height: auto !important;
+            overflow: visible !important;
+            background: white !important;
+          }
+          .h-screen { height: auto !important; }
+          .overflow-hidden { overflow: visible !important; }
+          .overflow-auto { overflow: visible !important; height: auto !important; }
+          .pb-16 { padding-bottom: 0 !important; }
+
+          /* Hide sidebar (desktop + mobile) */
+          .bg-slate-900 { display: none !important; }
+
+          /* Invoice container cleanup */
           #invoice-print {
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100% !important;
             max-width: none !important;
             border: none !important;
             border-radius: 0 !important;
+            box-shadow: none !important;
             padding: 0 !important;
             margin: 0 !important;
-            box-shadow: none !important;
-            background: white !important;
           }
-          tr { page-break-inside: avoid; break-inside: avoid; }
+
+          /* Don't split table rows across pages */
+          tr { break-inside: avoid; page-break-inside: avoid; }
         }
       `}</style>
     </div>
