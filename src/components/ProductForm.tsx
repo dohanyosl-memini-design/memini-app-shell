@@ -57,7 +57,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     nameDE: product?.nameDE || '',
     sku: product?.sku || '',
     description: product?.description || '',
-    material: product?.material || 'ko_grafitoptik_normal',
+    material: product?.material || '',
     site: product?.site || '',
     city: product?.city || '',
     locationCabinet: product?.locationCabinet || '',
@@ -249,12 +249,12 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
             {Array.from(new Set(carriers.map(c => c.group).filter(Boolean))).map(group => (
               <optgroup key={group!} label={group!}>
                 {carriers.filter(c => c.group === group).map(c => (
-                  <option key={c.code} value={c.code}>{c.name}</option>
+                  <option key={c.id} value={c.code}>{c.name}</option>
                 ))}
               </optgroup>
             ))}
             {carriers.filter(c => !c.group).map(c => (
-              <option key={c.code} value={c.code}>{c.name}</option>
+              <option key={c.id} value={c.code}>{c.name}</option>
             ))}
           </select>
         </div>
