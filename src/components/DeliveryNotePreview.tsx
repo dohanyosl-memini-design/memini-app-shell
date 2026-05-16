@@ -260,8 +260,7 @@ export default function DeliveryNotePreview({ deliveryNote }: { deliveryNote: De
 
       <style>{`
         @media print {
-          /* A4 lap: 52mm fent a fejlécnek, 30mm lent a lábléchez */
-          @page { size: A4; margin: 52mm 18mm 30mm 18mm; }
+          @page { size: A4; margin: 58mm 18mm 40mm 18mm; }
 
           /* App shell feloldása */
           html, body { height: auto !important; overflow: visible !important; background: white !important; }
@@ -281,24 +280,29 @@ export default function DeliveryNotePreview({ deliveryNote }: { deliveryNote: De
             margin: 0 !important;
           }
 
-          /* Fejléc: fix, minden oldalon a tetején */
+          /* Fejléc: fix minden oldalon a tetején */
           #dn-header {
             position: fixed !important;
             top: 0 !important;
             left: 0 !important;
             right: 0 !important;
-            padding: 8mm 18mm 3mm !important;
+            padding: 8mm 18mm 4mm !important;
             background: white !important;
           }
 
-          /* Lábléc: fix, minden oldalon az alján */
+          /* Lábléc: fix minden oldalon az alján */
           #dn-footer {
             position: fixed !important;
             bottom: 0 !important;
             left: 0 !important;
             right: 0 !important;
-            padding: 0 18mm 6mm !important;
+            padding: 0 18mm 8mm !important;
             background: white !important;
+          }
+
+          /* Tartalom: extra puffer alul */
+          #dn-content {
+            padding-bottom: 12mm !important;
           }
 
           /* Sorok ne törjenek ketté */

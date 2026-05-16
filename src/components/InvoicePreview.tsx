@@ -284,8 +284,13 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
 
       <style>{`
         @media print {
-          /* A4 lap: 52mm fent a fejlécnek, 30mm lent a lábléchez */
-          @page { size: A4; margin: 52mm 18mm 30mm 18mm; }
+          /*
+           * Fejléc magassága: ~48mm (8mm padding + logo + cím + visszacím sáv)
+           * Lábléc magassága: ~28mm (tartalom + 6mm padding)
+           * @page margók: bőven felülmúlják a tényleges magasságot
+           * #invoice-content padding-bottom: extra puffer, garantáltan nem csúszik a lábléc alá
+           */
+          @page { size: A4; margin: 58mm 18mm 40mm 18mm; }
 
           /* App shell feloldása */
           html, body { height: auto !important; overflow: visible !important; background: white !important; }
@@ -305,29 +310,29 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
             margin: 0 !important;
           }
 
-          /* Fejléc: fix, minden oldalon a tetején */
+          /* Fejléc: fix minden oldalon a tetején */
           #invoice-header {
             position: fixed !important;
             top: 0 !important;
             left: 0 !important;
             right: 0 !important;
-            padding: 8mm 18mm 3mm !important;
+            padding: 8mm 18mm 4mm !important;
             background: white !important;
           }
 
-          /* Lábléc: fix, minden oldalon az alján */
+          /* Lábléc: fix minden oldalon az alján */
           #invoice-footer {
             position: fixed !important;
             bottom: 0 !important;
             left: 0 !important;
             right: 0 !important;
-            padding: 0 18mm 6mm !important;
+            padding: 0 18mm 8mm !important;
             background: white !important;
           }
 
-          /* Tartalom: normális folyás */
+          /* Tartalom: extra puffer alul hogy ne csússzon a lábléc alá */
           #invoice-content {
-            margin-top: 0 !important;
+            padding-bottom: 12mm !important;
           }
 
           /* Sorok ne törjenek ketté */
