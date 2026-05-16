@@ -202,18 +202,13 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
           <tbody>
             {/* Termék sorok */}
             {productItems.map((item) => {
-              const [line1, line2raw] = item.description.split('\n')
-              const [line2Bold, line2Paren] = line2raw ? line2raw.split('\t') : ['', '']
+              const [line1, line2, line3] = item.description.split('\n')
               return (
               <tr key={item.id}>
                 <td style={{ border: '1px solid #333', padding: '8px 10px' }}>
-                  <p style={{ fontWeight: 700, margin: 0 }}>{line1}</p>
-                  {line2raw && (
-                    <p style={{ margin: '2px 0 0 0', fontSize: '10px', fontStyle: 'normal' }}>
-                      <span style={{ fontWeight: 700 }}>{line2Bold}</span>
-                      {line2Paren && <span style={{ color: '#666', fontWeight: 400 }}> ({line2Paren})</span>}
-                    </p>
-                  )}
+                  <p style={{ fontWeight: 700, fontStyle: 'italic', margin: 0 }}>{line1}</p>
+                  {line2 && <p style={{ fontWeight: 700, fontStyle: 'italic', margin: '1px 0 0 0', fontSize: '11px' }}>{line2}</p>}
+                  {line3 && <p style={{ fontStyle: 'italic', margin: '1px 0 0 0', fontSize: '10px' }}>{line3}</p>}
                 </td>
                 <td style={{ border: '1px solid #333', padding: '8px 10px', textAlign: 'center' }}>
                   {item.quantity}
@@ -331,7 +326,7 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
           body * { visibility: hidden !important; }
           #invoice-print, #invoice-print * { visibility: visible !important; }
           #invoice-print {
-            position: fixed !important;
+            position: absolute !important;
             top: 0 !important;
             left: 0 !important;
             width: 100% !important;
@@ -343,14 +338,7 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
             box-shadow: none !important;
             background: white !important;
           }
-          #invoice-footer {
-            position: fixed !important;
-            bottom: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
-            padding: 8px 0 0 0 !important;
-            background: white !important;
-          }
+          tr { page-break-inside: avoid; break-inside: avoid; }
         }
       `}</style>
     </div>
