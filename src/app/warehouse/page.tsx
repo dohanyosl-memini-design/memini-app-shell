@@ -290,12 +290,12 @@ export default function WarehousePage() {
               {Array.from(new Set(carriers.map(c => c.group).filter(Boolean))).map(group => (
                 <optgroup key={group!} label={group!}>
                   {carriers.filter(c => c.group === group).map(c => (
-                    <option key={c.code} value={c.code}>{c.name}</option>
+                    <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </optgroup>
               ))}
               {carriers.filter(c => !c.group).map(c => (
-                <option key={c.code} value={c.code}>{c.name}</option>
+                <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
             {/* Szekrény szűrő — dinamikusan a meglévő értékekből */}
@@ -358,7 +358,7 @@ export default function WarehousePage() {
                       )
                     })()}
                     {(!showCityHeaders || expandedCities.has(city)) && groupItems.map((product) => {
-                  const carrierInfo = carriers.find(c => c.code === product.material)
+                  const carrierInfo = carriers.find(c => c.id === product.material) ?? carriers.find(c => c.code === product.material)
                   const badgeColor = carrierInfo?.group ? (GROUP_COLORS[carrierInfo.group] ?? DEFAULT_BADGE_COLOR) : DEFAULT_BADGE_COLOR
                   const isLow = product.stock <= product.minStock
                   const margin = product.salesPrice > 0
