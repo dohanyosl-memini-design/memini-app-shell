@@ -52,6 +52,16 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     fetch('/api/carriers').then(r => r.json()).then(setCarriers).catch(() => {})
   }, [])
 
+  // Convert legacy code-based material to id-based after carriers load
+  useEffect(() => {
+    if (carriers.length === 0 || !form.material) return
+    const matchById = carriers.find(c => c.id === form.material)
+    if (!matchById) {
+      const matchByCode = carriers.find(c => c.code === form.material)
+      if (matchByCode) setForm(f => ({ ...f, material: matchByCode.id }))
+    }
+  }, [carriers])
+
   const [form, setForm] = useState({
     name: product?.name || '',
     nameDE: product?.nameDE || '',
@@ -249,12 +259,12 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
             {Array.from(new Set(carriers.map(c => c.group).filter(Boolean))).map(group => (
               <optgroup key={group!} label={group!}>
                 {carriers.filter(c => c.group === group).map(c => (
-                  <option key={c.id} value={c.code}>{c.name}</option>
+                  <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </optgroup>
             ))}
             {carriers.filter(c => !c.group).map(c => (
-              <option key={c.id} value={c.code}>{c.name}</option>
+              <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
         </div>

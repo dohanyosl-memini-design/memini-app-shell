@@ -193,7 +193,7 @@ export default function InvoiceForm({ onSave, onCancel, invoice }: { onSave: () 
       if (value) {
         const product = products.find(p => p.id === value)
         if (product) {
-          const carrier = carriers.find(c => c.code === product.material)
+          const carrier = carriers.find(c => c.id === product.material) ?? carriers.find(c => c.code === product.material)
           const line1 = carrier?.nameDE || product.nameDE || product.name
           const line2Bold = `${product.sku} / ${carrier?.code ?? product.material ?? ''}`
           const line2Paren = product.nameDE || ''
