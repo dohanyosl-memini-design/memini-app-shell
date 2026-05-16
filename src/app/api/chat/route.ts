@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 
 export const maxDuration = 60
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+let client: Anthropic
 
 const SYSTEM = `Te a Memini Design CRM rendszer AI asszisztense vagy.
 A felhasználó Laszlo Arpad Dohanyos e.U. vállalkozó (Ulm, Németország).
@@ -242,6 +242,12 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
 
 export async function POST(request: NextRequest) {
   try {
+    const apiKey = process.env.ANTHROPIC_API_KEY
+    if (!apiKey) {
+      return NextResponse.json({ reply: 'ANTHROPIC_API_KEY nincs beállítva a szerveren.' }, { status: 500 })
+    }
+    client = new Anthropic({ apiKey })
+
     const { messages } = await request.json()
 
     const conversation: Anthropic.MessageParam[] = messages.map(
