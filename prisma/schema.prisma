@@ -379,7 +379,7 @@ model DeliveryNoteItem {
 
 model Carrier {
   id        String   @id @default(cuid())
-  code      String   @unique
+  code      String
   name      String
   nameDE    String?
   group     String?
