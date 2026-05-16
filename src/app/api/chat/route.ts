@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 
 export const maxDuration = 60
 
-const client = new Anthropic()
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const SYSTEM = `Te a Memini Design CRM rendszer AI asszisztense vagy.
 A felhasználó Laszlo Arpad Dohanyos e.U. vállalkozó (Ulm, Németország).
