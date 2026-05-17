@@ -92,25 +92,23 @@ export default function InvoicePreview({ invoice, printMode }: { invoice: Invoic
         className="bg-white border border-gray-200 rounded-lg"
         style={{ ...S, padding: '32px 40px', maxWidth: '800px', margin: '0 auto' }}
       >
-        {/* ── FEJLÉC (minden oldalon ismétlődik nyomtatásban) ── */}
+        {/* ── FEJLÉC ── */}
         <div id="invoice-header">
-          {/* Logo + feladó */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
             <div style={{ textAlign: 'right' }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/Memini LOGO SVG.svg" alt="Memini Design"
                 style={{ height: '60px', width: 'auto', display: 'block', marginLeft: 'auto' }}
               />
-              <div style={{ marginTop: '8px', lineHeight: 1.5 }}>
+              <div style={{ marginTop: '6px', lineHeight: 1.5 }}>
                 <p style={{ fontWeight: 700, fontSize: '12px' }}>Laszlo Arpad Dohanyos e.U.</p>
                 <p style={{ fontSize: '11px' }}>Laszlo Arpad Dohanyos</p>
-                <p style={{ fontSize: '11px' }}>Römerstraße 32</p>
-                <p style={{ fontSize: '11px' }}>89077 Ulm</p>
+                <p style={{ fontSize: '11px' }}>Römerstraße 32, 89077 Ulm</p>
+                <p style={{ fontSize: '11px' }}>Deutschland</p>
               </div>
             </div>
           </div>
-          {/* Visszacím sáv — ez az első elválasztó vonal */}
-          <div style={{ fontSize: '9px', color: '#444', borderBottom: '1px solid #888', paddingBottom: '4px' }}>
+          <div style={{ fontSize: '9px', color: '#555', borderBottom: '1px solid #888', paddingBottom: '4px' }}>
             Laszlo Arpad Dohanyos e.U.&nbsp;&nbsp;│&nbsp;&nbsp;Römerstraße 32&nbsp;&nbsp;│&nbsp;&nbsp;89077 Ulm
           </div>
         </div>
@@ -282,24 +280,38 @@ export default function InvoicePreview({ invoice, printMode }: { invoice: Invoic
           </div>
         </div>
 
-        {/* ── LÁBLÉC (minden oldalon ismétlődik nyomtatásban) — ez a második elválasztó vonal ── */}
-        <div id="invoice-footer" style={{ borderTop: '1px solid #333', paddingTop: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', fontSize: '10px', lineHeight: 1.6 }}>
-          <div>
-            <p style={{ fontWeight: 700 }}>Laszlo Arpad Dohanyos e.U.</p>
-            <p>Römerstraße 32,</p>
-            <p>89077 Ulm, Deutschland</p>
+        {/* ── LÁBLÉC ── */}
+        <div id="invoice-footer">
+          {/* 3 oszlop */}
+          <div style={{ borderTop: '1px solid #333', paddingTop: '8px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', fontSize: '10px', lineHeight: 1.6 }}>
+            <div>
+              <p style={{ fontWeight: 700 }}>Laszlo Arpad Dohanyos e.U.</p>
+              <p>Römerstraße 32</p>
+              <p>89077 Ulm, Deutschland</p>
+            </div>
+            <div>
+              <p style={{ fontWeight: 700 }}>Kontakt Informationen:</p>
+              <p>Tel.: +49 176 36373422</p>
+              <p>E-Mail: verwaltung@meminidesign.de</p>
+            </div>
+            <div>
+              <p style={{ fontWeight: 700 }}>Bank Verbindung</p>
+              <p>Geldinstitut: Sparkasse Ulm</p>
+              <p>IBAN: DE57 6305 0000 0021 3127 53</p>
+              <p>SWIFT/BIC: SOLADES1ULM</p>
+              <p>USt-IdNr.: DE 334750913</p>
+            </div>
           </div>
-          <div>
-            <p style={{ fontWeight: 700 }}>Kontakt Informationen:</p>
-            <p>Tel.: +49 176 36373422</p>
-            <p>E-Mail: verwaltung@meminidesign.de</p>
-          </div>
-          <div>
-            <p style={{ fontWeight: 700 }}>Bank Verbindung</p>
-            <p>Geldinstitut: Sparkasse Ulm</p>
-            <p>IBAN: DE57 6305 0000 0021 3127 53</p>
-            <p>SWIFT/BIC: SOLADES1ULM</p>
-            <p>USt-IdNr.: DE 334750913</p>
+          {/* Csík + aláírás sor */}
+          <div style={{ borderTop: '1px solid #aaa', marginTop: '8px', paddingTop: '6px', display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#555' }}>
+            <div style={{ width: '38%' }}>
+              <p style={{ marginBottom: '12px' }}>Ort, Datum:</p>
+              <div style={{ borderBottom: '1px solid #555', width: '100%' }} />
+            </div>
+            <div style={{ width: '38%' }}>
+              <p style={{ marginBottom: '12px' }}>Unterschrift:</p>
+              <div style={{ borderBottom: '1px solid #555', width: '100%' }} />
+            </div>
           </div>
         </div>
       </div>
@@ -312,7 +324,7 @@ export default function InvoicePreview({ invoice, printMode }: { invoice: Invoic
            * @page margók: bőven felülmúlják a tényleges magasságot
            * #invoice-content padding-bottom: extra puffer, garantáltan nem csúszik a lábléc alá
            */
-          @page { size: A4; margin: 58mm 18mm 40mm 18mm; }
+          @page { size: A4; margin: 56mm 18mm 52mm 18mm; }
 
           /* App shell feloldása */
           html, body { height: auto !important; overflow: visible !important; background: white !important; }
