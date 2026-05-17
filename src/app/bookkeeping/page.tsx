@@ -196,7 +196,7 @@ export default function BookkeepingPage() {
   async function handleBulkDelete() {
     if (selectedIds.size === 0) return
     if (!confirm(`Törlöd a kijelölt ${selectedIds.size} kiadást?`)) return
-    await Promise.all([...selectedIds].map(id => fetch(`/api/expenses/${id}`, { method: 'DELETE' })))
+    await Promise.all(Array.from(selectedIds).map(id => fetch(`/api/expenses/${id}`, { method: 'DELETE' })))
     setSelectedIds(new Set())
     fetchData()
   }
