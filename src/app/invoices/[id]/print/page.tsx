@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
-import InvoicePreview from '@/components/InvoicePreview'
+import { format, differenceInDays } from 'date-fns'
 
 interface InvoiceItem {
   id: string
@@ -35,17 +35,22 @@ interface Invoice {
   billingCountry: string | null
   contact: { firstName: string; lastName: string } | null
   company: {
-    name: string
-    address: string | null
-    zip: string | null
-    city: string | null
-    vatId: string | null
-    phone: string | null
-    email: string | null
-    customerNumber: string | null
+    name: string; address: string | null; zip: string | null; city: string | null
+    vatId: string | null; phone: string | null; email: string | null; customerNumber: string | null
   } | null
   items: InvoiceItem[]
 }
+
+function fmtDE(n: number) {
+  return n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'
+}
+
+function fmtDate(d: string) {
+  return format(new Date(d), 'dd.MM.yyyy')
+}
+
+const ITEMS_PER_PAGE = 5
+const S = { fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px' } as const
 
 export default function InvoicePrintPage() {
   const params = useParams()
@@ -60,29 +65,318 @@ export default function InvoicePrintPage() {
 
   useEffect(() => {
     if (!loading && invoice) {
-      setTimeout(() => window.print(), 600)
+      setTimeout(() => window.print(), 700)
     }
   }, [loading, invoice])
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-white">
-        <p className="text-gray-400 text-sm">Betöltés...</p>
-      </div>
-    )
+    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', ...S }}>Betöltés...</div>
+  }
+  if (!invoice) {
+    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', ...S }}>A számla nem található.</div>
   }
 
-  if (!invoice) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-white">
-        <p className="text-gray-400 text-sm">A számla nem található.</p>
-      </div>
-    )
+  const paymentDays = differenceInDays(new Date(invoice.dueDate), new Date(invoice.date))
+  const productItems = invoice.items.filter(i => !i.isDiscount)
+  const discountItems = invoice.items.filter(i => i.isDiscount)
+  const hasDiscounts = discountItems.length > 0
+  const productSubtotal = productItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+  const discountTotal = discountItems.reduce((s, i) => s + Math.abs(i.unitPrice), 0)
+
+  const chunks: typeof productItems[] = []
+  for (let i = 0; i < productItems.length; i += ITEMS_PER_PAGE) {
+    chunks.push(productItems.slice(i, i + ITEMS_PER_PAGE))
   }
+  if (chunks.length === 0) chunks.push([])
+
+  const name = invoice.billingName || invoice.company?.name || null
+  const address = invoice.billingAddress || invoice.company?.address || null
+  const zip = invoice.billingZip || invoice.company?.zip || null
+  const city = invoice.billingCity || invoice.company?.city || null
 
   return (
-    <div className="bg-white min-h-screen">
-      <InvoicePreview invoice={invoice} printMode />
-    </div>
+    <>
+      <style>{`
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        @page { size: A4 portrait; margin: 0; }
+        html, body { background: white; }
+
+        /* Toolbar csak képernyőn */
+        .no-print { display: flex; gap: 8px; padding: 12px 18mm; background: #f3f4f6; border-bottom: 1px solid #ddd; }
+        .no-print button { padding: 6px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; }
+        .btn-primary { background: #1f2937; color: white; }
+        .btn-secondary { background: #e5e7eb; color: #374151; }
+        @media print { .no-print { display: none !important; } }
+
+        /* A táblázat fejléc/lábléc automatikusan ismétlődik minden oldalon */
+        table.print-layout {
+          width: 100%;
+          border-collapse: collapse;
+          font-family: Arial, Helvetica, sans-serif;
+          font-size: 12px;
+        }
+        table.print-layout thead { display: table-header-group; }
+        table.print-layout tfoot { display: table-footer-group; }
+        table.print-layout tbody { display: table-row-group; }
+
+        .header-cell {
+          padding: 8mm 18mm 4mm;
+          border-bottom: 1px solid #888;
+        }
+        .footer-cell {
+          padding: 5mm 18mm 6mm;
+          border-top: 1px solid #333;
+        }
+        .content-cell {
+          padding: 6mm 18mm 4mm;
+          vertical-align: top;
+        }
+
+        .footer-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 12px;
+          font-size: 10px;
+          line-height: 1.6;
+        }
+
+        /* Lapváltás */
+        .page-break {
+          page-break-before: always !important;
+          break-before: page !important;
+          padding-top: 6mm;
+        }
+
+        /* Tételek táblázat */
+        table.items { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 16px; }
+        table.items th, table.items td { border: 1px solid #333; padding: 7px 10px; }
+        table.items th { font-weight: 700; }
+        tr { break-inside: avoid; page-break-inside: avoid; }
+      `}</style>
+
+      {/* Toolbar */}
+      <div className="no-print">
+        <span style={{ fontSize: '13px', fontWeight: 600, color: '#374151', marginRight: '8px' }}>
+          {invoice.number}
+        </span>
+        <button className="btn-primary" onClick={() => window.print()}>🖨️ Nyomtatás / PDF</button>
+        <button className="btn-secondary" onClick={() => window.close()}>Bezárás</button>
+      </div>
+
+      {/* Nyomtatható tartalom */}
+      <table className="print-layout">
+        {/* ── FEJLÉC (minden oldalon) ── */}
+        <thead>
+          <tr>
+            <td className="header-cell">
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+                <div style={{ textAlign: 'right' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/Memini LOGO SVG.svg" alt="Memini Design"
+                    style={{ height: '60px', width: 'auto', display: 'block', marginLeft: 'auto' }}
+                  />
+                  <div style={{ marginTop: '6px', lineHeight: 1.5, fontSize: '11px' }}>
+                    <p style={{ fontWeight: 700, fontSize: '12px' }}>Laszlo Arpad Dohanyos e.U.</p>
+                    <p>Laszlo Arpad Dohanyos</p>
+                    <p>Römerstraße 32, 89077 Ulm</p>
+                    <p>Deutschland</p>
+                  </div>
+                </div>
+              </div>
+              <div style={{ fontSize: '9px', color: '#555' }}>
+                Laszlo Arpad Dohanyos e.U.&nbsp;&nbsp;│&nbsp;&nbsp;Römerstraße 32&nbsp;&nbsp;│&nbsp;&nbsp;89077 Ulm
+              </div>
+            </td>
+          </tr>
+        </thead>
+
+        {/* ── LÁBLÉC (minden oldalon) ── */}
+        <tfoot>
+          <tr>
+            <td className="footer-cell">
+              <div className="footer-grid">
+                <div>
+                  <p style={{ fontWeight: 700 }}>Laszlo Arpad Dohanyos e.U.</p>
+                  <p>Römerstraße 32</p>
+                  <p>89077 Ulm, Deutschland</p>
+                </div>
+                <div>
+                  <p style={{ fontWeight: 700 }}>Kontakt Informationen:</p>
+                  <p>Tel.: +49 176 36373422</p>
+                  <p>E-Mail: verwaltung@meminidesign.de</p>
+                </div>
+                <div>
+                  <p style={{ fontWeight: 700 }}>Bank Verbindung</p>
+                  <p>Geldinstitut: Sparkasse Ulm</p>
+                  <p>IBAN: DE57 6305 0000 0021 3127 53</p>
+                  <p>SWIFT/BIC: SOLADES1ULM</p>
+                  <p>USt-IdNr.: DE 334750913</p>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </tfoot>
+
+        {/* ── TARTALOM ── */}
+        <tbody>
+          <tr>
+            <td className="content-cell">
+
+              {/* Empfänger + Rechnungsdetails */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+                <div style={{ lineHeight: 1.6, fontSize: '12px' }}>
+                  {name && name.split('\n').map((line, i) => (
+                    <p key={i} style={{ fontWeight: i === 0 ? 700 : 400, fontSize: i === 0 ? '13px' : '12px' }}>{line}</p>
+                  ))}
+                  {invoice.contact && (
+                    <p>{invoice.contact.firstName} {invoice.contact.lastName}</p>
+                  )}
+                  <div style={{ marginTop: '8px' }}>
+                    {address && <p>{address}</p>}
+                    {(zip || city) && <p>{[zip, city].filter(Boolean).join(' ')}</p>}
+                    {invoice.company?.phone && <p>Tel.: {invoice.company.phone}</p>}
+                    {invoice.company?.email && <p>E-Mail: {invoice.company.email}</p>}
+                  </div>
+                </div>
+                <div style={{ fontSize: '12px', fontStyle: 'italic', textAlign: 'right', lineHeight: 1.8 }}>
+                  <table style={{ borderCollapse: 'collapse' }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ paddingRight: '20px' }}>Rechnungs-Nr.:</td>
+                        <td style={{ textAlign: 'right' }}>{invoice.number}</td>
+                      </tr>
+                      {invoice.company?.customerNumber && (
+                        <tr>
+                          <td style={{ paddingRight: '20px' }}>Kunden-Nr.:</td>
+                          <td style={{ textAlign: 'right' }}>{invoice.company.customerNumber}</td>
+                        </tr>
+                      )}
+                      <tr>
+                        <td style={{ paddingRight: '20px' }}>Rechnungsdatum:</td>
+                        <td style={{ textAlign: 'right' }}>{fmtDate(invoice.date)}</td>
+                      </tr>
+                      {invoice.deliveryInfo && (
+                        <tr>
+                          <td style={{ paddingRight: '20px' }}>Lieferdatum:</td>
+                          <td style={{ textAlign: 'right' }}>{invoice.deliveryInfo}</td>
+                        </tr>
+                      )}
+                      <tr>
+                        <td style={{ paddingRight: '20px' }}>Zahlungsfrist:</td>
+                        <td style={{ textAlign: 'right' }}>{paymentDays} Tage</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Cím */}
+              <h1 style={{ fontSize: '36px', fontWeight: 400, marginBottom: '10px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                {invoice.stornoOf ? 'Stornorechnung' : 'Rechnung'}
+              </h1>
+
+              {invoice.stornoOf && (
+                <p style={{ fontStyle: 'italic', fontSize: '12px', marginBottom: '16px', color: '#c00', lineHeight: 1.5 }}>
+                  Diese Stornorechnung bezieht sich auf Rechnung Nr. {invoice.stornoOf} und hebt diese vollständig auf.
+                </p>
+              )}
+              {!invoice.stornoOf && (
+                <p style={{ fontStyle: 'italic', fontSize: '12px', marginBottom: '20px', lineHeight: 1.5 }}>
+                  Ich danke Ihnen herzlich für Ihr Vertrauen in unsere Produkte und werde Ihnen nun, gemäß unserer
+                  Vereinbarung, die folgenden Lieferungen in Rechnung stellen:
+                </p>
+              )}
+
+              {/* Tételek — 5/oldal */}
+              {chunks.map((chunk, chunkIndex) => {
+                const isLast = chunkIndex === chunks.length - 1
+                return (
+                  <div key={chunkIndex} className={chunkIndex > 0 ? 'page-break' : ''}>
+                    <table className="items">
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: 'left' }}>Produktbezeichnung</th>
+                          <th style={{ textAlign: 'center', width: '80px' }}>Menge<br />(Stück)</th>
+                          <th style={{ textAlign: 'center', width: '110px' }}>Preis<br />(€&nbsp;/&nbsp;Stück)</th>
+                          <th style={{ textAlign: 'center', width: '110px' }}>Gesamtpreis<br />(€)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {chunk.map(item => {
+                          const [l1, l2, l3] = item.description.split('\n')
+                          return (
+                            <tr key={item.id}>
+                              <td>
+                                <p style={{ fontWeight: 700, fontStyle: 'italic', margin: 0 }}>{l1}</p>
+                                {l2 && <p style={{ fontWeight: 700, fontStyle: 'italic', fontSize: '11px', margin: '1px 0 0' }}>{l2}</p>}
+                                {l3 && <p style={{ fontStyle: 'italic', fontSize: '10px', margin: '1px 0 0' }}>{l3}</p>}
+                              </td>
+                              <td style={{ textAlign: 'center' }}>{item.quantity}</td>
+                              <td style={{ textAlign: 'right' }}>{fmtDE(item.unitPrice)}</td>
+                              <td style={{ textAlign: 'right' }}>{fmtDE(item.quantity * item.unitPrice)}</td>
+                            </tr>
+                          )
+                        })}
+                        {isLast && (
+                          <>
+                            {hasDiscounts && (
+                              <tr>
+                                <td colSpan={3} style={{ textAlign: 'right', fontWeight: 700 }}>Summe Netto</td>
+                                <td style={{ textAlign: 'right' }}>{fmtDE(productSubtotal)}</td>
+                              </tr>
+                            )}
+                            {discountItems.map(item => (
+                              <tr key={item.id}>
+                                <td colSpan={2} style={{ fontStyle: 'italic', fontWeight: 700 }}>{item.description}</td>
+                                <td style={{ textAlign: 'center' }}>1</td>
+                                <td style={{ textAlign: 'right' }}>{fmtDE(Math.abs(item.unitPrice))}</td>
+                              </tr>
+                            ))}
+                            <tr>
+                              <td colSpan={3} style={{ textAlign: 'right', fontWeight: 700 }}>Summe Netto</td>
+                              <td style={{ textAlign: 'right' }}>{fmtDE(hasDiscounts ? productSubtotal - discountTotal : invoice.subtotal)}</td>
+                            </tr>
+                            <tr>
+                              <td colSpan={3} style={{ textAlign: 'right', fontStyle: 'italic' }}>zzgl. MwSt. 19%</td>
+                              <td style={{ textAlign: 'right' }}>{fmtDE(invoice.vatAmount)}</td>
+                            </tr>
+                            <tr>
+                              <td colSpan={3} style={{ textAlign: 'right', fontWeight: 700 }}>Gesamtsumme</td>
+                              <td style={{ textAlign: 'right', fontWeight: 700 }}>{fmtDE(invoice.total)}</td>
+                            </tr>
+                          </>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              })}
+
+              {/* Lezáró szöveg */}
+              {invoice.notes && (
+                <div style={{ fontStyle: 'italic', fontSize: '12px', marginBottom: '16px', lineHeight: 1.5 }}>
+                  <p style={{ textDecoration: 'underline', marginBottom: '4px' }}>Hinweis:</p>
+                  <p>{invoice.notes}</p>
+                </div>
+              )}
+
+              <p style={{ fontStyle: 'italic', fontSize: '12px', lineHeight: 1.6, marginBottom: '20px' }}>
+                Die Zahlung erfolgt innerhalb von {paymentDays} Tagen ab Rechnungseingang ohne Abzüge auf das unten
+                angegebene Bankkonto. Ich danke Ihnen für Ihren Auftrag und freue mich auf die weitere Zusammenarbeit.
+              </p>
+
+              {/* Aláírás csík + hely */}
+              <div style={{ borderTop: '1px solid #333', marginBottom: '28px' }} />
+
+              <div style={{ fontStyle: 'italic', fontSize: '12px', marginBottom: '20px', lineHeight: 1.8 }}>
+                <p>Mit freundlichen Grüßen</p>
+                <p style={{ fontWeight: 700 }}>Laszlo Arpad Dohanyos</p>
+              </div>
+
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </>
   )
 }

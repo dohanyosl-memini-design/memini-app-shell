@@ -246,11 +246,15 @@ export default function DeliveryNotePreview({ deliveryNote, printMode }: { deliv
             </div>
           )}
 
-          <p style={{ fontStyle: 'italic', fontSize: '12px', lineHeight: 1.6, marginBottom: '16px' }}>
-            Bitte prüfen Sie die Ware bei Erhalt auf Vollständigkeit und Unversehrtheit. Mit freundlichen Grüßen,
+          <p style={{ fontStyle: 'italic', fontSize: '12px', lineHeight: 1.6, marginBottom: '20px' }}>
+            Bitte prüfen Sie die Ware bei Erhalt auf Vollständigkeit und Unversehrtheit.
           </p>
 
+          {/* Aláírás csík */}
+          <div style={{ borderTop: '1px solid #333', marginBottom: '28px' }} />
+
           <div style={{ fontStyle: 'italic', fontSize: '12px', marginBottom: '20px', lineHeight: 1.8 }}>
+            <p>Mit freundlichen Grüßen</p>
             <p style={{ fontWeight: 700 }}>Laszlo Arpad Dohanyos</p>
           </div>
         </div>
@@ -276,22 +280,12 @@ export default function DeliveryNotePreview({ deliveryNote, printMode }: { deliv
               <p>USt-IdNr.: DE 334750913</p>
             </div>
           </div>
-          <div style={{ borderTop: '1px solid #aaa', marginTop: '8px', paddingTop: '6px', display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#555' }}>
-            <div style={{ width: '38%' }}>
-              <p style={{ marginBottom: '12px' }}>Ort, Datum:</p>
-              <div style={{ borderBottom: '1px solid #555', width: '100%' }} />
-            </div>
-            <div style={{ width: '38%' }}>
-              <p style={{ marginBottom: '12px' }}>Unterschrift:</p>
-              <div style={{ borderBottom: '1px solid #555', width: '100%' }} />
-            </div>
-          </div>
         </div>
       </div>
 
       <style>{`
         @media print {
-          @page { size: A4; margin: 56mm 18mm 52mm 18mm; }
+          @page { size: A4; margin: 54mm 18mm 36mm 18mm; }
 
           /* App shell feloldása */
           html, body { height: auto !important; overflow: visible !important; background: white !important; }

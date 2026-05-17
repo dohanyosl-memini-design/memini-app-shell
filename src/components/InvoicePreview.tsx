@@ -269,10 +269,13 @@ export default function InvoicePreview({ invoice, printMode }: { invoice: Invoic
             </div>
           )}
 
-          <p style={{ fontStyle: 'italic', fontSize: '12px', lineHeight: 1.6, marginBottom: '16px' }}>
+          <p style={{ fontStyle: 'italic', fontSize: '12px', lineHeight: 1.6, marginBottom: '20px' }}>
             Die Zahlung erfolgt innerhalb von {paymentDays} Tagen ab Rechnungseingang ohne Abzüge auf das unten
             angegebene Bankkonto. Ich danke Ihnen für Ihren Auftrag und freue mich auf die weitere Zusammenarbeit.
           </p>
+
+          {/* Aláírás csík */}
+          <div style={{ borderTop: '1px solid #333', marginBottom: '28px' }} />
 
           <div style={{ fontStyle: 'italic', fontSize: '12px', marginBottom: '20px', lineHeight: 1.8 }}>
             <p>Mit freundlichen Grüßen</p>
@@ -282,7 +285,6 @@ export default function InvoicePreview({ invoice, printMode }: { invoice: Invoic
 
         {/* ── LÁBLÉC ── */}
         <div id="invoice-footer">
-          {/* 3 oszlop */}
           <div style={{ borderTop: '1px solid #333', paddingTop: '8px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', fontSize: '10px', lineHeight: 1.6 }}>
             <div>
               <p style={{ fontWeight: 700 }}>Laszlo Arpad Dohanyos e.U.</p>
@@ -302,17 +304,6 @@ export default function InvoicePreview({ invoice, printMode }: { invoice: Invoic
               <p>USt-IdNr.: DE 334750913</p>
             </div>
           </div>
-          {/* Csík + aláírás sor */}
-          <div style={{ borderTop: '1px solid #aaa', marginTop: '8px', paddingTop: '6px', display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#555' }}>
-            <div style={{ width: '38%' }}>
-              <p style={{ marginBottom: '12px' }}>Ort, Datum:</p>
-              <div style={{ borderBottom: '1px solid #555', width: '100%' }} />
-            </div>
-            <div style={{ width: '38%' }}>
-              <p style={{ marginBottom: '12px' }}>Unterschrift:</p>
-              <div style={{ borderBottom: '1px solid #555', width: '100%' }} />
-            </div>
-          </div>
         </div>
       </div>
 
@@ -324,7 +315,7 @@ export default function InvoicePreview({ invoice, printMode }: { invoice: Invoic
            * @page margók: bőven felülmúlják a tényleges magasságot
            * #invoice-content padding-bottom: extra puffer, garantáltan nem csúszik a lábléc alá
            */
-          @page { size: A4; margin: 56mm 18mm 52mm 18mm; }
+          @page { size: A4; margin: 54mm 18mm 36mm 18mm; }
 
           /* App shell feloldása */
           html, body { height: auto !important; overflow: visible !important; background: white !important; }
