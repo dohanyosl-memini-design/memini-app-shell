@@ -53,6 +53,8 @@ function fmtDate(d: string) {
   return format(new Date(d), 'dd.MM.yyyy')
 }
 
+const ITEMS_PER_PAGE = 5
+
 export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
   const paymentDays = differenceInDays(new Date(invoice.dueDate), new Date(invoice.date))
   const productItems = invoice.items.filter(i => !i.isDiscount)
@@ -60,6 +62,13 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
   const hasDiscounts = discountItems.length > 0
   const productSubtotal = productItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
   const discountTotal = discountItems.reduce((s, i) => s + Math.abs(i.unitPrice), 0)
+
+  // 5 tétel/lap — üres tömb esetén egy üres oldalt biztosít
+  const chunks: typeof productItems[] = []
+  for (let i = 0; i < productItems.length; i += ITEMS_PER_PAGE) {
+    chunks.push(productItems.slice(i, i + ITEMS_PER_PAGE))
+  }
+  if (chunks.length === 0) chunks.push([])
 
   const S = { fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px' }
 
@@ -185,62 +194,72 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
             </p>
           )}
 
-          {/* Tételek táblázat */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', marginBottom: '24px' }}>
-            <thead>
-              <tr>
-                <th style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'left', fontWeight: 700 }}>Produktbezeichnung</th>
-                <th style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'center', fontWeight: 700, width: '80px' }}>Menge<br />(Stück)</th>
-                <th style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'center', fontWeight: 700, width: '110px' }}>Preis<br />(€&nbsp;/&nbsp;Stück)</th>
-                <th style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'center', fontWeight: 700, width: '110px' }}>Gesamtpreis<br />(€)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {productItems.map((item) => {
-                const [line1, line2, line3] = item.description.split('\n')
-                return (
-                  <tr key={item.id}>
-                    <td style={{ border: '1px solid #333', padding: '8px 10px' }}>
-                      <p style={{ fontWeight: 700, fontStyle: 'italic', margin: 0 }}>{line1}</p>
-                      {line2 && <p style={{ fontWeight: 700, fontStyle: 'italic', margin: '1px 0 0 0', fontSize: '11px' }}>{line2}</p>}
-                      {line3 && <p style={{ fontStyle: 'italic', margin: '1px 0 0 0', fontSize: '10px' }}>{line3}</p>}
-                    </td>
-                    <td style={{ border: '1px solid #333', padding: '8px 10px', textAlign: 'center' }}>{item.quantity}</td>
-                    <td style={{ border: '1px solid #333', padding: '8px 10px', textAlign: 'right' }}>{fmtDE(item.unitPrice)}</td>
-                    <td style={{ border: '1px solid #333', padding: '8px 10px', textAlign: 'right' }}>{fmtDE(item.quantity * item.unitPrice)}</td>
-                  </tr>
-                )
-              })}
+          {/* Tételek — max 5/oldal, minden chunk új lapon kezdődik */}
+          {chunks.map((chunk, chunkIndex) => {
+            const isLast = chunkIndex === chunks.length - 1
+            return (
+              <div key={chunkIndex} style={chunkIndex > 0 ? { breakBefore: 'page', paddingTop: '8px' } : {}}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', marginBottom: isLast ? '24px' : '0' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'left', fontWeight: 700 }}>Produktbezeichnung</th>
+                      <th style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'center', fontWeight: 700, width: '80px' }}>Menge<br />(Stück)</th>
+                      <th style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'center', fontWeight: 700, width: '110px' }}>Preis<br />(€&nbsp;/&nbsp;Stück)</th>
+                      <th style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'center', fontWeight: 700, width: '110px' }}>Gesamtpreis<br />(€)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chunk.map((item) => {
+                      const [line1, line2, line3] = item.description.split('\n')
+                      return (
+                        <tr key={item.id}>
+                          <td style={{ border: '1px solid #333', padding: '8px 10px' }}>
+                            <p style={{ fontWeight: 700, fontStyle: 'italic', margin: 0 }}>{line1}</p>
+                            {line2 && <p style={{ fontWeight: 700, fontStyle: 'italic', margin: '1px 0 0 0', fontSize: '11px' }}>{line2}</p>}
+                            {line3 && <p style={{ fontStyle: 'italic', margin: '1px 0 0 0', fontSize: '10px' }}>{line3}</p>}
+                          </td>
+                          <td style={{ border: '1px solid #333', padding: '8px 10px', textAlign: 'center' }}>{item.quantity}</td>
+                          <td style={{ border: '1px solid #333', padding: '8px 10px', textAlign: 'right' }}>{fmtDE(item.unitPrice)}</td>
+                          <td style={{ border: '1px solid #333', padding: '8px 10px', textAlign: 'right' }}>{fmtDE(item.quantity * item.unitPrice)}</td>
+                        </tr>
+                      )
+                    })}
 
-              {hasDiscounts && (
-                <tr>
-                  <td colSpan={3} style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'right', fontWeight: 700 }}>Summe Netto</td>
-                  <td style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'right' }}>{fmtDE(productSubtotal)}</td>
-                </tr>
-              )}
-
-              {discountItems.map((item) => (
-                <tr key={item.id}>
-                  <td colSpan={2} style={{ border: '1px solid #333', padding: '8px 10px', fontStyle: 'italic', fontWeight: 700 }}>{item.description}</td>
-                  <td style={{ border: '1px solid #333', padding: '8px 10px', textAlign: 'center' }}>1</td>
-                  <td style={{ border: '1px solid #333', padding: '8px 10px', textAlign: 'right' }}>{fmtDE(Math.abs(item.unitPrice))}</td>
-                </tr>
-              ))}
-
-              <tr>
-                <td colSpan={3} style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'right', fontWeight: 700 }}>Summe Netto</td>
-                <td style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'right' }}>{fmtDE(hasDiscounts ? productSubtotal - discountTotal : invoice.subtotal)}</td>
-              </tr>
-              <tr>
-                <td colSpan={3} style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'right', fontStyle: 'italic' }}>zzgl. MwSt. 19%</td>
-                <td style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'right' }}>{fmtDE(invoice.vatAmount)}</td>
-              </tr>
-              <tr>
-                <td colSpan={3} style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'right', fontWeight: 700 }}>Gesamtsumme</td>
-                <td style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'right', fontWeight: 700 }}>{fmtDE(invoice.total)}</td>
-              </tr>
-            </tbody>
-          </table>
+                    {/* Összesítő sorok csak az utolsó chunkon */}
+                    {isLast && (
+                      <>
+                        {hasDiscounts && (
+                          <tr>
+                            <td colSpan={3} style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'right', fontWeight: 700 }}>Summe Netto</td>
+                            <td style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'right' }}>{fmtDE(productSubtotal)}</td>
+                          </tr>
+                        )}
+                        {discountItems.map((item) => (
+                          <tr key={item.id}>
+                            <td colSpan={2} style={{ border: '1px solid #333', padding: '8px 10px', fontStyle: 'italic', fontWeight: 700 }}>{item.description}</td>
+                            <td style={{ border: '1px solid #333', padding: '8px 10px', textAlign: 'center' }}>1</td>
+                            <td style={{ border: '1px solid #333', padding: '8px 10px', textAlign: 'right' }}>{fmtDE(Math.abs(item.unitPrice))}</td>
+                          </tr>
+                        ))}
+                        <tr>
+                          <td colSpan={3} style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'right', fontWeight: 700 }}>Summe Netto</td>
+                          <td style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'right' }}>{fmtDE(hasDiscounts ? productSubtotal - discountTotal : invoice.subtotal)}</td>
+                        </tr>
+                        <tr>
+                          <td colSpan={3} style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'right', fontStyle: 'italic' }}>zzgl. MwSt. 19%</td>
+                          <td style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'right' }}>{fmtDE(invoice.vatAmount)}</td>
+                        </tr>
+                        <tr>
+                          <td colSpan={3} style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'right', fontWeight: 700 }}>Gesamtsumme</td>
+                          <td style={{ border: '1px solid #333', padding: '7px 10px', textAlign: 'right', fontWeight: 700 }}>{fmtDE(invoice.total)}</td>
+                        </tr>
+                      </>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )
+          })}
 
           {invoice.notes && (
             <div style={{ fontStyle: 'italic', fontSize: '12px', marginBottom: '16px', lineHeight: 1.5 }}>
