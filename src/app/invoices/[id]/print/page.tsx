@@ -108,7 +108,7 @@ export default function InvoicePrintPage() {
         .btn-secondary { background: #e5e7eb; color: #374151; }
         @media print { .no-print { display: none !important; } }
 
-        /* A táblázat fejléc/lábléc automatikusan ismétlődik minden oldalon */
+        /* A táblázat fejléce automatikusan ismétlődik minden oldalon */
         table.print-layout {
           width: 100%;
           border-collapse: collapse;
@@ -119,9 +119,17 @@ export default function InvoicePrintPage() {
         table.print-layout tfoot { display: table-footer-group; }
         table.print-layout tbody { display: table-row-group; }
 
-        /* Nyomtatásban a tábla kitölti az egész lapot → tfoot a lap aljára kerül */
+        /* Nyomtatásban a lábléc minden lap alján fix */
         @media print {
-          table.print-layout { height: 100vh; }
+          table.print-layout tfoot {
+            display: block !important;
+            position: fixed !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            background: white !important;
+          }
+          .content-cell { padding-bottom: 36mm !important; }
         }
 
         .header-cell {

@@ -113,7 +113,15 @@ export default function DeliveryNotePrintPage() {
         table.print-layout tbody { display: table-row-group; }
 
         @media print {
-          table.print-layout { height: 100vh; }
+          table.print-layout tfoot {
+            display: block !important;
+            position: fixed !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            background: white !important;
+          }
+          .content-cell { padding-bottom: 36mm !important; }
         }
 
         .header-cell { padding: 8mm 18mm 4mm; border-bottom: 1px solid #888; }
