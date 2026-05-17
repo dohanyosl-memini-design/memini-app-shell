@@ -250,9 +250,6 @@ export default function DeliveryNotePreview({ deliveryNote, printMode }: { deliv
             Bitte prüfen Sie die Ware bei Erhalt auf Vollständigkeit und Unversehrtheit.
           </p>
 
-          {/* Aláírás csík */}
-          <div style={{ borderTop: '1px solid #333', marginBottom: '28px' }} />
-
           <div style={{ fontStyle: 'italic', fontSize: '12px', marginBottom: '20px', lineHeight: 1.8 }}>
             <p>Mit freundlichen Grüßen</p>
             <p style={{ fontWeight: 700 }}>Laszlo Arpad Dohanyos</p>
