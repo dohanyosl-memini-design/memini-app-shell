@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Plus, Trash2, Edit2, Upload, Camera, RefreshCw, TrendingDown, TrendingUp,
   RepeatIcon, X, Check, AlertCircle, Settings, CheckCircle2, Clock,
@@ -411,12 +411,12 @@ export default function BookkeepingPage() {
 
       {/* Fülek */}
       <div className="flex gap-1 mb-4 border-b border-gray-200">
-        {([
+        {(([
           { id: 'expenses', label: 'Kiadások' },
           { id: 'recurring', label: 'Visszatérő' },
           { id: 'summary', label: 'Összesítő' },
           { id: 'categories', label: 'Kategóriák', icon: Settings },
-        ] as const).map(t => (
+        ]) as { id: typeof tab; label: string; icon?: React.ElementType }[]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${tab === t.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
             {t.icon && <t.icon size={13} />}{t.label}
