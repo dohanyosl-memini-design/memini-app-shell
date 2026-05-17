@@ -23,6 +23,7 @@ interface CashflowEntry {
   id: string
   source: 'transaction' | 'invoice' | 'expense'
   type: 'income' | 'expense'
+  status: string | null
   amount: number
   currency: string
   date: string
@@ -89,10 +90,13 @@ export default function FinancePage() {
     fetchCashflow()
   }
 
-  const totalIncome = cashflow.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
+  // Only realized income (paid invoices + income transactions) counts toward totals
+  const totalIncome = cashflow.filter(t => t.type === 'income' && (t.source !== 'invoice' || t.status === 'paid')).reduce((s, t) => s + t.amount, 0)
   const totalExpenses = cashflow.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
   const balance = totalIncome - totalExpenses
-  const monthlyData = buildMonthlyCashflow(cashflow)
+  const pendingInvoiceTotal = cashflow.filter(t => t.source === 'invoice' && t.status !== 'paid').reduce((s, t) => s + t.amount, 0)
+  // Chart uses only realized entries
+  const monthlyData = buildMonthlyCashflow(cashflow.filter(t => t.source !== 'invoice' || t.status === 'paid'))
 
   const expenseByCategory = cashflow
     .filter((t) => t.type === 'expense' && t.category)
@@ -127,9 +131,9 @@ export default function FinancePage() {
       </div>
 
       {/* KPI sáv */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="bg-green-50 rounded-xl border border-green-100 p-5">
-          <p className="text-sm text-gray-600">Összes bevétel</p>
+          <p className="text-sm text-gray-600">Befolyt bevétel</p>
           <p className="text-2xl font-bold text-green-600 mt-1">€{totalIncome.toFixed(2)}</p>
         </div>
         <div className="bg-red-50 rounded-xl border border-red-100 p-5">
@@ -141,6 +145,11 @@ export default function FinancePage() {
           <p className={`text-2xl font-bold mt-1 ${balance >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>
             €{balance.toFixed(2)}
           </p>
+        </div>
+        <div className="bg-amber-50 rounded-xl border border-amber-200 p-5">
+          <p className="text-sm text-gray-600">Várható bevétel</p>
+          <p className="text-2xl font-bold text-amber-600 mt-1">€{pendingInvoiceTotal.toFixed(2)}</p>
+          <p className="text-xs text-amber-500 mt-0.5">Nyitott számlák</p>
         </div>
       </div>
 
@@ -222,21 +231,26 @@ export default function FinancePage() {
               <tr><td colSpan={7} className="px-5 py-12 text-center text-gray-400">Betöltés...</td></tr>
             ) : cashflow.filter(t => typeFilter === 'all' || t.type === typeFilter).length === 0 ? (
               <tr><td colSpan={7} className="px-5 py-12 text-center text-gray-400">Nincs bejegyzés</td></tr>
-            ) : cashflow.filter(t => typeFilter === 'all' || t.type === typeFilter).map((t) => (
-              <tr key={`${t.source}-${t.id}`} className="hover:bg-gray-50 transition-colors">
+            ) : cashflow.filter(t => typeFilter === 'all' || t.type === typeFilter).map((t) => {
+              const isPending = t.source === 'invoice' && t.status !== 'paid'
+              const isOverdue = t.status === 'overdue'
+              return (
+              <tr key={`${t.source}-${t.id}`} className={`transition-colors ${isOverdue ? 'bg-red-50 hover:bg-red-100' : isPending ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-gray-50'}`}>
                 <td className="px-5 py-3.5 text-sm text-gray-600">
                   {format(new Date(t.date), 'yyyy.MM.dd')}
                 </td>
                 <td className="px-5 py-3.5">
-                  <p className="text-sm font-medium text-gray-900">{t.description}</p>
+                  <p className={`text-sm font-medium ${isPending ? 'text-gray-500' : 'text-gray-900'}`}>{t.description}</p>
                 </td>
                 <td className="px-5 py-3.5">
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                    isOverdue ? 'bg-red-100 text-red-700' :
+                    isPending ? 'bg-amber-100 text-amber-700' :
                     t.source === 'invoice' ? 'bg-green-100 text-green-700' :
                     t.source === 'expense' ? 'bg-red-100 text-red-700' :
                     'bg-gray-100 text-gray-600'
                   }`}>
-                    {t.source === 'invoice' ? 'Számla' : t.source === 'expense' ? 'Könyvelés' : 'Manuális'}
+                    {isOverdue ? 'Lejárt' : isPending ? 'Nyitott' : t.source === 'invoice' ? 'Befizetett' : t.source === 'expense' ? 'Könyvelés' : 'Manuális'}
                   </span>
                 </td>
                 <td className="px-5 py-3.5">
@@ -248,7 +262,7 @@ export default function FinancePage() {
                 </td>
                 <td className="px-5 py-3.5 text-xs text-gray-400 font-mono">{t.reference || '-'}</td>
                 <td className="px-5 py-3.5 text-right">
-                  <span className={`text-sm font-bold ${t.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
+                  <span className={`text-sm font-bold ${isPending ? 'text-amber-500' : t.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
                     {t.type === 'income' ? '+' : '-'}€{t.amount.toFixed(2)}
                   </span>
                 </td>
@@ -267,7 +281,8 @@ export default function FinancePage() {
                   </div>
                 </td>
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       </div>

@@ -7,6 +7,7 @@ export interface CashflowEntry {
   id: string
   source: 'transaction' | 'invoice' | 'expense'
   type: 'income' | 'expense'
+  status: string | null
   amount: number
   currency: string
   date: string
@@ -16,12 +17,12 @@ export interface CashflowEntry {
 }
 
 export async function GET() {
-  const [transactions, paidInvoices, expenses] = await Promise.all([
+  const now = new Date()
+  const [transactions, allInvoices, expenses] = await Promise.all([
     prisma.transaction.findMany({ orderBy: { date: 'desc' } }),
     prisma.invoice.findMany({
-      where: { status: 'paid', paidAt: { not: null } },
-      select: { id: true, number: true, total: true, paidAt: true, currency: true, company: { select: { name: true } } },
-      orderBy: { paidAt: 'desc' },
+      select: { id: true, number: true, total: true, date: true, dueDate: true, paidAt: true, status: true, currency: true, company: { select: { name: true } } },
+      orderBy: { date: 'desc' },
     }),
     prisma.expense.findMany({ orderBy: { date: 'desc' } }),
   ])
@@ -31,6 +32,7 @@ export async function GET() {
       id: t.id,
       source: 'transaction' as const,
       type: t.type as 'income' | 'expense',
+      status: null,
       amount: t.amount,
       currency: t.currency,
       date: t.date.toISOString(),
@@ -38,21 +40,27 @@ export async function GET() {
       category: t.category,
       reference: t.reference,
     })),
-    ...paidInvoices.map(inv => ({
-      id: inv.id,
-      source: 'invoice' as const,
-      type: 'income' as const,
-      amount: inv.total,
-      currency: inv.currency,
-      date: inv.paidAt!.toISOString(),
-      description: inv.company?.name ? `Számla – ${inv.company.name}` : `Számla ${inv.number}`,
-      category: 'Értékesítés',
-      reference: inv.number,
-    })),
+    ...allInvoices.map(inv => {
+      const isOverdue = inv.status !== 'paid' && new Date(inv.dueDate) < now
+      const resolvedStatus = inv.status === 'paid' ? 'paid' : isOverdue ? 'overdue' : inv.status
+      return {
+        id: inv.id,
+        source: 'invoice' as const,
+        type: 'income' as const,
+        status: resolvedStatus,
+        amount: inv.total,
+        currency: inv.currency,
+        date: (inv.paidAt ?? inv.date).toISOString(),
+        description: inv.company?.name ? `Számla – ${inv.company.name}` : `Számla ${inv.number}`,
+        category: 'Értékesítés',
+        reference: inv.number,
+      }
+    }),
     ...expenses.map(exp => ({
       id: exp.id,
       source: 'expense' as const,
       type: 'expense' as const,
+      status: null,
       amount: exp.totalAmount > 0 ? exp.totalAmount : exp.amount,
       currency: exp.currency,
       date: exp.date.toISOString(),
