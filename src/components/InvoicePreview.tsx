@@ -1,6 +1,6 @@
 'use client'
 
-import { Printer } from 'lucide-react'
+import { Printer, FileDown } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 
 interface InvoiceItem {
@@ -76,13 +76,21 @@ export default function InvoicePreview({ invoice, printMode }: { invoice: Invoic
   return (
     <div>
       {!printMode && (
-        <div className="flex justify-end mb-4 print:hidden">
+        <div className="flex justify-end gap-2 mb-4 print:hidden">
+          <a
+            href={`/api/invoices/${invoice.id}/docx`}
+            download
+            className="flex items-center gap-2 px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800 transition-colors text-sm"
+          >
+            <FileDown size={16} />
+            Word (.docx)
+          </a>
           <button
             onClick={() => window.open(`/invoices/${invoice.id}/print`, '_blank')}
             className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm"
           >
             <Printer size={16} />
-            Nyomtatás / PDF mentés
+            Nyomtatás / PDF
           </button>
         </div>
       )}
