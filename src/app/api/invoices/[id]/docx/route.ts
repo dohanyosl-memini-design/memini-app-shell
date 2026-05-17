@@ -17,10 +17,11 @@ function fmtDate(d: string | Date) {
 }
 
 const FONT = 'Arial'
-const N = 20    // 10pt in half-points
-const SM = 18   // 9pt
-const XS = 16   // 8pt
-const H1 = 52   // 26pt
+const LG = 20   // 10pt ≈ 13px  (recipient name first line)
+const N  = 18   // 9pt  ≈ 12px  (default body text — matches preview base)
+const SM = 16   // 8pt  ≈ 11px  (header sub-address lines)
+const XS = 14   // 7pt  ≈ 9px   (return address strip)
+const H1 = 54   // 27pt ≈ 36px  (title)
 
 const NONE = BorderStyle.NONE
 
@@ -48,7 +49,7 @@ const topOnlyBorder = {
 }
 
 function r(text: string, opts: { bold?: boolean; italic?: boolean; size?: number; color?: string } = {}) {
-  return new TextRun({ text, font: FONT, size: opts.size ?? N, bold: opts.bold, italics: opts.italic, color: opts.color ?? '111111' })
+  return new TextRun({ text, font: FONT, size: opts.size ?? N, bold: opts.bold ?? false, italics: opts.italic ?? false, color: opts.color ?? '111111' })
 }
 
 function p(children: TextRun[], align?: typeof AlignmentType[keyof typeof AlignmentType], afterPt = 0) {
@@ -59,7 +60,7 @@ function td(text: string, align: typeof AlignmentType[keyof typeof AlignmentType
   return new TableCell({
     borders: cellBorders,
     columnSpan: opts.colSpan,
-    children: [p([r(text, { size: SM, bold: opts.bold, italic: opts.italic })], align)],
+    children: [p([r(text, { bold: opts.bold, italic: opts.italic })], align)],
   })
 }
 
@@ -67,7 +68,7 @@ function th(text: string, align: typeof AlignmentType[keyof typeof AlignmentType
   return new TableCell({
     borders: cellBorders,
     shading: { type: ShadingType.SOLID, color: 'EEEEEE', fill: 'EEEEEE' },
-    children: [p([r(text, { size: SM, bold: true })], align)],
+    children: [p([r(text, { bold: true })], align)],
   })
 }
 
@@ -113,7 +114,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
               p([r('Laszlo Arpad Dohanyos e.U.', { bold: true })], AlignmentType.RIGHT, 20),
               p([r('Laszlo Arpad Dohanyos', { size: SM })], AlignmentType.RIGHT, 20),
               p([r('Römerstraße 32, 89077 Ulm', { size: SM })], AlignmentType.RIGHT, 20),
-              p([r('Deutschland', { size: SM })], AlignmentType.RIGHT),
+              p([r('Deutschland', { size: SM })], AlignmentType.RIGHT, 20),
             ],
           }),
         ],
@@ -123,7 +124,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
           new TableCell({
             columnSpan: 2,
             borders: { ...noBorders, bottom: { style: BorderStyle.SINGLE, size: 4, color: '888888' } },
-            children: [new Paragraph({ spacing: { after: 60 }, children: [r('Laszlo Arpad Dohanyos e.U.  │  Römerstraße 32  │  89077 Ulm', { size: XS, color: '555555' })] })],
+            children: [new Paragraph({ spacing: { after: 60 }, children: [r('Laszlo Arpad Dohanyos e.U.  │  Römerstraße 32  │  89077 Ulm', { size: SM, color: '555555' })] })],
           }),
         ],
       }),
@@ -141,29 +142,29 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
             width: { size: 33, type: WidthType.PERCENTAGE },
             borders: topOnlyBorder,
             children: [
-              p([r('Laszlo Arpad Dohanyos e.U.', { bold: true, size: XS })], undefined, 20),
-              p([r('Römerstraße 32', { size: XS })], undefined, 20),
-              p([r('89077 Ulm, Deutschland', { size: XS })]),
+              p([r('Laszlo Arpad Dohanyos e.U.', { bold: true, size: XS })], AlignmentType.LEFT, 20),
+              p([r('Römerstraße 32', { size: XS })], AlignmentType.LEFT, 20),
+              p([r('89077 Ulm, Deutschland', { size: XS })], AlignmentType.LEFT),
             ],
           }),
           new TableCell({
             width: { size: 34, type: WidthType.PERCENTAGE },
             borders: topOnlyBorder,
             children: [
-              p([r('Kontakt Informationen:', { bold: true, size: XS })], undefined, 20),
-              p([r('Tel.: +49 176 36373422', { size: XS })], undefined, 20),
-              p([r('E-Mail: verwaltung@meminidesign.de', { size: XS })]),
+              p([r('Kontakt Informationen:', { bold: true, size: XS })], AlignmentType.CENTER, 20),
+              p([r('Tel.: +49 176 36373422', { size: XS })], AlignmentType.CENTER, 20),
+              p([r('E-Mail: verwaltung@meminidesign.de', { size: XS })], AlignmentType.CENTER),
             ],
           }),
           new TableCell({
             width: { size: 33, type: WidthType.PERCENTAGE },
             borders: topOnlyBorder,
             children: [
-              p([r('Bank Verbindung', { bold: true, size: XS })], undefined, 20),
-              p([r('Geldinstitut: Sparkasse Ulm', { size: XS })], undefined, 20),
-              p([r('IBAN: DE57 6305 0000 0021 3127 53', { size: XS })], undefined, 20),
-              p([r('SWIFT/BIC: SOLADES1ULM', { size: XS })], undefined, 20),
-              p([r('USt-IdNr.: DE 334750913', { size: XS })]),
+              p([r('Bank Verbindung', { bold: true, size: XS })], AlignmentType.RIGHT, 20),
+              p([r('Geldinstitut: Sparkasse Ulm', { size: XS })], AlignmentType.RIGHT, 20),
+              p([r('IBAN: DE57 6305 0000 0021 3127 53', { size: XS })], AlignmentType.RIGHT, 20),
+              p([r('SWIFT/BIC: SOLADES1ULM', { size: XS })], AlignmentType.RIGHT, 20),
+              p([r('USt-IdNr.: DE 334750913', { size: XS })], AlignmentType.RIGHT),
             ],
           }),
         ],
@@ -199,14 +200,14 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
             width: { size: 55, type: WidthType.PERCENTAGE },
             borders: noBorders,
             children: recipientLines.map((line, i) =>
-              p([r(line, { bold: i === 0, size: i === 0 ? N + 2 : N })], undefined, 20)
+              p([r(line, { bold: i === 0, size: i === 0 ? LG : N })], undefined, 20)
             ),
           }),
           new TableCell({
             width: { size: 45, type: WidthType.PERCENTAGE },
             borders: noBorders,
             children: detailRows.map(([label, value]) =>
-              p([r(label + '  ', { italic: true, size: SM }), r(value, { italic: true, size: SM })], AlignmentType.RIGHT, 20)
+              p([r(label + '  ', { italic: true }), r(value, { italic: true })], AlignmentType.RIGHT, 20)
             ),
           }),
         ],
@@ -222,7 +223,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         new TableCell({
           borders: cellBorders,
           children: [
-            p([r(l1, { bold: true, italic: true, size: SM })], undefined, l2 ? 20 : 0),
+            p([r(l1, { bold: true, italic: true })], undefined, l2 ? 20 : 0),
             ...(l2 ? [p([r(l2, { bold: true, italic: true, size: SM })], undefined, l3 ? 20 : 0)] : []),
             ...(l3 ? [p([r(l3, { italic: true, size: XS })])] : []),
           ],
@@ -267,15 +268,15 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       footers: { default: new Footer({ children: [footerContent] }) },
       children: [
         addressBlock,
-        new Paragraph({ spacing: { before: 240, after: 120 }, children: [r(invoice.stornoOf ? 'Stornorechnung' : 'Rechnung', { size: H1 })] }),
+        new Paragraph({ spacing: { before: 240, after: 120 }, children: [r(invoice.stornoOf ? 'Stornorechnung' : 'Rechnung', { size: H1, bold: false })] }),
         ...(invoice.stornoOf
           ? [p([r(`Diese Stornorechnung bezieht sich auf Rechnung Nr. ${invoice.stornoOf} und hebt diese vollständig auf.`, { italic: true, color: 'CC0000' })], undefined, 120)]
           : [p([r('Ich danke Ihnen herzlich für Ihr Vertrauen in unsere Produkte und werde Ihnen nun, gemäß unserer Vereinbarung, die folgenden Lieferungen in Rechnung stellen:', { italic: true })], undefined, 160)]
         ),
         itemsTable,
         ...(invoice.notes ? [
-          p([r('Hinweis:', { size: SM })], undefined, 40),
-          p([r(invoice.notes, { italic: true, size: SM })], undefined, 160),
+          p([r('Hinweis:')], undefined, 40),
+          p([r(invoice.notes, { italic: true })], undefined, 160),
         ] : []),
         p([r(`Die Zahlung erfolgt innerhalb von ${paymentDays} Tagen ab Rechnungseingang ohne Abzüge auf das unten angegebene Bankkonto. Ich danke Ihnen für Ihren Auftrag und freue mich auf die weitere Zusammenarbeit.`, { italic: true })], undefined, 160),
         p([r('Mit freundlichen Grüßen', { italic: true })], undefined, 40),
