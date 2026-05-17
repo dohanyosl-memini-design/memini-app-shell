@@ -88,7 +88,7 @@ export default function DeliveryNotePreview({ deliveryNote, printMode }: { deliv
       <div
         id="dn-print"
         className="bg-white border border-gray-200 rounded-lg"
-        style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px', padding: '32px 40px', maxWidth: '800px', margin: '0 auto' }}
+        style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '12px', padding: '24px 32px', maxWidth: '640px', margin: '0 auto' }}
       >
         {/* ── FEJLÉC ── */}
         <div id="dn-header">

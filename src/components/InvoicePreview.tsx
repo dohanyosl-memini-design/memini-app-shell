@@ -90,7 +90,7 @@ export default function InvoicePreview({ invoice, printMode }: { invoice: Invoic
       <div
         id="invoice-print"
         className="bg-white border border-gray-200 rounded-lg"
-        style={{ ...S, padding: '32px 40px', maxWidth: '800px', margin: '0 auto' }}
+        style={{ ...S, padding: '24px 32px', maxWidth: '640px', margin: '0 auto' }}
       >
         {/* ── FEJLÉC ── */}
         <div id="invoice-header">
