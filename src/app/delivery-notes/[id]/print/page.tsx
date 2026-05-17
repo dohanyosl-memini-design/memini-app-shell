@@ -125,7 +125,7 @@ export default function DeliveryNotePrintPage() {
         }
 
         .header-cell { padding: 8mm 18mm 4mm; border-bottom: 1px solid #888; }
-        .footer-cell { padding: 5mm 18mm 6mm; border-top: 1px solid #333; }
+        .footer-cell { padding: 5mm 0 6mm; border-top: 1px solid #333; }
         .content-cell { padding: 6mm 18mm 4mm; vertical-align: top; }
 
         .footer-grid {

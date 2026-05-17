@@ -137,7 +137,7 @@ export default function InvoicePrintPage() {
           border-bottom: 1px solid #888;
         }
         .footer-cell {
-          padding: 5mm 18mm 6mm;
+          padding: 5mm 0 6mm;
           border-top: 1px solid #333;
         }
         .content-cell {
