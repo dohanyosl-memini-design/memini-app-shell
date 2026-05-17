@@ -112,6 +112,10 @@ export default function DeliveryNotePrintPage() {
         table.print-layout tfoot { display: table-footer-group; }
         table.print-layout tbody { display: table-row-group; }
 
+        @media print {
+          table.print-layout { height: 100vh; }
+        }
+
         .header-cell { padding: 8mm 18mm 4mm; border-bottom: 1px solid #888; }
         .footer-cell { padding: 5mm 18mm 6mm; border-top: 1px solid #333; }
         .content-cell { padding: 6mm 18mm 4mm; vertical-align: top; }
@@ -330,9 +334,6 @@ export default function DeliveryNotePrintPage() {
               <p style={{ fontStyle: 'italic', fontSize: '12px', lineHeight: 1.6, marginBottom: '20px' }}>
                 Bitte prüfen Sie die Ware bei Erhalt auf Vollständigkeit und Unversehrtheit.
               </p>
-
-              {/* Aláírás csík */}
-              <div style={{ borderTop: '1px solid #333', marginBottom: '28px' }} />
 
               <div style={{ fontStyle: 'italic', fontSize: '12px', marginBottom: '20px', lineHeight: 1.8 }}>
                 <p>Mit freundlichen Grüßen</p>

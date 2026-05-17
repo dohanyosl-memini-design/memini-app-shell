@@ -119,6 +119,11 @@ export default function InvoicePrintPage() {
         table.print-layout tfoot { display: table-footer-group; }
         table.print-layout tbody { display: table-row-group; }
 
+        /* Nyomtatásban a tábla kitölti az egész lapot → tfoot a lap aljára kerül */
+        @media print {
+          table.print-layout { height: 100vh; }
+        }
+
         .header-cell {
           padding: 8mm 18mm 4mm;
           border-bottom: 1px solid #888;
@@ -364,9 +369,6 @@ export default function InvoicePrintPage() {
                 Die Zahlung erfolgt innerhalb von {paymentDays} Tagen ab Rechnungseingang ohne Abzüge auf das unten
                 angegebene Bankkonto. Ich danke Ihnen für Ihren Auftrag und freue mich auf die weitere Zusammenarbeit.
               </p>
-
-              {/* Aláírás csík + hely */}
-              <div style={{ borderTop: '1px solid #333', marginBottom: '28px' }} />
 
               <div style={{ fontStyle: 'italic', fontSize: '12px', marginBottom: '20px', lineHeight: 1.8 }}>
                 <p>Mit freundlichen Grüßen</p>
