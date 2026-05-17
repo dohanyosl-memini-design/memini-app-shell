@@ -131,10 +131,12 @@ export default function DeliveryNotePrintPage() {
         .footer-grid {
           display: grid;
           grid-template-columns: 1fr 1fr 1fr;
-          gap: 12px;
           font-size: 10px;
           line-height: 1.6;
         }
+        .footer-grid > div:nth-child(1) { text-align: left; }
+        .footer-grid > div:nth-child(2) { text-align: center; }
+        .footer-grid > div:nth-child(3) { text-align: right; }
 
         .page-break {
           page-break-before: always !important;
