@@ -10,7 +10,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession()
   const pathname = usePathname()
   const isLoginPage = pathname === '/login'
-  const isPrintPage = /\/orders\/[^/]+\/print$/.test(pathname)
+  const isPrintPage = /\/(orders|invoices|delivery-notes)\/[^/]+\/print$/.test(pathname)
 
   if (isLoginPage || isPrintPage) return <>{children}</>
   if (!session) return <>{children}</>

@@ -14,6 +14,7 @@ interface InvoiceItem {
 }
 
 interface Invoice {
+  id?: string
   number: string
   date: string
   dueDate: string
@@ -55,7 +56,7 @@ function fmtDate(d: string) {
 
 const ITEMS_PER_PAGE = 5
 
-export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
+export default function InvoicePreview({ invoice, printMode }: { invoice: Invoice; printMode?: boolean }) {
   const paymentDays = differenceInDays(new Date(invoice.dueDate), new Date(invoice.date))
   const productItems = invoice.items.filter(i => !i.isDiscount)
   const discountItems = invoice.items.filter(i => i.isDiscount)
@@ -74,15 +75,17 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
 
   return (
     <div>
-      <div className="flex justify-end mb-4 print:hidden">
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm"
-        >
-          <Printer size={16} />
-          Nyomtatás / PDF mentés
-        </button>
-      </div>
+      {!printMode && (
+        <div className="flex justify-end mb-4 print:hidden">
+          <button
+            onClick={() => window.open(`/invoices/${invoice.id}/print`, '_blank')}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm"
+          >
+            <Printer size={16} />
+            Nyomtatás / PDF mentés
+          </button>
+        </div>
+      )}
 
       <div
         id="invoice-print"

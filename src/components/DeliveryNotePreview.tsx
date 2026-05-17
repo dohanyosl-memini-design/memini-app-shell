@@ -14,6 +14,7 @@ interface DeliveryNoteItem {
 }
 
 interface DeliveryNote {
+  id?: string
   number: string
   date: string
   deliveryInfo: string | null
@@ -52,7 +53,7 @@ function fmtDate(d: string) {
 
 const ITEMS_PER_PAGE = 5
 
-export default function DeliveryNotePreview({ deliveryNote }: { deliveryNote: DeliveryNote }) {
+export default function DeliveryNotePreview({ deliveryNote, printMode }: { deliveryNote: DeliveryNote; printMode?: boolean }) {
   const productItems = deliveryNote.items.filter(i => !i.isDiscount)
   const discountItems = deliveryNote.items.filter(i => i.isDiscount)
   const hasDiscounts = discountItems.length > 0
@@ -72,15 +73,17 @@ export default function DeliveryNotePreview({ deliveryNote }: { deliveryNote: De
 
   return (
     <div>
-      <div className="flex justify-end mb-4 print:hidden">
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm"
-        >
-          <Printer size={16} />
-          Nyomtatás / PDF mentés
-        </button>
-      </div>
+      {!printMode && (
+        <div className="flex justify-end mb-4 print:hidden">
+          <button
+            onClick={() => window.open(`/delivery-notes/${deliveryNote.id}/print`, '_blank')}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm"
+          >
+            <Printer size={16} />
+            Nyomtatás / PDF mentés
+          </button>
+        </div>
+      )}
 
       <div
         id="dn-print"
