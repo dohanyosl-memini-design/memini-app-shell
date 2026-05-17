@@ -1,10 +1,21 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, Trash2, Edit2, Upload, Camera, RefreshCw, TrendingDown, TrendingUp, RepeatIcon, X, Check, AlertCircle } from 'lucide-react'
+import {
+  Plus, Trash2, Edit2, Upload, Camera, RefreshCw, TrendingDown, TrendingUp,
+  RepeatIcon, X, Check, AlertCircle, Settings, CheckCircle2, Clock,
+} from 'lucide-react'
 import { format, addMonths, subMonths, startOfMonth } from 'date-fns'
 import { hu } from 'date-fns/locale'
 import Modal from '@/components/Modal'
+
+interface ExpenseCategory {
+  id: string
+  name: string
+  color: string
+  sortOrder: number
+  active: boolean
+}
 
 interface Expense {
   id: string
@@ -12,11 +23,14 @@ interface Expense {
   vendor: string
   description: string
   amount: number
-  currency: string
   vatAmount: number
+  totalAmount: number
+  currency: string
   category: string | null
   receiptUrl: string | null
   reference: string | null
+  status: string
+  notes: string | null
 }
 
 interface RecurringExpense {
@@ -41,35 +55,43 @@ interface Invoice {
   company: { name: string } | null
 }
 
-const CATEGORIES = [
-  'Irodaszer', 'Szállítás', 'Marketing', 'Szoftver / Előfizetés', 'Nyomtatás',
-  'Csomagolóanyag', 'Alapanyag', 'Közüzemi díj', 'Bank / Pénzügyi díj',
-  'Könyvelő', 'Egyéb',
-]
-
 const FREQ_LABELS: Record<string, string> = {
   weekly: 'Heti', monthly: 'Havi', quarterly: 'Negyedéves', yearly: 'Éves',
 }
 
-function fmtEur(v: number) {
-  return `€${v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+function fmtAmount(v: number, currency: string) {
+  if (currency === 'HUF') {
+    return v.toLocaleString('hu-HU', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' Ft'
+  }
+  return '€' + v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
+
+function fmtEur(v: number) { return fmtAmount(v, 'EUR') }
 
 const EMPTY_FORM = {
   date: format(new Date(), 'yyyy-MM-dd'),
-  vendor: '', description: '', amount: '', vatAmount: '',
-  currency: 'EUR', category: '', reference: '',
+  vendor: '', description: '', amount: '', vatAmount: '', totalAmount: '',
+  currency: 'EUR', category: '', reference: '', status: 'pending', notes: '',
+}
+
+interface BulkResult {
+  filename: string
+  ok: boolean
+  data?: Record<string, unknown>
+  error?: string
+  saved?: boolean
 }
 
 export default function BookkeepingPage() {
-  const [tab, setTab] = useState<'expenses' | 'recurring' | 'summary'>('expenses')
+  const [tab, setTab] = useState<'expenses' | 'recurring' | 'summary' | 'categories'>('expenses')
   const [selectedMonth, setSelectedMonth] = useState(startOfMonth(new Date()))
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [recurring, setRecurring] = useState<RecurringExpense[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [categories, setCategories] = useState<ExpenseCategory[]>([])
   const [loading, setLoading] = useState(true)
 
-  // New expense modal
+  // Expense modal
   const [showModal, setShowModal] = useState(false)
   const [editExpense, setEditExpense] = useState<Expense | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -83,26 +105,41 @@ export default function BookkeepingPage() {
     nextDue: format(new Date(), 'yyyy-MM-dd'), notes: '',
   })
 
-  // OCR state
+  // Single scan
   const [scanning, setScanning] = useState(false)
   const [scanResult, setScanResult] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // Bulk upload
+  const [showBulk, setShowBulk] = useState(false)
+  const [bulkFiles, setBulkFiles] = useState<File[]>([])
+  const [bulkProgress, setBulkProgress] = useState(0)
+  const [bulkTotal, setBulkTotal] = useState(0)
+  const [bulkRunning, setBulkRunning] = useState(false)
+  const [bulkResults, setBulkResults] = useState<BulkResult[]>([])
+  const bulkFileRef = useRef<HTMLInputElement>(null)
+
+  // Category management
+  const [catForm, setCatForm] = useState({ name: '', color: '#6B7280' })
+  const [catSaving, setCatSaving] = useState(false)
 
   const monthKey = format(selectedMonth, 'yyyy-MM')
 
   const fetchData = useCallback(async () => {
     setLoading(true)
-    const [expRes, recRes, invRes] = await Promise.all([
+    const [expRes, recRes, invRes, catRes] = await Promise.all([
       fetch(`/api/expenses?month=${monthKey}`),
       fetch('/api/recurring-expenses'),
-      fetch(`/api/invoices?status=paid`),
+      fetch('/api/invoices?status=paid'),
+      fetch('/api/expense-categories'),
     ])
-    const [expData, recData, invData] = await Promise.all([
-      expRes.json(), recRes.json(), invRes.json(),
+    const [expData, recData, invData, catData] = await Promise.all([
+      expRes.json(), recRes.json(), invRes.json(), catRes.json(),
     ])
-    setExpenses(expData)
-    setRecurring(recData)
-    setInvoices(invData.filter((inv: Invoice) => inv.date?.startsWith(monthKey)))
+    setExpenses(Array.isArray(expData) ? expData : [])
+    setRecurring(Array.isArray(recData) ? recData : [])
+    setInvoices((Array.isArray(invData) ? invData : []).filter((inv: Invoice) => inv.date?.startsWith(monthKey)))
+    setCategories(Array.isArray(catData) ? catData : [])
     setLoading(false)
   }, [monthKey])
 
@@ -123,24 +160,26 @@ export default function BookkeepingPage() {
       description: exp.description,
       amount: String(exp.amount),
       vatAmount: String(exp.vatAmount),
+      totalAmount: String(exp.totalAmount || 0),
       currency: exp.currency,
       category: exp.category || '',
       reference: exp.reference || '',
+      status: exp.status || 'pending',
+      notes: exp.notes || '',
     })
     setShowModal(true)
   }
 
   async function handleSaveExpense() {
-    const body = { ...form, amount: Number(form.amount), vatAmount: Number(form.vatAmount || 0) }
-    if (editExpense) {
-      await fetch(`/api/expenses/${editExpense.id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-      })
-    } else {
-      await fetch('/api/expenses', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-      })
+    const body = {
+      ...form,
+      amount: Number(form.amount),
+      vatAmount: Number(form.vatAmount || 0),
+      totalAmount: Number(form.totalAmount || 0),
     }
+    const url = editExpense ? `/api/expenses/${editExpense.id}` : '/api/expenses'
+    const method = editExpense ? 'PUT' : 'POST'
+    await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     setShowModal(false)
     fetchData()
   }
@@ -151,26 +190,28 @@ export default function BookkeepingPage() {
     fetchData()
   }
 
+  async function handleToggleStatus(exp: Expense) {
+    const newStatus = exp.status === 'pending' ? 'verified' : 'pending'
+    await fetch(`/api/expenses/${exp.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...exp, status: newStatus }),
+    })
+    fetchData()
+  }
+
   async function handleScanFile(file: File) {
-    const MAX_BYTES = 4 * 1024 * 1024
-    if (file.size > MAX_BYTES) {
-      setScanResult('A fájl túl nagy (max 4 MB). Tömörítsd vagy szkenneld alacsonyabb minőségben.')
+    if (file.size > 10 * 1024 * 1024) {
+      setScanResult('A fájl túl nagy (max 10 MB). Tömörítsd vagy szkenneld alacsonyabb minőségben.')
       return
     }
     setScanning(true)
     setScanResult(null)
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      const res = await fetch('/api/expenses/scan', {
-        method: 'POST',
-        body: formData,
-        signal: AbortSignal.timeout(55000),
-      })
-      if (!res.ok) {
-        setScanResult('Szerver hiba – töltsd ki kézzel.')
-        return
-      }
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/expenses/scan', { method: 'POST', body: fd, signal: AbortSignal.timeout(55000) })
+      if (!res.ok) { setScanResult('Szerver hiba – töltsd ki kézzel.'); return }
       const data = await res.json()
       if (data.ok && data.data) {
         const d = data.data
@@ -180,25 +221,76 @@ export default function BookkeepingPage() {
           date: d.date || f.date,
           amount: d.amount != null ? String(d.amount) : f.amount,
           vatAmount: d.vatAmount != null ? String(d.vatAmount) : f.vatAmount,
+          totalAmount: d.totalAmount != null ? String(d.totalAmount) : f.totalAmount,
           description: d.description || f.description,
           reference: d.reference || f.reference,
+          category: d.category || f.category,
+          currency: d.currency || f.currency,
         }))
         setScanResult('✓ Adatok kinyerve – ellenőrizd és mentsd!')
       } else {
         setScanResult('Nem sikerült az adatokat kinyerni. Töltsd ki kézzel.')
       }
     } catch (err) {
-      if (err instanceof Error && err.name === 'TimeoutError') {
-        setScanResult('Időtúllépés – próbáld kisebb fájllal, vagy töltsd ki kézzel.')
-      } else {
-        setScanResult('Hiba történt – töltsd ki kézzel.')
-      }
+      setScanResult(err instanceof Error && err.name === 'TimeoutError'
+        ? 'Időtúllépés – próbáld kisebb fájllal, vagy töltsd ki kézzel.'
+        : 'Hiba történt – töltsd ki kézzel.')
     } finally {
       setScanning(false)
     }
   }
 
-  // Recurring
+  // ── TÖMEGES FELTÖLTÉS ──
+  async function handleBulkScan() {
+    if (bulkFiles.length === 0) return
+    setBulkRunning(true)
+    setBulkProgress(0)
+    setBulkTotal(bulkFiles.length)
+    setBulkResults([])
+
+    const results: BulkResult[] = []
+    for (let i = 0; i < bulkFiles.length; i++) {
+      const file = bulkFiles[i]
+      setBulkProgress(i)
+      try {
+        const fd = new FormData()
+        fd.append('file', file)
+        const res = await fetch('/api/expenses/scan', { method: 'POST', body: fd, signal: AbortSignal.timeout(55000) })
+        const json = await res.json()
+        if (json.ok && json.data) {
+          // Auto-save
+          const d = json.data
+          const saveRes = await fetch('/api/expenses', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              date: d.date || format(new Date(), 'yyyy-MM-dd'),
+              vendor: d.vendor || file.name,
+              description: d.description || '',
+              amount: Number(d.amount || 0),
+              vatAmount: Number(d.vatAmount || 0),
+              totalAmount: Number(d.totalAmount || 0),
+              currency: d.currency || 'EUR',
+              category: d.category || null,
+              reference: d.reference || null,
+              status: 'pending',
+            }),
+          })
+          results.push({ filename: file.name, ok: true, data: d, saved: saveRes.ok })
+        } else {
+          results.push({ filename: file.name, ok: false, error: 'Nem sikerült kinyerni az adatokat' })
+        }
+      } catch {
+        results.push({ filename: file.name, ok: false, error: 'Hiba a feldolgozás során' })
+      }
+      setBulkResults([...results])
+    }
+    setBulkProgress(bulkFiles.length)
+    setBulkRunning(false)
+    fetchData()
+  }
+
+  // ── VISSZATÉRŐ ──
   function openNewRecurring() {
     setEditRecurring(null)
     setRecForm({
@@ -211,15 +303,9 @@ export default function BookkeepingPage() {
 
   async function handleSaveRecurring() {
     const body = { ...recForm, amount: Number(recForm.amount) }
-    if (editRecurring) {
-      await fetch(`/api/recurring-expenses/${editRecurring.id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-      })
-    } else {
-      await fetch('/api/recurring-expenses', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-      })
-    }
+    const url = editRecurring ? `/api/recurring-expenses/${editRecurring.id}` : '/api/recurring-expenses'
+    const method = editRecurring ? 'PUT' : 'POST'
+    await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     setShowRecurringModal(false)
     fetchData()
   }
@@ -230,13 +316,33 @@ export default function BookkeepingPage() {
     fetchData()
   }
 
-  // Summary calculations
-  const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0)
+  // ── KATEGÓRIA ──
+  async function handleAddCategory() {
+    if (!catForm.name.trim()) return
+    setCatSaving(true)
+    await fetch('/api/expense-categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(catForm),
+    })
+    setCatForm({ name: '', color: '#6B7280' })
+    setCatSaving(false)
+    fetchData()
+  }
+
+  async function handleDeleteCategory(id: string, name: string) {
+    if (!confirm(`Törlöd a "${name}" kategóriát?`)) return
+    await fetch(`/api/expense-categories/${id}`, { method: 'DELETE' })
+    fetchData()
+  }
+
+  // Summaries
+  const totalExpenses = expenses.reduce((s, e) => s + (e.totalAmount || e.amount), 0)
   const totalIncome = invoices.reduce((s, i) => s + i.total, 0)
   const balance = totalIncome - totalExpenses
-
-  // Due recurring this month
   const dueThisMonth = recurring.filter(r => r.active && r.nextDue.startsWith(monthKey))
+
+  const categoryNames = categories.map(c => c.name)
 
   return (
     <div className="p-4 md:p-6">
@@ -245,61 +351,46 @@ export default function BookkeepingPage() {
           <h1 className="text-2xl font-bold text-gray-900">Könyvelés</h1>
           <p className="text-gray-500 mt-0.5">Kiadások és bevételek nyilvántartása</p>
         </div>
-        <button
-          onClick={openNew}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-        >
-          <Plus size={16} /> Új kiadás
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowBulk(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium"
+          >
+            <Upload size={16} /> Tömeges feltöltés
+          </button>
+          <button
+            onClick={openNew}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+          >
+            <Plus size={16} /> Új kiadás
+          </button>
+        </div>
       </div>
 
-      {/* Month navigator */}
+      {/* Hónavigátor */}
       <div className="flex items-center gap-3 mb-5">
-        <button
-          onClick={() => setSelectedMonth(m => subMonths(m, 1))}
-          className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
-        >
-          ‹
-        </button>
+        <button onClick={() => setSelectedMonth(m => subMonths(m, 1))} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50">‹</button>
         <span className="text-lg font-semibold text-gray-800 min-w-[140px] text-center">
           {format(selectedMonth, 'yyyy. MMMM', { locale: hu })}
         </span>
-        <button
-          onClick={() => setSelectedMonth(m => addMonths(m, 1))}
-          className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
-        >
-          ›
-        </button>
-        <button
-          onClick={() => setSelectedMonth(startOfMonth(new Date()))}
-          className="px-3 py-1.5 text-xs text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
-        >
-          Ma
-        </button>
+        <button onClick={() => setSelectedMonth(m => addMonths(m, 1))} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50">›</button>
+        <button onClick={() => setSelectedMonth(startOfMonth(new Date()))} className="px-3 py-1.5 text-xs text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50">Ma</button>
       </div>
 
-      {/* Summary cards */}
+      {/* Összesítő kártyák */}
       <div className="grid grid-cols-3 gap-3 mb-5">
         <div className="bg-white rounded-xl border border-gray-100 p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <TrendingUp size={14} className="text-green-500" />
-            <p className="text-xs text-gray-500 font-medium">Bevételek</p>
-          </div>
+          <div className="flex items-center gap-2 mb-1"><TrendingUp size={14} className="text-green-500" /><p className="text-xs text-gray-500 font-medium">Bevételek</p></div>
           <p className="text-xl font-bold text-green-600">{fmtEur(totalIncome)}</p>
           <p className="text-xs text-gray-400 mt-0.5">{invoices.length} befizetett számla</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <TrendingDown size={14} className="text-red-500" />
-            <p className="text-xs text-gray-500 font-medium">Kiadások</p>
-          </div>
+          <div className="flex items-center gap-2 mb-1"><TrendingDown size={14} className="text-red-500" /><p className="text-xs text-gray-500 font-medium">Kiadások</p></div>
           <p className="text-xl font-bold text-red-600">{fmtEur(totalExpenses)}</p>
           <p className="text-xs text-gray-400 mt-0.5">{expenses.length} kiadás</p>
         </div>
         <div className={`bg-white rounded-xl border p-4 ${balance >= 0 ? 'border-green-100' : 'border-red-100'}`}>
-          <div className="flex items-center gap-2 mb-1">
-            <p className="text-xs text-gray-500 font-medium">Egyenleg</p>
-          </div>
+          <p className="text-xs text-gray-500 font-medium mb-1">Egyenleg</p>
           <p className={`text-xl font-bold ${balance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
             {balance >= 0 ? '+' : ''}{fmtEur(balance)}
           </p>
@@ -307,38 +398,28 @@ export default function BookkeepingPage() {
         </div>
       </div>
 
-      {/* Recurring due alert */}
+      {/* Esedékes visszatérők */}
       {dueThisMonth.length > 0 && (
         <div className="mb-4 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
           <AlertCircle size={15} className="text-amber-500 mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm font-medium text-amber-800">
-              {dueThisMonth.length} visszatérő díj esedékes ebben a hónapban
-            </p>
-            <p className="text-xs text-amber-600 mt-0.5">
-              {dueThisMonth.map(r => `${r.name} (${fmtEur(r.amount)})`).join(' · ')}
-            </p>
+            <p className="text-sm font-medium text-amber-800">{dueThisMonth.length} visszatérő díj esedékes ebben a hónapban</p>
+            <p className="text-xs text-amber-600 mt-0.5">{dueThisMonth.map(r => `${r.name} (${fmtEur(r.amount)})`).join(' · ')}</p>
           </div>
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Fülek */}
       <div className="flex gap-1 mb-4 border-b border-gray-200">
         {([
           { id: 'expenses', label: 'Kiadások' },
-          { id: 'recurring', label: 'Visszatérő költségek' },
-          { id: 'summary', label: 'Havi összesítő' },
+          { id: 'recurring', label: 'Visszatérő' },
+          { id: 'summary', label: 'Összesítő' },
+          { id: 'categories', label: 'Kategóriák', icon: Settings },
         ] as const).map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-              tab === t.id
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {t.label}
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${tab === t.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            {t.icon && <t.icon size={13} />}{t.label}
           </button>
         ))}
       </div>
@@ -346,57 +427,55 @@ export default function BookkeepingPage() {
       {loading ? (
         <div className="py-16 text-center text-gray-400">Betöltés...</div>
       ) : tab === 'expenses' ? (
+
         /* ── KIADÁSOK ── */
         <div className="space-y-2">
           {expenses.length === 0 ? (
             <div className="py-16 text-center">
               <TrendingDown size={32} className="text-gray-200 mx-auto mb-3" />
               <p className="text-gray-400 text-sm">Nincs rögzített kiadás ebben a hónapban</p>
-              <button onClick={openNew} className="mt-3 text-sm text-blue-600 hover:underline">
-                + Kiadás hozzáadása
-              </button>
+              <button onClick={openNew} className="mt-3 text-sm text-blue-600 hover:underline">+ Kiadás hozzáadása</button>
             </div>
-          ) : (
-            expenses.map(exp => (
-              <div key={exp.id} className="bg-white rounded-xl border border-gray-100 p-3.5 flex items-center gap-3 hover:shadow-sm transition-shadow">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-gray-900 text-sm">{exp.vendor}</span>
-                    {exp.category && (
-                      <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{exp.category}</span>
-                    )}
-                    <span className="text-xs text-gray-400">{format(new Date(exp.date), 'yyyy. MMM d.', { locale: hu })}</span>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-0.5 truncate">{exp.description}</p>
-                  {exp.reference && <p className="text-xs font-mono text-gray-400">{exp.reference}</p>}
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="font-bold text-gray-900">{fmtEur(exp.amount)}</p>
-                  {exp.vatAmount > 0 && (
-                    <p className="text-xs text-gray-400">+ÁFA: {fmtEur(exp.vatAmount)}</p>
+          ) : expenses.map(exp => (
+            <div key={exp.id} className="bg-white rounded-xl border border-gray-100 p-3.5 flex items-center gap-3 hover:shadow-sm transition-shadow">
+              <button onClick={() => handleToggleStatus(exp)} className="shrink-0" title={exp.status === 'verified' ? 'Ellenőrzött' : 'Függőben'}>
+                {exp.status === 'verified'
+                  ? <CheckCircle2 size={18} className="text-green-500" />
+                  : <Clock size={18} className="text-amber-400" />}
+              </button>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium text-gray-900 text-sm">{exp.vendor}</span>
+                  {exp.category && (
+                    <span className="text-xs px-2 py-0.5 rounded-full"
+                      style={{ backgroundColor: (categories.find(c => c.name === exp.category)?.color || '#6B7280') + '20', color: categories.find(c => c.name === exp.category)?.color || '#6B7280' }}>
+                      {exp.category}
+                    </span>
                   )}
+                  <span className="text-xs text-gray-400">{format(new Date(exp.date), 'yyyy. MMM d.', { locale: hu })}</span>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button onClick={() => openEdit(exp)} className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors">
-                    <Edit2 size={14} />
-                  </button>
-                  <button onClick={() => handleDeleteExpense(exp.id)} className="p-1.5 text-gray-400 hover:text-red-600 transition-colors">
-                    <Trash2 size={14} />
-                  </button>
-                </div>
+                <p className="text-xs text-gray-500 mt-0.5 truncate">{exp.description}</p>
+                {exp.reference && <p className="text-xs font-mono text-gray-400">{exp.reference}</p>}
               </div>
-            ))
-          )}
+              <div className="text-right shrink-0">
+                <p className="font-bold text-gray-900">{fmtAmount(exp.totalAmount || exp.amount, exp.currency)}</p>
+                {exp.vatAmount > 0 && <p className="text-xs text-gray-400">+ÁFA: {fmtAmount(exp.vatAmount, exp.currency)}</p>}
+                <p className="text-xs text-gray-400">{exp.currency}</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button onClick={() => openEdit(exp)} className="p-1.5 text-gray-400 hover:text-blue-600"><Edit2 size={14} /></button>
+                <button onClick={() => handleDeleteExpense(exp.id)} className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 size={14} /></button>
+              </div>
+            </div>
+          ))}
         </div>
 
       ) : tab === 'recurring' ? (
+
         /* ── VISSZATÉRŐ ── */
         <div className="space-y-2">
           <div className="flex justify-end mb-2">
-            <button
-              onClick={openNewRecurring}
-              className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700"
-            >
+            <button onClick={openNewRecurring} className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700">
               <Plus size={14} /> Új visszatérő tétel
             </button>
           </div>
@@ -405,96 +484,69 @@ export default function BookkeepingPage() {
               <RepeatIcon size={32} className="text-gray-200 mx-auto mb-3" />
               <p className="text-gray-400 text-sm">Nincs visszatérő költség beállítva</p>
             </div>
-          ) : (
-            recurring.map(rec => {
-              const isDue = rec.nextDue.startsWith(monthKey)
-              return (
-                <div key={rec.id} className={`bg-white rounded-xl border p-3.5 flex items-center gap-3 ${isDue ? 'border-amber-200' : 'border-gray-100'}`}>
-                  <RepeatIcon size={16} className={isDue ? 'text-amber-500 shrink-0' : 'text-gray-300 shrink-0'} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-gray-900 text-sm">{rec.name}</span>
-                      {rec.vendor && <span className="text-xs text-gray-400">{rec.vendor}</span>}
-                      <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">{FREQ_LABELS[rec.frequency]}</span>
-                      {!rec.active && <span className="text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">Inaktív</span>}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      Következő: {format(new Date(rec.nextDue), 'yyyy. MMM d.', { locale: hu })}
-                      {isDue && <span className="text-amber-600 font-medium ml-1">– Esedékes!</span>}
-                    </p>
+          ) : recurring.map(rec => {
+            const isDue = rec.nextDue.startsWith(monthKey)
+            return (
+              <div key={rec.id} className={`bg-white rounded-xl border p-3.5 flex items-center gap-3 ${isDue ? 'border-amber-200' : 'border-gray-100'}`}>
+                <RepeatIcon size={16} className={isDue ? 'text-amber-500 shrink-0' : 'text-gray-300 shrink-0'} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-gray-900 text-sm">{rec.name}</span>
+                    {rec.vendor && <span className="text-xs text-gray-400">{rec.vendor}</span>}
+                    <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">{FREQ_LABELS[rec.frequency]}</span>
+                    {!rec.active && <span className="text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">Inaktív</span>}
                   </div>
-                  <p className="font-bold text-gray-900 shrink-0">{fmtEur(rec.amount)}</p>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      onClick={() => {
-                        setEditRecurring(rec)
-                        setRecForm({
-                          name: rec.name, vendor: rec.vendor || '', amount: String(rec.amount),
-                          currency: rec.currency, category: rec.category || '',
-                          frequency: rec.frequency, startDate: rec.nextDue.slice(0, 10),
-                          nextDue: rec.nextDue.slice(0, 10), notes: rec.notes || '',
-                        })
-                        setShowRecurringModal(true)
-                      }}
-                      className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
-                    >
-                      <Edit2 size={14} />
-                    </button>
-                    <button onClick={() => handleDeleteRecurring(rec.id)} className="p-1.5 text-gray-400 hover:text-red-600 transition-colors">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Következő: {format(new Date(rec.nextDue), 'yyyy. MMM d.', { locale: hu })}
+                    {isDue && <span className="text-amber-600 font-medium ml-1">– Esedékes!</span>}
+                  </p>
                 </div>
-              )
-            })
-          )}
+                <p className="font-bold text-gray-900 shrink-0">{fmtAmount(rec.amount, rec.currency)}</p>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button onClick={() => { setEditRecurring(rec); setRecForm({ name: rec.name, vendor: rec.vendor || '', amount: String(rec.amount), currency: rec.currency, category: rec.category || '', frequency: rec.frequency, startDate: rec.nextDue.slice(0, 10), nextDue: rec.nextDue.slice(0, 10), notes: rec.notes || '' }); setShowRecurringModal(true) }} className="p-1.5 text-gray-400 hover:text-blue-600"><Edit2 size={14} /></button>
+                  <button onClick={() => handleDeleteRecurring(rec.id)} className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 size={14} /></button>
+                </div>
+              </div>
+            )
+          })}
         </div>
 
-      ) : (
+      ) : tab === 'summary' ? (
+
         /* ── ÖSSZESÍTŐ ── */
         <div className="space-y-4">
-          {/* Category breakdown */}
           <div className="bg-white rounded-xl border border-gray-100 p-4">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">Kiadások kategória szerint</h3>
-            {expenses.length === 0 ? (
-              <p className="text-gray-400 text-sm">Nincs adat</p>
-            ) : (
-              (() => {
-                const byCategory = expenses.reduce<Record<string, number>>((acc, e) => {
-                  const cat = e.category || 'Egyéb'
-                  acc[cat] = (acc[cat] || 0) + e.amount
-                  return acc
-                }, {})
-                const sorted = Object.entries(byCategory).sort((a, b) => b[1] - a[1])
-                const max = sorted[0]?.[1] || 1
-                return (
-                  <div className="space-y-2">
-                    {sorted.map(([cat, amount]) => (
+            {expenses.length === 0 ? <p className="text-gray-400 text-sm">Nincs adat</p> : (() => {
+              const byCategory = expenses.reduce<Record<string, number>>((acc, e) => {
+                const cat = e.category || 'Egyéb'
+                acc[cat] = (acc[cat] || 0) + (e.totalAmount || e.amount)
+                return acc
+              }, {})
+              const sorted = Object.entries(byCategory).sort((a, b) => b[1] - a[1])
+              const max = sorted[0]?.[1] || 1
+              return (
+                <div className="space-y-2">
+                  {sorted.map(([cat, amount]) => {
+                    const catColor = categories.find(c => c.name === cat)?.color || '#6B7280'
+                    return (
                       <div key={cat}>
                         <div className="flex justify-between text-xs text-gray-600 mb-0.5">
-                          <span>{cat}</span>
-                          <span className="font-medium">{fmtEur(amount)}</span>
+                          <span>{cat}</span><span className="font-medium">{fmtEur(amount)}</span>
                         </div>
                         <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-blue-500 rounded-full"
-                            style={{ width: `${(amount / max) * 100}%` }}
-                          />
+                          <div className="h-full rounded-full" style={{ width: `${(amount / max) * 100}%`, backgroundColor: catColor }} />
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )
-              })()
-            )}
+                    )
+                  })}
+                </div>
+              )
+            })()}
           </div>
-
-          {/* Invoice income */}
           <div className="bg-white rounded-xl border border-gray-100 p-4">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">Befizetett számlák (bevétel)</h3>
-            {invoices.length === 0 ? (
-              <p className="text-gray-400 text-sm">Nincs befizetett számla ebben a hónapban</p>
-            ) : (
+            {invoices.length === 0 ? <p className="text-gray-400 text-sm">Nincs befizetett számla ebben a hónapban</p> : (
               <div className="space-y-1.5">
                 {invoices.map(inv => (
                   <div key={inv.id} className="flex justify-between text-sm">
@@ -503,70 +555,70 @@ export default function BookkeepingPage() {
                   </div>
                 ))}
                 <div className="flex justify-between text-sm font-bold border-t border-gray-100 pt-2 mt-2">
-                  <span>Összesen:</span>
-                  <span className="text-green-700">{fmtEur(totalIncome)}</span>
+                  <span>Összesen:</span><span className="text-green-700">{fmtEur(totalIncome)}</span>
                 </div>
               </div>
             )}
           </div>
         </div>
+
+      ) : (
+
+        /* ── KATEGÓRIÁK ── */
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-gray-100 p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Kategória hozzáadása</h3>
+            <div className="flex gap-2">
+              <input type="text" value={catForm.name} onChange={e => setCatForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="Kategória neve..." onKeyDown={e => e.key === 'Enter' && handleAddCategory()}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="color" value={catForm.color} onChange={e => setCatForm(f => ({ ...f, color: e.target.value }))}
+                className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer p-1" title="Szín" />
+              <button onClick={handleAddCategory} disabled={!catForm.name.trim() || catSaving}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50">
+                <Plus size={16} />
+              </button>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-100 p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Meglévő kategóriák</h3>
+            <div className="space-y-2">
+              {categories.map(cat => (
+                <div key={cat.id} className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
+                  <span className="text-sm text-gray-700 flex-1">{cat.name}</span>
+                  <button onClick={() => handleDeleteCategory(cat.id, cat.name)} className="p-1 text-gray-300 hover:text-red-500 transition-colors">
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* ── Expense modal ── */}
+      {/* ── ÚJ KIADÁS MODAL ── */}
       {showModal && (
-        <Modal
-          title={editExpense ? 'Kiadás szerkesztése' : 'Új kiadás'}
-          onClose={() => setShowModal(false)}
-          size="lg"
-        >
+        <Modal title={editExpense ? 'Kiadás szerkesztése' : 'Új kiadás'} onClose={() => setShowModal(false)} size="lg">
           <div className="space-y-4">
-            {/* OCR scan */}
             {!editExpense && (
               <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center">
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*,application/pdf"
-                  className="hidden"
-                  onChange={e => { if (e.target.files?.[0]) handleScanFile(e.target.files[0]) }}
-                />
+                <input ref={fileRef} type="file" accept="image/*,.heic,.heif,application/pdf" className="hidden"
+                  onChange={e => { if (e.target.files?.[0]) handleScanFile(e.target.files[0]) }} />
                 <div className="flex items-center justify-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (fileRef.current) {
-                        fileRef.current.removeAttribute('capture')
-                        fileRef.current.setAttribute('accept', 'image/*,application/pdf')
-                        fileRef.current.click()
-                      }
-                    }}
-                    className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
-                  >
-                    <Upload size={14} /> Feltöltés (kép / PDF)
+                  <button type="button" onClick={() => { fileRef.current?.removeAttribute('capture'); fileRef.current?.click() }}
+                    className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm">
+                    <Upload size={14} /> PDF / Kép / HEIC
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (fileRef.current) {
-                        fileRef.current.setAttribute('capture', 'environment')
-                        fileRef.current.setAttribute('accept', 'image/*')
-                        fileRef.current.click()
-                      }
-                    }}
-                    className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors text-sm"
-                  >
+                  <button type="button" onClick={() => { fileRef.current?.setAttribute('capture', 'environment'); fileRef.current?.setAttribute('accept', 'image/*'); fileRef.current?.click() }}
+                    className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 text-sm">
                     <Camera size={14} /> Fotózás
                   </button>
                 </div>
-                {scanning && (
-                  <p className="text-xs text-blue-600 mt-2 flex items-center justify-center gap-1">
-                    <RefreshCw size={12} className="animate-spin" /> AI feldolgozás...
-                  </p>
-                )}
+                {scanning && <p className="text-xs text-blue-600 mt-2 flex items-center justify-center gap-1"><RefreshCw size={12} className="animate-spin" /> Arthur feldolgozza...</p>}
                 {scanResult && (
                   <p className={`text-xs mt-2 flex items-center justify-center gap-1 ${scanResult.startsWith('✓') ? 'text-green-600' : 'text-amber-600'}`}>
-                    {scanResult.startsWith('✓') ? <Check size={12} /> : <AlertCircle size={12} />}
-                    {scanResult}
+                    {scanResult.startsWith('✓') ? <Check size={12} /> : <AlertCircle size={12} />} {scanResult}
                   </p>
                 )}
               </div>
@@ -581,54 +633,63 @@ export default function BookkeepingPage() {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Üzlet / Szállító *</label>
                 <input type="text" value={form.vendor} onChange={e => setForm(f => ({ ...f, vendor: e.target.value }))}
-                  placeholder="pl. REWE, Amazon, Avery..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  placeholder="pl. OBI, Amazon..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-gray-600 mb-1">Leírás *</label>
                 <input type="text" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  placeholder="Mit vásároltál?"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  placeholder="Mit vásároltál?" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Összeg *</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Nettó összeg</label>
                 <input type="number" min={0} step={0.01} value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-                  placeholder="0.00"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  placeholder="0.00" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">ÁFA összeg</label>
                 <input type="number" min={0} step={0.01} value={form.vatAmount} onChange={e => setForm(f => ({ ...f, vatAmount: e.target.value }))}
-                  placeholder="0.00"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  placeholder="0.00" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Bruttó összeg *</label>
+                <input type="number" min={0} step={0.01} value={form.totalAmount} onChange={e => setForm(f => ({ ...f, totalAmount: e.target.value }))}
+                  placeholder="0.00" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Deviza</label>
+                <select value={form.currency} onChange={e => setForm(f => ({ ...f, currency: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="EUR">EUR (€)</option>
+                  <option value="HUF">HUF (Ft)</option>
+                </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Kategória</label>
                 <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">— Kategória —</option>
-                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  <option value="">— Válassz —</option>
+                  {categoryNames.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Bizonylat száma</label>
                 <input type="text" value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))}
-                  placeholder="Számla / nyugta szám"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  placeholder="Számla / nyugta szám" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Státusz</label>
+                <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="pending">Függőben</option>
+                  <option value="verified">Ellenőrzött</option>
+                </select>
               </div>
             </div>
 
             <div className="flex justify-end gap-3 pt-2">
-              <button type="button" onClick={() => setShowModal(false)}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors text-sm">
-                Mégse
-              </button>
-              <button
-                type="button"
-                disabled={!form.vendor || !form.description || !form.amount}
-                onClick={handleSaveExpense}
-                className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm font-medium"
-              >
+              <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm">Mégse</button>
+              <button type="button" disabled={!form.vendor || !form.description || !form.totalAmount} onClick={handleSaveExpense}
+                className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium">
                 {editExpense ? 'Módosítás' : 'Mentés'}
               </button>
             </div>
@@ -636,20 +697,86 @@ export default function BookkeepingPage() {
         </Modal>
       )}
 
-      {/* ── Recurring modal ── */}
+      {/* ── TÖMEGES FELTÖLTÉS MODAL ── */}
+      {showBulk && (
+        <Modal title="Tömeges számlafeltöltés" onClose={() => { if (!bulkRunning) { setShowBulk(false); setBulkFiles([]); setBulkResults([]) } }} size="lg">
+          <div className="space-y-4">
+            <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center">
+              <input ref={bulkFileRef} type="file" multiple accept="image/*,.heic,.heif,application/pdf" className="hidden"
+                onChange={e => setBulkFiles(Array.from(e.target.files || []))} />
+              <Upload size={24} className="text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-500 mb-3">PDF, JPEG, PNG, HEIC fájlok</p>
+              <button type="button" onClick={() => bulkFileRef.current?.click()}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm">
+                Fájlok kiválasztása
+              </button>
+            </div>
+
+            {bulkFiles.length > 0 && (
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-sm font-medium text-gray-700 mb-2">{bulkFiles.length} fájl kiválasztva:</p>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {bulkFiles.map((f, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
+                      {bulkResults[i] ? (
+                        bulkResults[i].ok
+                          ? <CheckCircle2 size={12} className="text-green-500 shrink-0" />
+                          : <AlertCircle size={12} className="text-red-400 shrink-0" />
+                      ) : bulkRunning && i === bulkProgress
+                        ? <RefreshCw size={12} className="text-blue-500 animate-spin shrink-0" />
+                        : <div className="w-3 h-3 rounded-full border border-gray-300 shrink-0" />}
+                      <span className="truncate">{f.name}</span>
+                      {bulkResults[i] && (
+                        <span className={bulkResults[i].ok ? 'text-green-600 shrink-0' : 'text-red-400 shrink-0'}>
+                          {bulkResults[i].ok ? '✓ Mentve' : '✗ Hiba'}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {bulkRunning && (
+              <div>
+                <div className="flex justify-between text-xs text-gray-500 mb-1">
+                  <span>Arthur feldolgozza...</span>
+                  <span>{bulkProgress}/{bulkTotal}</span>
+                </div>
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                    style={{ width: `${bulkTotal > 0 ? (bulkProgress / bulkTotal) * 100 : 0}%` }} />
+                </div>
+              </div>
+            )}
+
+            {!bulkRunning && bulkResults.length > 0 && (
+              <div className={`rounded-lg px-4 py-3 text-sm font-medium ${bulkResults.every(r => r.ok) ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+                {bulkResults.filter(r => r.ok).length}/{bulkResults.length} számla sikeresen feldolgozva és mentve.
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" onClick={() => { setShowBulk(false); setBulkFiles([]); setBulkResults([]) }} disabled={bulkRunning}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm disabled:opacity-50">Bezárás</button>
+              <button type="button" onClick={handleBulkScan} disabled={bulkFiles.length === 0 || bulkRunning}
+                className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium">
+                {bulkRunning ? <><RefreshCw size={14} className="animate-spin" /> Feldolgozás...</> : <><Upload size={14} /> Arthur, feldolgozd!</>}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── VISSZATÉRŐ MODAL ── */}
       {showRecurringModal && (
-        <Modal
-          title={editRecurring ? 'Visszatérő tétel szerkesztése' : 'Új visszatérő tétel'}
-          onClose={() => setShowRecurringModal(false)}
-          size="md"
-        >
+        <Modal title={editRecurring ? 'Visszatérő tétel szerkesztése' : 'Új visszatérő tétel'} onClose={() => setShowRecurringModal(false)} size="md">
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-gray-600 mb-1">Megnevezés *</label>
                 <input type="text" value={recForm.name} onChange={e => setRecForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="pl. Adobe CC, Shopify, bérleti díj..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  placeholder="pl. Adobe CC, Shopify..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Szállító</label>
@@ -660,6 +787,14 @@ export default function BookkeepingPage() {
                 <label className="block text-xs font-medium text-gray-600 mb-1">Összeg *</label>
                 <input type="number" min={0} step={0.01} value={recForm.amount} onChange={e => setRecForm(f => ({ ...f, amount: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Deviza</label>
+                <select value={recForm.currency} onChange={e => setRecForm(f => ({ ...f, currency: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="EUR">EUR (€)</option>
+                  <option value="HUF">HUF (Ft)</option>
+                </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Gyakoriság</label>
@@ -676,26 +811,19 @@ export default function BookkeepingPage() {
                 <input type="date" value={recForm.nextDue} onChange={e => setRecForm(f => ({ ...f, nextDue: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
-              <div>
+              <div className="col-span-2">
                 <label className="block text-xs font-medium text-gray-600 mb-1">Kategória</label>
                 <select value={recForm.category} onChange={e => setRecForm(f => ({ ...f, category: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">— Kategória —</option>
-                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  <option value="">— Válassz —</option>
+                  {categoryNames.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
             </div>
             <div className="flex justify-end gap-3 pt-2">
-              <button type="button" onClick={() => setShowRecurringModal(false)}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm">
-                Mégse
-              </button>
-              <button
-                type="button"
-                disabled={!recForm.name || !recForm.amount}
-                onClick={handleSaveRecurring}
-                className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
-              >
+              <button type="button" onClick={() => setShowRecurringModal(false)} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg text-sm">Mégse</button>
+              <button type="button" disabled={!recForm.name || !recForm.amount} onClick={handleSaveRecurring}
+                className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium">
                 {editRecurring ? 'Módosítás' : 'Mentés'}
               </button>
             </div>

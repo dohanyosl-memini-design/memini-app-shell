@@ -11,11 +11,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       vendor: body.vendor,
       description: body.description,
       amount: Number(body.amount),
+      vatAmount: Number(body.vatAmount ?? 0),
+      totalAmount: Number(body.totalAmount ?? body.amount ?? 0),
       currency: body.currency || 'EUR',
-      vatAmount: Number(body.vatAmount || 0),
       category: body.category || null,
       receiptUrl: body.receiptUrl || null,
       reference: body.reference || null,
+      status: body.status || 'pending',
+      notes: body.notes || null,
     },
   })
 

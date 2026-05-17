@@ -313,13 +313,25 @@ model Expense {
   vendor      String
   description String
   amount      Float
-  currency    String   @default("EUR")
   vatAmount   Float    @default(0)
+  totalAmount Float    @default(0)
+  currency    String   @default("EUR")
   category    String?
   receiptUrl  String?
   reference   String?
+  status      String   @default("pending")
+  notes       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model ExpenseCategory {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String   @default("#6B7280")
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
 }
 
 model RecurringExpense {

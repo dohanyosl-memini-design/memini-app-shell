@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import heicConvert from 'heic-convert'
 
-export const maxDuration = 60
+export const maxDuration = 120
 
 const client = new Anthropic()
 
@@ -20,14 +20,7 @@ const CATEGORY_LIST = [
   'Egyéb',
 ]
 
-export async function POST(request: NextRequest) {
-  const formData = await request.formData()
-  const file = formData.get('file') as File | null
-
-  if (!file) {
-    return NextResponse.json({ error: 'No file provided' }, { status: 400 })
-  }
-
+async function scanFile(file: File): Promise<{ vendor: string | null; date: string | null; amount: number | null; vatAmount: number | null; totalAmount: number | null; description: string | null; reference: string | null; category: string | null; currency: string | null }> {
   const bytes = await file.arrayBuffer()
   let imageBase64: string
   let mediaType: string
@@ -87,12 +80,33 @@ If a field cannot be determined, use null. Return only the JSON object.`,
   })
 
   const text = message.content[0].type === 'text' ? message.content[0].text : ''
+  const jsonMatch = text.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) throw new Error('Could not parse response')
+  return JSON.parse(jsonMatch[0])
+}
 
-  try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    const extracted = jsonMatch ? JSON.parse(jsonMatch[0]) : {}
-    return NextResponse.json({ ok: true, data: extracted })
-  } catch {
-    return NextResponse.json({ ok: false, error: 'Could not parse response', raw: text })
+export async function POST(request: NextRequest) {
+  const formData = await request.formData()
+  const files = formData.getAll('files') as File[]
+
+  if (!files || files.length === 0) {
+    return NextResponse.json({ error: 'No files provided' }, { status: 400 })
   }
+
+  const results: Array<{ filename: string; ok: boolean; data?: object; error?: string }> = []
+
+  for (const file of files) {
+    try {
+      const data = await scanFile(file)
+      results.push({ filename: file.name, ok: true, data })
+    } catch (err) {
+      results.push({
+        filename: file.name,
+        ok: false,
+        error: err instanceof Error ? err.message : 'Unknown error',
+      })
+    }
+  }
+
+  return NextResponse.json({ results })
 }
