@@ -31,6 +31,12 @@ export async function GET() {
     recentContacts,
     partnersByType,
     partnersByClassification,
+    paidInvoicesThisMonth,
+    paidInvoicesLastMonth,
+    allPaidInvoices,
+    expensesThisMonth,
+    expensesLastMonth,
+    allBookkeepingExpenses,
   ] = await Promise.all([
     prisma.invoice.findMany({
       where: { status: 'open' },
@@ -106,6 +112,37 @@ export async function GET() {
     }),
     prisma.company.groupBy({ by: ['partnerType'], _count: true }),
     prisma.company.groupBy({ by: ['classification'], _count: true }),
+    // Paid invoices this month (for income)
+    prisma.invoice.findMany({
+      where: { status: 'paid', paidAt: { gte: startOfMonth } },
+      select: { total: true, paidAt: true },
+    }),
+    // Paid invoices last month
+    prisma.invoice.findMany({
+      where: { status: 'paid', paidAt: { gte: startOfLastMonth, lte: endOfLastMonth } },
+      select: { total: true, paidAt: true },
+    }),
+    // All paid invoices for cashflow chart
+    prisma.invoice.findMany({
+      where: { status: 'paid', paidAt: { not: null } },
+      select: { total: true, paidAt: true, currency: true, number: true, company: { select: { name: true } } },
+      orderBy: { paidAt: 'asc' },
+    }),
+    // Expenses this month
+    prisma.expense.aggregate({
+      where: { date: { gte: startOfMonth } },
+      _sum: { totalAmount: true, amount: true },
+    }),
+    // Expenses last month
+    prisma.expense.aggregate({
+      where: { date: { gte: startOfLastMonth, lte: endOfLastMonth } },
+      _sum: { totalAmount: true, amount: true },
+    }),
+    // All expenses for cashflow chart
+    prisma.expense.findMany({
+      orderBy: { date: 'asc' },
+      select: { date: true, totalAmount: true, amount: true, category: true, currency: true },
+    }),
   ])
 
   const lowStockProducts = allActiveProducts.filter(p => p.stock <= p.minStock)
@@ -120,6 +157,25 @@ export async function GET() {
   const topProducts = [...allActiveProducts]
     .sort((a, b) => b.stock - a.stock)
     .slice(0, 6)
+
+  // Combined income: Transactions + paid invoices
+  const invoiceIncomeThisMonth = paidInvoicesThisMonth.reduce((s, i) => s + i.total, 0)
+  const invoiceIncomeLastMonth = paidInvoicesLastMonth.reduce((s, i) => s + i.total, 0)
+  const expenseSumThisMonth = expensesThisMonth._sum.totalAmount || expensesThisMonth._sum.amount || 0
+  const expenseSumLastMonth = expensesLastMonth._sum.totalAmount || expensesLastMonth._sum.amount || 0
+
+  const combinedMonthlyIncome = (monthlyIncome._sum.amount || 0) + invoiceIncomeThisMonth
+  const combinedMonthlyExpenses = (monthlyExpenses._sum.amount || 0) + expenseSumThisMonth
+  const combinedLastMonthIncome = (lastMonthIncome._sum.amount || 0) + invoiceIncomeLastMonth
+  const combinedLastMonthExpenses = (lastMonthExpenses._sum.amount || 0) + expenseSumLastMonth
+
+  // Build combined cashflow entries for chart
+  type CfEntry = { type: 'income' | 'expense'; amount: number; date: string; category: string | null }
+  const allCashflowEntries: CfEntry[] = [
+    ...allTransactions.map(t => ({ type: t.type as 'income' | 'expense', amount: t.amount, date: t.date instanceof Date ? t.date.toISOString() : String(t.date), category: t.category })),
+    ...allPaidInvoices.map(inv => ({ type: 'income' as const, amount: inv.total, date: inv.paidAt instanceof Date ? inv.paidAt.toISOString() : String(inv.paidAt), category: 'Értékesítés' })),
+    ...allBookkeepingExpenses.map(exp => ({ type: 'expense' as const, amount: exp.totalAmount > 0 ? exp.totalAmount : exp.amount, date: exp.date instanceof Date ? exp.date.toISOString() : String(exp.date), category: exp.category })),
+  ]
 
   return NextResponse.json({
     openInvoicesTotal,
@@ -148,5 +204,10 @@ export async function GET() {
     recentContacts,
     partnersByType,
     partnersByClassification,
+    combinedMonthlyIncome,
+    combinedMonthlyExpenses,
+    combinedLastMonthIncome,
+    combinedLastMonthExpenses,
+    allCashflowEntries,
   })
 }

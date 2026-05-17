@@ -19,6 +19,18 @@ interface Transaction {
   reference: string | null
 }
 
+interface CashflowEntry {
+  id: string
+  source: 'transaction' | 'invoice' | 'expense'
+  type: 'income' | 'expense'
+  amount: number
+  currency: string
+  date: string
+  description: string
+  category: string | null
+  reference: string | null
+}
+
 const CATEGORY_COLORS: Record<string, string> = {
   Értékesítés: 'bg-green-100 text-green-700',
   Előleg: 'bg-teal-100 text-teal-700',
@@ -31,7 +43,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   Egyéb: 'bg-gray-100 text-gray-600',
 }
 
-function buildMonthlyCashflow(transactions: Transaction[]) {
+function buildMonthlyCashflow(transactions: { type: string; amount: number; date: string }[]) {
   const months: Record<string, { month: string; bevétel: number; kiadás: number }> = {}
 
   transactions.forEach((t) => {
@@ -47,6 +59,7 @@ function buildMonthlyCashflow(transactions: Transaction[]) {
 
 export default function FinancePage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [cashflow, setCashflow] = useState<CashflowEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [typeFilter, setTypeFilter] = useState('all')
   const [showModal, setShowModal] = useState(false)
@@ -61,20 +74,27 @@ export default function FinancePage() {
     setLoading(false)
   }, [typeFilter])
 
-  useEffect(() => { fetchTransactions() }, [fetchTransactions])
+  const fetchCashflow = useCallback(async () => {
+    const res = await fetch('/api/cashflow')
+    const data = await res.json()
+    setCashflow(Array.isArray(data) ? data : [])
+  }, [])
+
+  useEffect(() => { fetchTransactions(); fetchCashflow() }, [fetchTransactions, fetchCashflow])
 
   async function handleDelete(id: string) {
     if (!confirm('Biztosan törli ezt a tranzakciót?')) return
     await fetch(`/api/transactions/${id}`, { method: 'DELETE' })
     fetchTransactions()
+    fetchCashflow()
   }
 
-  const totalIncome = transactions.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-  const totalExpenses = transactions.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+  const totalIncome = cashflow.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
+  const totalExpenses = cashflow.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
   const balance = totalIncome - totalExpenses
-  const monthlyData = buildMonthlyCashflow(transactions)
+  const monthlyData = buildMonthlyCashflow(cashflow)
 
-  const expenseByCategory = transactions
+  const expenseByCategory = cashflow
     .filter((t) => t.type === 'expense' && t.category)
     .reduce<Record<string, number>>((acc, t) => {
       acc[t.category!] = (acc[t.category!] || 0) + t.amount
@@ -190,6 +210,7 @@ export default function FinancePage() {
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Dátum</th>
               <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Leírás</th>
+              <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Forrás</th>
               <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Kategória</th>
               <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Referencia</th>
               <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Összeg</th>
@@ -198,16 +219,25 @@ export default function FinancePage() {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {loading ? (
-              <tr><td colSpan={6} className="px-5 py-12 text-center text-gray-400">Betöltés...</td></tr>
-            ) : transactions.length === 0 ? (
-              <tr><td colSpan={6} className="px-5 py-12 text-center text-gray-400">Nincs tranzakció</td></tr>
-            ) : transactions.map((t) => (
-              <tr key={t.id} className="hover:bg-gray-50 transition-colors">
+              <tr><td colSpan={7} className="px-5 py-12 text-center text-gray-400">Betöltés...</td></tr>
+            ) : cashflow.filter(t => typeFilter === 'all' || t.type === typeFilter).length === 0 ? (
+              <tr><td colSpan={7} className="px-5 py-12 text-center text-gray-400">Nincs bejegyzés</td></tr>
+            ) : cashflow.filter(t => typeFilter === 'all' || t.type === typeFilter).map((t) => (
+              <tr key={`${t.source}-${t.id}`} className="hover:bg-gray-50 transition-colors">
                 <td className="px-5 py-3.5 text-sm text-gray-600">
                   {format(new Date(t.date), 'yyyy.MM.dd')}
                 </td>
                 <td className="px-5 py-3.5">
                   <p className="text-sm font-medium text-gray-900">{t.description}</p>
+                </td>
+                <td className="px-5 py-3.5">
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                    t.source === 'invoice' ? 'bg-green-100 text-green-700' :
+                    t.source === 'expense' ? 'bg-red-100 text-red-700' :
+                    'bg-gray-100 text-gray-600'
+                  }`}>
+                    {t.source === 'invoice' ? 'Számla' : t.source === 'expense' ? 'Könyvelés' : 'Manuális'}
+                  </span>
                 </td>
                 <td className="px-5 py-3.5">
                   {t.category && (
@@ -224,12 +254,16 @@ export default function FinancePage() {
                 </td>
                 <td className="px-5 py-3.5">
                   <div className="flex items-center justify-center gap-2">
-                    <button onClick={() => { setEditTransaction(t); setShowModal(true) }} className="text-gray-400 hover:text-blue-600 transition-colors">
-                      <Edit2 size={14} />
-                    </button>
-                    <button onClick={() => handleDelete(t.id)} className="text-gray-400 hover:text-red-600 transition-colors">
-                      <Trash2 size={14} />
-                    </button>
+                    {t.source === 'transaction' && (
+                      <>
+                        <button onClick={() => { const tx = transactions.find(x => x.id === t.id); if (tx) { setEditTransaction(tx); setShowModal(true) } }} className="text-gray-400 hover:text-blue-600 transition-colors">
+                          <Edit2 size={14} />
+                        </button>
+                        <button onClick={() => handleDelete(t.id)} className="text-gray-400 hover:text-red-600 transition-colors">
+                          <Trash2 size={14} />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </td>
               </tr>

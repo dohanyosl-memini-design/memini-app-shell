@@ -24,6 +24,11 @@ interface StatsData {
   totalRevenue: number
   allTransactions: { type: string; amount: number; date: string; category: string | null }[]
   dormantCompanies: { id: string; name: string; classification: string | null; city: string | null }[]
+  combinedMonthlyIncome: number
+  combinedMonthlyExpenses: number
+  combinedLastMonthIncome: number
+  combinedLastMonthExpenses: number
+  allCashflowEntries: { type: string; amount: number; date: string; category: string | null }[]
 }
 
 function buildMonthlyCashflow(transactions: StatsData['allTransactions']) {
@@ -60,11 +65,11 @@ export default function ReportsPage() {
   if (loading) return <div className="p-4 md:p-6 flex items-center justify-center h-64 text-gray-400">Betöltés...</div>
   if (error || !stats) return <div className="p-4 md:p-6 flex items-center justify-center h-64 text-red-400">Hiba a statisztikák betöltésekor.</div>
 
-  const thisMonthBalance = stats.monthlyIncome - stats.monthlyExpenses
-  const lastMonthBalance = stats.lastMonthIncome - stats.lastMonthExpenses
-  const incomePct = pct(stats.monthlyIncome, stats.lastMonthIncome)
-  const expPct = pct(stats.monthlyExpenses, stats.lastMonthExpenses)
-  const monthlyData = buildMonthlyCashflow(stats.allTransactions)
+  const thisMonthBalance = stats.combinedMonthlyIncome - stats.combinedMonthlyExpenses
+  const lastMonthBalance = stats.combinedLastMonthIncome - stats.combinedLastMonthExpenses
+  const incomePct = pct(stats.combinedMonthlyIncome, stats.combinedLastMonthIncome)
+  const expPct = pct(stats.combinedMonthlyExpenses, stats.combinedLastMonthExpenses)
+  const monthlyData = buildMonthlyCashflow(stats.allCashflowEntries)
   const now = new Date()
 
   return (
@@ -79,7 +84,7 @@ export default function ReportsPage() {
         {/* Havi bevétel */}
         <div className="bg-green-50 border border-green-100 rounded-xl p-5">
           <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Havi bevétel</p>
-          <p className="text-2xl font-bold text-green-600 mt-1">€{stats.monthlyIncome.toFixed(2)}</p>
+          <p className="text-2xl font-bold text-green-600 mt-1">€{stats.combinedMonthlyIncome.toFixed(2)}</p>
           {incomePct && (
             <p className={`text-xs mt-1 flex items-center gap-1 ${incomePct.up ? 'text-green-600' : 'text-red-500'}`}>
               {incomePct.up ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
@@ -91,7 +96,7 @@ export default function ReportsPage() {
         {/* Havi kiadás */}
         <div className="bg-red-50 border border-red-100 rounded-xl p-5">
           <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Havi kiadás</p>
-          <p className="text-2xl font-bold text-red-500 mt-1">€{stats.monthlyExpenses.toFixed(2)}</p>
+          <p className="text-2xl font-bold text-red-500 mt-1">€{stats.combinedMonthlyExpenses.toFixed(2)}</p>
           {expPct && (
             <p className={`text-xs mt-1 flex items-center gap-1 ${!expPct.up ? 'text-green-600' : 'text-red-500'}`}>
               {expPct.up ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
