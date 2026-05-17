@@ -119,6 +119,9 @@ export default function BookkeepingPage() {
   const [bulkResults, setBulkResults] = useState<BulkResult[]>([])
   const bulkFileRef = useRef<HTMLInputElement>(null)
 
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
   // Category management
   const [catForm, setCatForm] = useState({ name: '', color: '#6B7280' })
   const [catSaving, setCatSaving] = useState(false)
@@ -188,6 +191,26 @@ export default function BookkeepingPage() {
     if (!confirm('Törlöd ezt a kiadást?')) return
     await fetch(`/api/expenses/${id}`, { method: 'DELETE' })
     fetchData()
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Törlöd a kijelölt ${selectedIds.size} kiadást?`)) return
+    await Promise.all([...selectedIds].map(id => fetch(`/api/expenses/${id}`, { method: 'DELETE' })))
+    setSelectedIds(new Set())
+    fetchData()
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds(prev => prev.size === expenses.length ? new Set() : new Set(expenses.map(e => e.id)))
   }
 
   async function handleToggleStatus(exp: Expense) {
@@ -430,6 +453,24 @@ export default function BookkeepingPage() {
 
         /* ── KIADÁSOK ── */
         <div className="space-y-2">
+          {expenses.length > 0 && (
+            <div className="flex items-center gap-3 px-1 pb-1 border-b border-gray-100 mb-1">
+              <input type="checkbox" className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                checked={selectedIds.size === expenses.length && expenses.length > 0}
+                onChange={toggleSelectAll} />
+              {selectedIds.size > 0 ? (
+                <>
+                  <span className="text-xs text-gray-500">{selectedIds.size} kijelölve</span>
+                  <button onClick={handleBulkDelete}
+                    className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700 font-medium">
+                    <Trash2 size={12} /> Kijelöltek törlése
+                  </button>
+                </>
+              ) : (
+                <span className="text-xs text-gray-400">Összes kijelölése</span>
+              )}
+            </div>
+          )}
           {expenses.length === 0 ? (
             <div className="py-16 text-center">
               <TrendingDown size={32} className="text-gray-200 mx-auto mb-3" />
@@ -437,7 +478,9 @@ export default function BookkeepingPage() {
               <button onClick={openNew} className="mt-3 text-sm text-blue-600 hover:underline">+ Kiadás hozzáadása</button>
             </div>
           ) : expenses.map(exp => (
-            <div key={exp.id} className="bg-white rounded-xl border border-gray-100 p-3.5 flex items-center gap-3 hover:shadow-sm transition-shadow">
+            <div key={exp.id} className={`bg-white rounded-xl border p-3.5 flex items-center gap-3 hover:shadow-sm transition-shadow ${selectedIds.has(exp.id) ? 'border-blue-300 bg-blue-50/40' : 'border-gray-100'}`}>
+              <input type="checkbox" className="w-4 h-4 rounded accent-blue-600 cursor-pointer shrink-0"
+                checked={selectedIds.has(exp.id)} onChange={() => toggleSelect(exp.id)} />
               <button onClick={() => handleToggleStatus(exp)} className="shrink-0" title={exp.status === 'verified' ? 'Ellenőrzött' : 'Függőben'}>
                 {exp.status === 'verified'
                   ? <CheckCircle2 size={18} className="text-green-500" />
