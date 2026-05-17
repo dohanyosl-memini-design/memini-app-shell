@@ -198,7 +198,7 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
           {chunks.map((chunk, chunkIndex) => {
             const isLast = chunkIndex === chunks.length - 1
             return (
-              <div key={chunkIndex} style={chunkIndex > 0 ? { breakBefore: 'page', paddingTop: '8px' } : {}}>
+              <div key={chunkIndex} className={chunkIndex > 0 ? 'invoice-page-break' : ''}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', marginBottom: isLast ? '24px' : '0' }}>
                   <thead>
                     <tr>
@@ -352,6 +352,13 @@ export default function InvoicePreview({ invoice }: { invoice: Invoice }) {
           /* Tartalom: extra puffer alul hogy ne csússzon a lábléc alá */
           #invoice-content {
             padding-bottom: 12mm !important;
+          }
+
+          /* Lapváltás a 2. chunktól */
+          .invoice-page-break {
+            page-break-before: always !important;
+            break-before: page !important;
+            padding-top: 8px;
           }
 
           /* Sorok ne törjenek ketté */
