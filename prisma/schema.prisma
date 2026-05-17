@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -394,7 +394,7 @@ model PriceListEntry {
   hordozo   String?
   costPrice Float    @default(0)
   basePrice Float    @default(0)
-  tiers     Json     @default("[]")
+  tiers     String   @default("[]")
   notes     String?
   active    Boolean  @default(true)
   sortOrder Int      @default(0)
@@ -406,7 +406,7 @@ model ArthurReport {
   id        String   @id @default(cuid())
   type      String   // daily | weekly | monthly
   title     String
-  summary   String   @db.Text
-  drafts    Json     @default("[]")
+  summary   String
+  drafts    String   @default("[]")
   createdAt DateTime @default(now())
 }
