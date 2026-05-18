@@ -135,9 +135,9 @@ export default function BookkeepingPage() {
     number: '', date: format(new Date(), 'yyyy-MM-dd'),
     dueDate: format(addDays(new Date(), 14), 'yyyy-MM-dd'),
     billingName: '', billingAddress: '', billingZip: '', billingCity: '', billingCountry: '',
-    description: '', quantity: '1', unitPrice: '', vatRate: '19',
-    subtotal: '', vatAmount: '', total: '', currency: 'EUR', status: 'open',
+    subtotal: 0, vatAmount: 0, total: 0, currency: 'EUR', status: 'open',
   })
+  const [invItems, setInvItems] = useState<{ description: string; quantity: number; unitPrice: number; vatRate: number; isDiscount: boolean }[]>([])
 
   const monthKey = format(selectedMonth, 'yyyy-MM')
 
@@ -381,8 +381,21 @@ export default function BookkeepingPage() {
     const json = await res.json()
     if (json.ok && json.data) {
       const d = json.data
-      const itemsArr = Array.isArray(d.items) && d.items.length > 0 ? d.items : []
-      const firstItem = itemsArr[0]
+      const items = (Array.isArray(d.items) ? d.items : []).map((it: { description: string; quantity: number; unitPrice: number; vatRate: number }) => ({
+        description: it.description || '',
+        quantity: Number(it.quantity) || 1,
+        unitPrice: Number(it.unitPrice) || 0,
+        vatRate: Number(it.vatRate) || 19,
+        isDiscount: false,
+      }))
+      const discounts = (Array.isArray(d.discounts) ? d.discounts : []).map((dis: { description: string; amount: number }) => ({
+        description: dis.description || 'Kedvezmény',
+        quantity: 1,
+        unitPrice: Number(dis.amount) || 0,
+        vatRate: 0,
+        isDiscount: true,
+      }))
+      setInvItems([...items, ...discounts])
       setInvForm({
         number: d.number || '',
         date: d.date || format(new Date(), 'yyyy-MM-dd'),
@@ -392,13 +405,9 @@ export default function BookkeepingPage() {
         billingZip: d.billingZip || '',
         billingCity: d.billingCity || '',
         billingCountry: d.billingCountry || '',
-        description: firstItem?.description || 'Szolgáltatás',
-        quantity: String(firstItem?.quantity || 1),
-        unitPrice: String(firstItem?.unitPrice || d.subtotal || ''),
-        vatRate: String(firstItem?.vatRate || 19),
-        subtotal: String(d.subtotal || ''),
-        vatAmount: String(d.vatAmount || ''),
-        total: String(d.total || ''),
+        subtotal: Number(d.subtotal) || 0,
+        vatAmount: Number(d.vatAmount) || 0,
+        total: Number(d.total) || 0,
         currency: d.currency || 'EUR',
         status: d.isPaid ? 'paid' : 'open',
       })
@@ -408,11 +417,8 @@ export default function BookkeepingPage() {
   }
 
   async function handleSaveInvoice() {
-    if (!invForm.billingName || !invForm.dueDate) return
+    if (!invForm.billingName || !invForm.dueDate || invItems.length === 0) return
     setInvSaving(true)
-    const qty = Number(invForm.quantity) || 1
-    const unitPrice = Number(invForm.unitPrice) || Number(invForm.subtotal) || 0
-    const vatRate = Number(invForm.vatRate) || 19
     const body = {
       number: invForm.number || undefined,
       date: invForm.date,
@@ -425,12 +431,22 @@ export default function BookkeepingPage() {
       currency: invForm.currency,
       status: invForm.status,
       paidAt: invForm.status === 'paid' ? invForm.date : null,
-      items: [{ description: invForm.description || 'Szolgáltatás', quantity: qty, unitPrice, vatRate }],
+      items: invItems.map(it => ({
+        description: it.description,
+        quantity: it.quantity,
+        unitPrice: it.isDiscount ? -Math.abs(it.unitPrice) : it.unitPrice,
+        vatRate: it.vatRate,
+        isDiscount: it.isDiscount,
+      })),
     }
     const res = await fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     if (res.ok) {
       setShowInvScanModal(false)
+      setInvItems([])
       fetchData()
+    } else {
+      const err = await res.json()
+      alert(err.error || 'Hiba a mentés során')
     }
     setInvSaving(false)
   }
@@ -963,12 +979,12 @@ export default function BookkeepingPage() {
       {/* ── Bevételi számla scan modal ── */}
       {showInvScanModal && (
         <Modal title="Bevételi számla beolvasva" onClose={() => setShowInvScanModal(false)}>
-          <div className="space-y-3 p-1">
+          <div className="space-y-3 p-1 max-h-[80vh] overflow-y-auto">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-gray-500 mb-1 block">Számlaszám</label>
                 <input type="text" value={invForm.number} onChange={e => setInvForm(f => ({ ...f, number: e.target.value }))}
-                  placeholder="pl. 01/2026" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+                  placeholder="pl. 05/2026" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
               </div>
               <div>
                 <label className="text-xs text-gray-500 mb-1 block">Pénznem</label>
@@ -1008,28 +1024,65 @@ export default function BookkeepingPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
               </div>
             </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Tétel leírása</label>
-              <input type="text" value={invForm.description} onChange={e => setInvForm(f => ({ ...f, description: e.target.value }))}
-                placeholder="Szolgáltatás leírása..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+
+            {/* Tételek listája */}
+            {invItems.length > 0 && (
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Tételek ({invItems.length} db)</label>
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left px-2 py-1.5 text-gray-500 font-medium">Megnevezés</th>
+                        <th className="text-right px-2 py-1.5 text-gray-500 font-medium w-10">Db</th>
+                        <th className="text-right px-2 py-1.5 text-gray-500 font-medium w-16">Ár</th>
+                        <th className="text-right px-2 py-1.5 text-gray-500 font-medium w-10">ÁFA</th>
+                        <th className="w-6"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {invItems.map((item, i) => (
+                        <tr key={i} className={item.isDiscount ? 'bg-amber-50' : ''}>
+                          <td className="px-2 py-1.5">
+                            <input type="text" value={item.description}
+                              onChange={e => setInvItems(prev => prev.map((it, j) => j === i ? { ...it, description: e.target.value } : it))}
+                              className="w-full bg-transparent border-none outline-none text-gray-700 text-xs" />
+                          </td>
+                          <td className="px-2 py-1.5 text-right">
+                            <input type="number" value={item.quantity} min={0} step={1}
+                              onChange={e => setInvItems(prev => prev.map((it, j) => j === i ? { ...it, quantity: Number(e.target.value) } : it))}
+                              className="w-10 bg-transparent border-none outline-none text-gray-700 text-xs text-right" />
+                          </td>
+                          <td className="px-2 py-1.5 text-right">
+                            <input type="number" value={item.unitPrice} min={0} step={0.01}
+                              onChange={e => setInvItems(prev => prev.map((it, j) => j === i ? { ...it, unitPrice: Number(e.target.value) } : it))}
+                              className="w-16 bg-transparent border-none outline-none text-gray-700 text-xs text-right" />
+                          </td>
+                          <td className="px-2 py-1.5 text-right text-gray-400">{item.vatRate}%</td>
+                          <td className="px-1 py-1.5 text-center">
+                            <button onClick={() => setInvItems(prev => prev.filter((_, j) => j !== i))}
+                              className="text-gray-300 hover:text-red-500"><X size={12} /></button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Összesítő */}
+            <div className="bg-gray-50 rounded-lg px-3 py-2 text-sm flex justify-between items-center">
+              <div className="space-y-0.5 text-xs text-gray-500">
+                <div>Nettó: <span className="font-medium text-gray-700">{fmtAmount(invForm.subtotal, invForm.currency)}</span></div>
+                <div>ÁFA: <span className="font-medium text-gray-700">{fmtAmount(invForm.vatAmount, invForm.currency)}</span></div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-gray-500">Végösszeg</div>
+                <div className="text-lg font-bold text-green-700">{fmtAmount(invForm.total, invForm.currency)}</div>
+              </div>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">Nettó ár</label>
-                <input type="number" min={0} step={0.01} value={invForm.unitPrice} onChange={e => setInvForm(f => ({ ...f, unitPrice: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">ÁFA %</label>
-                <input type="number" min={0} max={100} value={invForm.vatRate} onChange={e => setInvForm(f => ({ ...f, vatRate: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">Mennyiség</label>
-                <input type="number" min={1} value={invForm.quantity} onChange={e => setInvForm(f => ({ ...f, quantity: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
-              </div>
-            </div>
+
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Státusz</label>
               <select value={invForm.status} onChange={e => setInvForm(f => ({ ...f, status: e.target.value }))}
@@ -1040,11 +1093,11 @@ export default function BookkeepingPage() {
               </select>
             </div>
             <div className="flex gap-2 pt-1">
-              <button onClick={() => setShowInvScanModal(false)}
+              <button onClick={() => { setShowInvScanModal(false); setInvItems([]) }}
                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50">
                 Mégse
               </button>
-              <button onClick={handleSaveInvoice} disabled={invSaving || !invForm.billingName}
+              <button onClick={handleSaveInvoice} disabled={invSaving || !invForm.billingName || invItems.length === 0}
                 className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
                 {invSaving ? 'Mentés...' : 'Mentés számlák közé'}
               </button>

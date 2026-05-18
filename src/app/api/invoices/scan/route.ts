@@ -39,39 +39,55 @@ export async function POST(request: NextRequest) {
 
   const message = await client.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 1500,
+    max_tokens: 2000,
     messages: [{
       role: 'user',
       content: [
         fileBlock,
         {
           type: 'text',
-          text: `Ez egy kiállított bevételi számla (nem kiadási). Olvasd ki az adatokat és adj vissza CSAK valid JSON-t, semmi mást:
+          text: `This is an OUTGOING invoice (Rechnung / bevételi számla) issued BY Laszlo Arpad Dohanyos e.U. TO a customer.
+
+Extract the following data and return ONLY valid JSON, nothing else:
 {
-  "number": "számlaszám vagy null",
-  "date": "ÉÉÉÉ-HH-NN kiállítás dátuma",
-  "dueDate": "ÉÉÉÉ-HH-NN fizetési határidő, vagy null ha nem látható",
-  "billingName": "vevő/ügyfél neve",
-  "billingAddress": "vevő utca, házszám vagy null",
-  "billingZip": "vevő irányítószám vagy null",
-  "billingCity": "vevő város vagy null",
-  "billingCountry": "vevő ország kódja (DE/HU/AT) vagy null",
+  "number": "invoice number (Rechnungs-Nr.) as string, or null",
+  "date": "issue date (Rechnungsdatum) in YYYY-MM-DD format",
+  "dueDate": "payment due date in YYYY-MM-DD format — calculate from issue date + Zahlungsfrist days if not explicit, or null",
+  "billingName": "the CUSTOMER name (NOT Laszlo Arpad Dohanyos e.U.) — the company or person this invoice is addressed TO",
+  "billingAddress": "customer street address, or null",
+  "billingZip": "customer postal code, or null",
+  "billingCity": "customer city, or null",
+  "billingCountry": "customer country code (DE/HU/AT/etc), or null",
   "items": [
     {
-      "description": "tétel leírása",
-      "quantity": 1,
-      "unitPrice": 100.00,
-      "vatRate": 19
+      "description": "product or service description",
+      "quantity": number,
+      "unitPrice": net unit price as number,
+      "vatRate": VAT percentage as number (e.g. 19),
+      "isDiscount": false
     }
   ],
-  "subtotal": nettó összeg számként,
-  "vatAmount": ÁFA összeg számként,
-  "total": bruttó végösszeg számként,
-  "currency": "EUR vagy HUF",
-  "isPaid": true ha látszik befizetettség/pecsét/stamp, false ha nem
+  "discounts": [
+    {
+      "description": "discount description",
+      "amount": discount amount as positive number,
+      "isDiscount": true
+    }
+  ],
+  "subtotal": final net amount after discounts as number,
+  "vatAmount": total VAT amount as number,
+  "total": final gross total as number,
+  "currency": "EUR or HUF",
+  "isPaid": true if the invoice shows a paid stamp or marking, false otherwise
 }
 
-Ha egy mező nem látható, használj null-t. Csak a JSON objektumot add vissza.`,
+Important:
+- Read ALL pages of the document
+- billingName must be the RECIPIENT (customer), not the sender (Laszlo Arpad Dohanyos e.U.)
+- Include ALL line items from all pages
+- Include discounts separately in "discounts" array
+- subtotal is the NET amount AFTER deducting discounts
+- Return only the JSON object, no explanation`,
         },
       ],
     }],
