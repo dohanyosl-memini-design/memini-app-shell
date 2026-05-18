@@ -3,9 +3,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Plus, Trash2, Edit2, Upload, Camera, RefreshCw, TrendingDown, TrendingUp,
-  RepeatIcon, X, Check, AlertCircle, Settings, CheckCircle2, Clock,
+  RepeatIcon, X, Check, AlertCircle, Settings, CheckCircle2, Clock, FileInput,
 } from 'lucide-react'
-import { format, addMonths, subMonths, startOfMonth } from 'date-fns'
+import { format, addMonths, subMonths, startOfMonth, addDays } from 'date-fns'
 import { hu } from 'date-fns/locale'
 import Modal from '@/components/Modal'
 
@@ -125,6 +125,19 @@ export default function BookkeepingPage() {
   // Category management
   const [catForm, setCatForm] = useState({ name: '', color: '#6B7280' })
   const [catSaving, setCatSaving] = useState(false)
+
+  // Invoice scan
+  const invFileRef = useRef<HTMLInputElement>(null)
+  const [showInvScanModal, setShowInvScanModal] = useState(false)
+  const [invScanning, setInvScanning] = useState(false)
+  const [invSaving, setInvSaving] = useState(false)
+  const [invForm, setInvForm] = useState({
+    number: '', date: format(new Date(), 'yyyy-MM-dd'),
+    dueDate: format(addDays(new Date(), 14), 'yyyy-MM-dd'),
+    billingName: '', billingAddress: '', billingZip: '', billingCity: '', billingCountry: '',
+    description: '', quantity: '1', unitPrice: '', vatRate: '19',
+    subtotal: '', vatAmount: '', total: '', currency: 'EUR', status: 'open',
+  })
 
   const monthKey = format(selectedMonth, 'yyyy-MM')
 
@@ -359,6 +372,69 @@ export default function BookkeepingPage() {
     fetchData()
   }
 
+  // ── INVOICE SCAN ──
+  async function handleInvScanFile(file: File) {
+    setInvScanning(true)
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch('/api/invoices/scan', { method: 'POST', body: fd })
+    const json = await res.json()
+    if (json.ok && json.data) {
+      const d = json.data
+      const itemsArr = Array.isArray(d.items) && d.items.length > 0 ? d.items : []
+      const firstItem = itemsArr[0]
+      setInvForm({
+        number: d.number || '',
+        date: d.date || format(new Date(), 'yyyy-MM-dd'),
+        dueDate: d.dueDate || format(addDays(new Date(), 14), 'yyyy-MM-dd'),
+        billingName: d.billingName || '',
+        billingAddress: d.billingAddress || '',
+        billingZip: d.billingZip || '',
+        billingCity: d.billingCity || '',
+        billingCountry: d.billingCountry || '',
+        description: firstItem?.description || 'Szolgáltatás',
+        quantity: String(firstItem?.quantity || 1),
+        unitPrice: String(firstItem?.unitPrice || d.subtotal || ''),
+        vatRate: String(firstItem?.vatRate || 19),
+        subtotal: String(d.subtotal || ''),
+        vatAmount: String(d.vatAmount || ''),
+        total: String(d.total || ''),
+        currency: d.currency || 'EUR',
+        status: d.isPaid ? 'paid' : 'open',
+      })
+      setShowInvScanModal(true)
+    }
+    setInvScanning(false)
+  }
+
+  async function handleSaveInvoice() {
+    if (!invForm.billingName || !invForm.dueDate) return
+    setInvSaving(true)
+    const qty = Number(invForm.quantity) || 1
+    const unitPrice = Number(invForm.unitPrice) || Number(invForm.subtotal) || 0
+    const vatRate = Number(invForm.vatRate) || 19
+    const body = {
+      number: invForm.number || undefined,
+      date: invForm.date,
+      dueDate: invForm.dueDate,
+      billingName: invForm.billingName,
+      billingAddress: invForm.billingAddress || null,
+      billingZip: invForm.billingZip || null,
+      billingCity: invForm.billingCity || null,
+      billingCountry: invForm.billingCountry || null,
+      currency: invForm.currency,
+      status: invForm.status,
+      paidAt: invForm.status === 'paid' ? invForm.date : null,
+      items: [{ description: invForm.description || 'Szolgáltatás', quantity: qty, unitPrice, vatRate }],
+    }
+    const res = await fetch('/api/invoices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    if (res.ok) {
+      setShowInvScanModal(false)
+      fetchData()
+    }
+    setInvSaving(false)
+  }
+
   // Summaries
   const totalExpenses = expenses.reduce((s, e) => s + (e.totalAmount || e.amount), 0)
   const totalIncome = invoices.reduce((s, i) => s + i.total, 0)
@@ -381,6 +457,16 @@ export default function BookkeepingPage() {
           >
             <Upload size={16} /> Tömeges feltöltés
           </button>
+          <button
+            onClick={() => invFileRef.current?.click()}
+            disabled={invScanning}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50"
+          >
+            {invScanning ? <RefreshCw size={16} className="animate-spin" /> : <FileInput size={16} />}
+            Bevételi számla
+          </button>
+          <input ref={invFileRef} type="file" accept=".pdf,image/*,.heic,.heif" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleInvScanFile(f); e.target.value = '' }} />
           <button
             onClick={openNew}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
@@ -868,6 +954,99 @@ export default function BookkeepingPage() {
               <button type="button" disabled={!recForm.name || !recForm.amount} onClick={handleSaveRecurring}
                 className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium">
                 {editRecurring ? 'Módosítás' : 'Mentés'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Bevételi számla scan modal ── */}
+      {showInvScanModal && (
+        <Modal title="Bevételi számla beolvasva" onClose={() => setShowInvScanModal(false)}>
+          <div className="space-y-3 p-1">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Számlaszám</label>
+                <input type="text" value={invForm.number} onChange={e => setInvForm(f => ({ ...f, number: e.target.value }))}
+                  placeholder="pl. 01/2026" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Pénznem</label>
+                <select value={invForm.currency} onChange={e => setInvForm(f => ({ ...f, currency: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+                  <option value="EUR">EUR</option>
+                  <option value="HUF">HUF</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Kiállítás dátuma</label>
+                <input type="date" value={invForm.date} onChange={e => setInvForm(f => ({ ...f, date: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Fizetési határidő</label>
+                <input type="date" value={invForm.dueDate} onChange={e => setInvForm(f => ({ ...f, dueDate: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Vevő neve *</label>
+              <input type="text" value={invForm.billingName} onChange={e => setInvForm(f => ({ ...f, billingName: e.target.value }))}
+                placeholder="Ügyfél neve..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Irányítószám</label>
+                <input type="text" value={invForm.billingZip} onChange={e => setInvForm(f => ({ ...f, billingZip: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs text-gray-500 mb-1 block">Város</label>
+                <input type="text" value={invForm.billingCity} onChange={e => setInvForm(f => ({ ...f, billingCity: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Tétel leírása</label>
+              <input type="text" value={invForm.description} onChange={e => setInvForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="Szolgáltatás leírása..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Nettó ár</label>
+                <input type="number" min={0} step={0.01} value={invForm.unitPrice} onChange={e => setInvForm(f => ({ ...f, unitPrice: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">ÁFA %</label>
+                <input type="number" min={0} max={100} value={invForm.vatRate} onChange={e => setInvForm(f => ({ ...f, vatRate: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Mennyiség</label>
+                <input type="number" min={1} value={invForm.quantity} onChange={e => setInvForm(f => ({ ...f, quantity: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Státusz</label>
+              <select value={invForm.status} onChange={e => setInvForm(f => ({ ...f, status: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+                <option value="open">Nyitott</option>
+                <option value="paid">Befizetett</option>
+                <option value="sent">Kiküldött</option>
+              </select>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setShowInvScanModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50">
+                Mégse
+              </button>
+              <button onClick={handleSaveInvoice} disabled={invSaving || !invForm.billingName}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
+                {invSaving ? 'Mentés...' : 'Mentés számlák közé'}
               </button>
             </div>
           </div>
