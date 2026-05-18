@@ -409,7 +409,8 @@ export default function BookkeepingPage() {
         vatAmount: Number(d.vatAmount) || 0,
         total: Number(d.total) || 0,
         currency: d.currency || 'EUR',
-        status: d.isPaid ? 'paid' : 'open',
+        // Default to paid — uploaded invoices are already issued income
+        status: 'paid',
       })
       setShowInvScanModal(true)
     }
@@ -1071,17 +1072,32 @@ export default function BookkeepingPage() {
               </div>
             )}
 
-            {/* Összesítő */}
-            <div className="bg-gray-50 rounded-lg px-3 py-2 text-sm flex justify-between items-center">
-              <div className="space-y-0.5 text-xs text-gray-500">
-                <div>Nettó: <span className="font-medium text-gray-700">{fmtAmount(invForm.subtotal, invForm.currency)}</span></div>
-                <div>ÁFA: <span className="font-medium text-gray-700">{fmtAmount(invForm.vatAmount, invForm.currency)}</span></div>
-              </div>
-              <div className="text-right">
-                <div className="text-xs text-gray-500">Végösszeg</div>
-                <div className="text-lg font-bold text-green-700">{fmtAmount(invForm.total, invForm.currency)}</div>
-              </div>
-            </div>
+            {/* Összesítő — valós időben számolódik a tételekből */}
+            {(() => {
+              const calcSubtotal = invItems
+                .filter(it => !it.isDiscount)
+                .reduce((s, it) => s + it.quantity * it.unitPrice, 0)
+              const calcDiscount = invItems
+                .filter(it => it.isDiscount)
+                .reduce((s, it) => s + it.unitPrice, 0)
+              const calcVat = invItems
+                .filter(it => !it.isDiscount)
+                .reduce((s, it) => s + it.quantity * it.unitPrice * (it.vatRate / 100), 0)
+              const calcTotal = calcSubtotal - calcDiscount + calcVat
+              return (
+                <div className="bg-gray-50 rounded-lg px-3 py-2 text-sm flex justify-between items-center">
+                  <div className="space-y-0.5 text-xs text-gray-500">
+                    <div>Nettó: <span className="font-medium text-gray-700">{fmtAmount(calcSubtotal - calcDiscount, invForm.currency)}</span></div>
+                    <div>ÁFA: <span className="font-medium text-gray-700">{fmtAmount(calcVat, invForm.currency)}</span></div>
+                    {calcDiscount > 0 && <div className="text-amber-600">Kedvezmény: -{fmtAmount(calcDiscount, invForm.currency)}</div>}
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs text-gray-500">Végösszeg</div>
+                    <div className="text-lg font-bold text-green-700">{fmtAmount(calcTotal, invForm.currency)}</div>
+                  </div>
+                </div>
+              )
+            })()}
 
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Státusz</label>

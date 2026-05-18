@@ -26,14 +26,20 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const body = await request.json()
 
+  const amount = Number(body.amount) || 0
+  const vatAmount = Number(body.vatAmount) || 0
+  const rawTotal = Number(body.totalAmount) || 0
+  // Always ensure totalAmount is correct: use explicit total if > 0, else amount + vat
+  const totalAmount = rawTotal > 0 ? rawTotal : amount + vatAmount || amount
+
   const expense = await prisma.expense.create({
     data: {
       date: new Date(body.date),
       vendor: body.vendor,
       description: body.description,
-      amount: Number(body.amount),
-      vatAmount: Number(body.vatAmount ?? 0),
-      totalAmount: Number(body.totalAmount ?? body.amount ?? 0),
+      amount,
+      vatAmount,
+      totalAmount,
       currency: body.currency || 'EUR',
       category: body.category || null,
       receiptUrl: body.receiptUrl || null,

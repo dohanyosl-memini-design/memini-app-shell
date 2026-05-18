@@ -4,15 +4,20 @@ import { prisma } from '@/lib/prisma'
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   const body = await request.json()
 
+  const amount = Number(body.amount) || 0
+  const vatAmount = Number(body.vatAmount) || 0
+  const rawTotal = Number(body.totalAmount) || 0
+  const totalAmount = rawTotal > 0 ? rawTotal : amount + vatAmount || amount
+
   const expense = await prisma.expense.update({
     where: { id: params.id },
     data: {
       date: new Date(body.date),
       vendor: body.vendor,
       description: body.description,
-      amount: Number(body.amount),
-      vatAmount: Number(body.vatAmount ?? 0),
-      totalAmount: Number(body.totalAmount ?? body.amount ?? 0),
+      amount,
+      vatAmount,
+      totalAmount,
       currency: body.currency || 'EUR',
       category: body.category || null,
       receiptUrl: body.receiptUrl || null,
