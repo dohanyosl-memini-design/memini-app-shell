@@ -24,6 +24,10 @@ interface Stats {
   monthlyExpenses: number
   lastMonthIncome: number
   lastMonthExpenses: number
+  combinedMonthlyIncome: number
+  combinedMonthlyExpenses: number
+  combinedLastMonthIncome: number
+  combinedLastMonthExpenses: number
   totalRevenue: number
   dealsByStage: { stage: string; _count: number; _sum: { value: number | null } }[]
   upcomingTasks: {
@@ -35,6 +39,7 @@ interface Stats {
     company: { name: string } | null; createdAt: string
   }[]
   allTransactions: { type: string; amount: number; date: string; category: string | null }[]
+  allCashflowEntries: { type: string; amount: number; date: string; category: string | null }[]
   topProducts: { name: string; sku: string; stock: number; salesPrice: number }[]
   dormantCompanies: { id: string; name: string; classification: string | null; partnerType: string | null; city: string | null }[]
   partnersByType: { partnerType: string | null; _count: number }[]
@@ -95,8 +100,12 @@ export default function Dashboard() {
   }
   if (!stats) return null
 
-  const monthBalance = stats.monthlyIncome - stats.monthlyExpenses
-  const chartData = buildYearlyChart(stats.allTransactions)
+  const combinedMonthlyIncome = stats.combinedMonthlyIncome ?? stats.monthlyIncome
+  const combinedMonthlyExpenses = stats.combinedMonthlyExpenses ?? stats.monthlyExpenses
+  const combinedLastMonthIncome = stats.combinedLastMonthIncome ?? stats.lastMonthIncome
+  const combinedLastMonthExpenses = stats.combinedLastMonthExpenses ?? stats.lastMonthExpenses
+  const monthBalance = combinedMonthlyIncome - combinedMonthlyExpenses
+  const chartData = buildYearlyChart(stats.allCashflowEntries ?? stats.allTransactions)
   const activeDeals = stats.dealsByStage.filter((s) => !['closed_won', 'closed_lost'].includes(s.stage))
   const pipelineValue = activeDeals.reduce((s, d) => s + (d._sum.value || 0), 0)
 
@@ -174,16 +183,16 @@ export default function Dashboard() {
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
               <p className="text-xs text-gray-400 mb-1">Havi bevétel</p>
-              <p className="text-lg font-bold text-green-600">{fmtEur(stats.monthlyIncome)}</p>
-              {stats.lastMonthIncome > 0 && (
-                <p className="text-xs text-gray-400 mt-0.5">Előző: {fmtEur(stats.lastMonthIncome)}</p>
+              <p className="text-lg font-bold text-green-600">{fmtEur(combinedMonthlyIncome)}</p>
+              {combinedLastMonthIncome > 0 && (
+                <p className="text-xs text-gray-400 mt-0.5">Előző: {fmtEur(combinedLastMonthIncome)}</p>
               )}
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
               <p className="text-xs text-gray-400 mb-1">Havi kiadás</p>
-              <p className="text-lg font-bold text-red-500">{fmtEur(stats.monthlyExpenses)}</p>
-              {stats.lastMonthExpenses > 0 && (
-                <p className="text-xs text-gray-400 mt-0.5">Előző: {fmtEur(stats.lastMonthExpenses)}</p>
+              <p className="text-lg font-bold text-red-500">{fmtEur(combinedMonthlyExpenses)}</p>
+              {combinedLastMonthExpenses > 0 && (
+                <p className="text-xs text-gray-400 mt-0.5">Előző: {fmtEur(combinedLastMonthExpenses)}</p>
               )}
             </div>
             <div className={`rounded-xl shadow-sm border p-4 ${monthBalance >= 0 ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
