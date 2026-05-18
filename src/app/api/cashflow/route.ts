@@ -18,28 +18,27 @@ export interface CashflowEntry {
 
 export async function GET() {
   const now = new Date()
-  const [transactions, allInvoices, expenses] = await Promise.all([
-    prisma.transaction.findMany({ orderBy: { date: 'desc' } }),
+  const [allInvoices, allExpenses, transactionExpenses] = await Promise.all([
     prisma.invoice.findMany({
-      select: { id: true, number: true, total: true, date: true, dueDate: true, paidAt: true, status: true, currency: true, company: { select: { name: true } } },
+      select: {
+        id: true, number: true, total: true, date: true, dueDate: true,
+        paidAt: true, status: true, currency: true,
+        company: { select: { name: true } },
+      },
       orderBy: { date: 'desc' },
     }),
-    prisma.expense.findMany({ orderBy: { date: 'desc' } }),
+    prisma.expense.findMany({
+      orderBy: { date: 'desc' },
+    }),
+    // Only expense transactions — income transactions are covered by Invoice records
+    prisma.transaction.findMany({
+      where: { type: 'expense' },
+      orderBy: { date: 'desc' },
+    }),
   ])
 
   const entries: CashflowEntry[] = [
-    ...transactions.map(t => ({
-      id: t.id,
-      source: 'transaction' as const,
-      type: t.type as 'income' | 'expense',
-      status: null,
-      amount: t.amount,
-      currency: t.currency,
-      date: t.date.toISOString(),
-      description: t.description,
-      category: t.category,
-      reference: t.reference,
-    })),
+    // ALL invoices as income (all statuses)
     ...allInvoices.map(inv => {
       const isOverdue = inv.status !== 'paid' && new Date(inv.dueDate) < now
       const resolvedStatus = inv.status === 'paid' ? 'paid' : isOverdue ? 'overdue' : inv.status
@@ -56,7 +55,8 @@ export async function GET() {
         reference: inv.number,
       }
     }),
-    ...expenses.map(exp => ({
+    // Expenses from Expense table
+    ...allExpenses.map(exp => ({
       id: exp.id,
       source: 'expense' as const,
       type: 'expense' as const,
@@ -67,6 +67,19 @@ export async function GET() {
       description: exp.description ? `${exp.vendor} – ${exp.description}` : exp.vendor,
       category: exp.category,
       reference: exp.reference,
+    })),
+    // Manual expense transactions
+    ...transactionExpenses.map(t => ({
+      id: t.id,
+      source: 'transaction' as const,
+      type: 'expense' as const,
+      status: null,
+      amount: t.amount,
+      currency: t.currency,
+      date: t.date.toISOString(),
+      description: t.description,
+      category: t.category,
+      reference: t.reference,
     })),
   ]
 

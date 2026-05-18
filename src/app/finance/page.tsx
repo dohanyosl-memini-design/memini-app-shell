@@ -98,16 +98,19 @@ export default function FinancePage() {
     ? cashflow
     : cashflow.filter(t => t.date.startsWith(yearFilter))
 
-  // Realized income = paid invoices + income transactions (for selected year)
+  // ALL invoices count as income (paid = received, others = billed/outstanding)
   const totalIncome = filteredByYear
-    .filter(t => t.type === 'income' && (t.source !== 'invoice' || t.status === 'paid'))
+    .filter(t => t.type === 'income')
+    .reduce((s, t) => s + t.amount, 0)
+  const receivedIncome = filteredByYear
+    .filter(t => t.type === 'income' && t.status === 'paid')
     .reduce((s, t) => s + t.amount, 0)
   const totalExpenses = filteredByYear
     .filter(t => t.type === 'expense')
     .reduce((s, t) => s + t.amount, 0)
   const balance = totalIncome - totalExpenses
 
-  // Pending invoices (not paid) — all time, not year-filtered (shows real receivables)
+  // Pending invoices (not paid) — all time
   const pendingInvoiceTotal = cashflow
     .filter(t => t.source === 'invoice' && t.status !== 'paid')
     .reduce((s, t) => s + t.amount, 0)
@@ -168,9 +171,9 @@ export default function FinancePage() {
       {/* KPI sáv */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="bg-green-50 rounded-xl border border-green-100 p-5">
-          <p className="text-sm text-gray-600">Befolyt bevétel</p>
+          <p className="text-sm text-gray-600">Számlázott bevétel</p>
           <p className="text-2xl font-bold text-green-600 mt-1">{fmtEur(totalIncome)}</p>
-          <p className="text-xs text-gray-400 mt-1">Számlák + tranzakciók</p>
+          <p className="text-xs text-gray-400 mt-1">Beérkezett: {fmtEur(receivedIncome)}</p>
         </div>
         <div className="bg-red-50 rounded-xl border border-red-100 p-5">
           <p className="text-sm text-gray-600">Összes kiadás</p>
