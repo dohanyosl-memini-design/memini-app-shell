@@ -44,6 +44,9 @@ interface Stats {
   dormantCompanies: { id: string; name: string; classification: string | null; partnerType: string | null; city: string | null }[]
   partnersByType: { partnerType: string | null; _count: number }[]
   partnersByClassification: { classification: string | null; _count: number }[]
+  yearlyIncome: number
+  yearlyExpenses: number
+  yearlyBalance: number
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -345,6 +348,27 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* Éves összesítő KPI-ok */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <p className="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wide">{new Date().getFullYear()}. évi összesítő</p>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <p className="text-xs text-gray-400">Éves bevétel</p>
+                <p className="text-base font-bold text-green-600 mt-0.5">{fmtEur(stats.yearlyIncome ?? 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Éves kiadás</p>
+                <p className="text-base font-bold text-red-500 mt-0.5">{fmtEur(stats.yearlyExpenses ?? 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Éves egyenleg</p>
+                <p className={`text-base font-bold mt-0.5 ${(stats.yearlyBalance ?? 0) >= 0 ? 'text-blue-600' : 'text-orange-500'}`}>
+                  {fmtEur(stats.yearlyBalance ?? 0)}
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Egyéb KPI-ok */}
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
@@ -365,15 +389,15 @@ export default function Dashboard() {
               <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center mb-2">
                 <Euro size={15} className="text-white" />
               </div>
-              <p className="text-lg font-bold text-gray-900">{fmtEur(stats.totalRevenue)}</p>
-              <p className="text-xs text-gray-400 mt-0.5">Összes bevétel</p>
+              <p className="text-lg font-bold text-gray-900">{stats.openInvoicesCount}</p>
+              <p className="text-xs text-gray-400 mt-0.5">Nyitott számla db</p>
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
               <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center mb-2">
                 <FileText size={15} className="text-white" />
               </div>
               <p className="text-lg font-bold text-gray-900">{stats.totalDeals}</p>
-              <p className="text-xs text-gray-400 mt-0.5">Összes deal</p>
+              <p className="text-xs text-gray-400 mt-0.5">Aktív deal</p>
             </div>
           </div>
         </div>

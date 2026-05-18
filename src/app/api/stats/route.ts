@@ -306,7 +306,8 @@ export async function GET() {
     dealsLost,
     avgPaymentDays,
     topSellingProducts,
-    // Legacy: kept for backward compat
-    totalRevenue: allTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0),
+    // All-time total revenue (transactions + invoices)
+    totalRevenue: allTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
+      + allPaidInvoices.reduce((s, i) => s + i.total, 0),
   })
 }
