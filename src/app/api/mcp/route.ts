@@ -449,32 +449,41 @@ function buildServer() {
   return server
 }
 
-export async function POST(request: NextRequest) {
+function checkAuth(request: NextRequest): Response | null {
   const secret = process.env.MCP_SECRET
-  if (secret) {
-    const key = request.headers.get('x-api-key')
-    if (key !== secret) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
-    }
+  if (!secret) return null
+  const key = request.headers.get('x-api-key')
+  if (key !== secret) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
+  return null
+}
+
+export async function POST(request: NextRequest) {
+  const authError = checkAuth(request)
+  if (authError) return authError
 
   const server = buildServer()
-  const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined })
+  const transport = new WebStandardStreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+    enableJsonResponse: true,
+  })
   await server.connect(transport)
   return transport.handleRequest(request)
 }
 
 export async function GET(request: NextRequest) {
-  const secret = process.env.MCP_SECRET
-  if (secret) {
-    const key = request.headers.get('x-api-key')
-    if (key !== secret) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
-    }
-  }
+  const authError = checkAuth(request)
+  if (authError) return authError
 
   const server = buildServer()
-  const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined })
+  const transport = new WebStandardStreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+    enableJsonResponse: true,
+  })
   await server.connect(transport)
   return transport.handleRequest(request)
 }
