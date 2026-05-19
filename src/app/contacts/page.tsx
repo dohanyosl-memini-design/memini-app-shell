@@ -22,7 +22,11 @@ interface Contact {
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   lead: { label: 'Érdeklődő', color: 'bg-yellow-100 text-yellow-800' },
+  contacted: { label: 'Kapcsolatban', color: 'bg-blue-100 text-blue-700' },
+  prospect: { label: 'Potenciális', color: 'bg-purple-100 text-purple-700' },
+  qualified: { label: 'Minősített', color: 'bg-indigo-100 text-indigo-700' },
   active: { label: 'Aktív', color: 'bg-green-100 text-green-800' },
+  customer: { label: 'Ügyfél', color: 'bg-emerald-100 text-emerald-700' },
   inactive: { label: 'Inaktív', color: 'bg-gray-100 text-gray-600' },
 }
 
@@ -139,7 +143,7 @@ export default function ContactsPage() {
               </tr>
             ) : (
               filtered.map((contact) => {
-                const status = STATUS_CONFIG[contact.status]
+                const status = STATUS_CONFIG[contact.status] ?? { label: contact.status, color: 'bg-gray-100 text-gray-600' }
                 return (
                   <tr key={contact.id} className="hover:bg-gray-50 transition-colors cursor-pointer">
                     <td className="px-6 py-4" onClick={() => window.location.href = `/contacts/${contact.id}`}>

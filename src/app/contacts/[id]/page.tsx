@@ -105,7 +105,11 @@ const ACTIVITY_CONFIG: Record<string, { label: string; icon: React.ElementType; 
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   lead: { label: 'Érdeklődő', color: 'bg-yellow-100 text-yellow-800' },
+  contacted: { label: 'Kapcsolatban', color: 'bg-blue-100 text-blue-700' },
+  prospect: { label: 'Potenciális', color: 'bg-purple-100 text-purple-700' },
+  qualified: { label: 'Minősített', color: 'bg-indigo-100 text-indigo-700' },
   active: { label: 'Aktív', color: 'bg-green-100 text-green-800' },
+  customer: { label: 'Ügyfél', color: 'bg-emerald-100 text-emerald-700' },
   inactive: { label: 'Inaktív', color: 'bg-gray-100 text-gray-600' },
 }
 
@@ -314,7 +318,7 @@ export default function ContactDetailPage() {
     )
   }
 
-  const status = STATUS_CONFIG[contact.status]
+  const status = STATUS_CONFIG[contact.status] ?? { label: contact.status, color: 'bg-gray-100 text-gray-600' }
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
