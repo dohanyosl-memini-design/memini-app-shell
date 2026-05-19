@@ -182,26 +182,22 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </div>
 
-          {/* Havi KPI-ok */}
+          {/* Éves KPI-ok */}
           <div className="grid grid-cols-3 gap-3">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-              <p className="text-xs text-gray-400 mb-1">Havi bevétel</p>
-              <p className="text-lg font-bold text-green-600">{fmtEur(combinedMonthlyIncome)}</p>
-              {combinedLastMonthIncome > 0 && (
-                <p className="text-xs text-gray-400 mt-0.5">Előző: {fmtEur(combinedLastMonthIncome)}</p>
-              )}
+            <div className="bg-green-50 rounded-xl shadow-sm border border-green-100 p-4">
+              <p className="text-xs text-gray-500 mb-1">Éves bevétel</p>
+              <p className="text-lg font-bold text-green-600">{fmtEur(stats.yearlyIncome ?? 0)}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{new Date().getFullYear()} összesen</p>
             </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-              <p className="text-xs text-gray-400 mb-1">Havi kiadás</p>
-              <p className="text-lg font-bold text-red-500">{fmtEur(combinedMonthlyExpenses)}</p>
-              {combinedLastMonthExpenses > 0 && (
-                <p className="text-xs text-gray-400 mt-0.5">Előző: {fmtEur(combinedLastMonthExpenses)}</p>
-              )}
+            <div className="bg-red-50 rounded-xl shadow-sm border border-red-100 p-4">
+              <p className="text-xs text-gray-500 mb-1">Éves kiadás</p>
+              <p className="text-lg font-bold text-red-500">{fmtEur(stats.yearlyExpenses ?? 0)}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{new Date().getFullYear()} összesen</p>
             </div>
-            <div className={`rounded-xl shadow-sm border p-4 ${monthBalance >= 0 ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
-              <p className="text-xs text-gray-400 mb-1">Cashflow egyenleg</p>
-              <p className={`text-lg font-bold ${monthBalance >= 0 ? 'text-green-700' : 'text-red-600'}`}>{fmtEur(monthBalance)}</p>
-              <p className="text-xs text-gray-400 mt-0.5">Ez a hónap</p>
+            <div className={`rounded-xl shadow-sm border p-4 ${(stats.yearlyBalance ?? 0) >= 0 ? 'bg-blue-50 border-blue-100' : 'bg-red-50 border-red-100'}`}>
+              <p className="text-xs text-gray-500 mb-1">Éves egyenleg</p>
+              <p className={`text-lg font-bold ${(stats.yearlyBalance ?? 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{fmtEur(stats.yearlyBalance ?? 0)}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{new Date().getFullYear()} nettó</p>
             </div>
           </div>
 
@@ -347,27 +343,6 @@ export default function Dashboard() {
               </div>
             </div>
           )}
-
-          {/* Éves összesítő KPI-ok */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <p className="text-xs font-semibold text-gray-400 mb-3 uppercase tracking-wide">{new Date().getFullYear()}. évi összesítő</p>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <p className="text-xs text-gray-400">Éves bevétel</p>
-                <p className="text-base font-bold text-green-600 mt-0.5">{fmtEur(stats.yearlyIncome ?? 0)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-400">Éves kiadás</p>
-                <p className="text-base font-bold text-red-500 mt-0.5">{fmtEur(stats.yearlyExpenses ?? 0)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-400">Éves egyenleg</p>
-                <p className={`text-base font-bold mt-0.5 ${(stats.yearlyBalance ?? 0) >= 0 ? 'text-blue-600' : 'text-orange-500'}`}>
-                  {fmtEur(stats.yearlyBalance ?? 0)}
-                </p>
-              </div>
-            </div>
-          </div>
 
           {/* Egyéb KPI-ok */}
           <div className="grid grid-cols-2 gap-3">
