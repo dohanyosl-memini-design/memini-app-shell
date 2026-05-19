@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "memini-crm": {
+      "type": "http",
+      "url": "https://memini-app-shell-la4vgw919-lacckukacs-projects.vercel.app/api/mcp"
+    }
+  }
+}
