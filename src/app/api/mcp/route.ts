@@ -446,7 +446,130 @@ function buildServer() {
     }
   )
 
-  // ─── FELADATOK ───────────────────────────────────────────────────────────
+  // ─── TERMÉKEK (teljes írás/olvasás) ─────────────────────────────────────
+
+  server.tool(
+    'get_product',
+    'Egy termék teljes adatainak lekérése ID vagy SKU alapján.',
+    {
+      id:  z.string().optional().describe('Termék ID'),
+      sku: z.string().optional().describe('Termék SKU kód'),
+    },
+    async ({ id, sku }) => {
+      if (!id && !sku) return { content: [{ type: 'text', text: 'Adj meg id-t vagy sku-t.' }] }
+      const data = await prisma.product.findFirst({
+        where: id ? { id } : { sku: sku! },
+      })
+      if (!data) return { content: [{ type: 'text', text: 'Termék nem található.' }] }
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'create_product',
+    'Új termék létrehozása. A sku egyedi kód, kötelező.',
+    {
+      name:            z.string().describe('Magyar megnevezés'),
+      sku:             z.string().describe('Egyedi cikkszám'),
+      nameDE:          z.string().optional().describe('Német megnevezés'),
+      description:     z.string().optional(),
+      material:        z.string().optional().describe('Hordozó kód'),
+      productType:     z.string().optional(),
+      site:            z.string().optional(),
+      city:            z.string().optional(),
+      locationCabinet: z.string().optional().describe('Szekrény'),
+      locationShelf:   z.string().optional().describe('Polc'),
+      locationBox:     z.string().optional().describe('Doboz'),
+      costPrice:       z.number().optional().describe('Bekerülési ár'),
+      salesPrice:      z.number().optional().describe('Eladási ár'),
+      stock:           z.number().int().optional().describe('Kezdő készlet'),
+      minStock:        z.number().int().optional().describe('Minimum készlet, alapértelmezett: 10'),
+      unit:            z.string().optional().describe('Mértékegység, alapértelmezett: db'),
+      vatRate:         z.number().optional().describe('ÁFA kulcs %, alapértelmezett: 19'),
+    },
+    async (body) => {
+      const data = await prisma.product.create({
+        data: {
+          name:            body.name,
+          sku:             body.sku,
+          nameDE:          body.nameDE || null,
+          description:     body.description || null,
+          material:        body.material || null,
+          productType:     body.productType || null,
+          site:            body.site || null,
+          city:            body.city || null,
+          locationCabinet: body.locationCabinet || null,
+          locationShelf:   body.locationShelf || null,
+          locationBox:     body.locationBox || null,
+          costPrice:       body.costPrice ?? 0,
+          salesPrice:      body.salesPrice ?? 0,
+          stock:           body.stock ?? 0,
+          minStock:        body.minStock ?? 10,
+          unit:            body.unit || 'db',
+          vatRate:         body.vatRate ?? 19,
+        },
+      })
+      return { content: [{ type: 'text', text: `Termék létrehozva: ${data.name} (${data.sku}) — ID: ${data.id}` }] }
+    }
+  )
+
+  server.tool(
+    'update_product',
+    'Meglévő termék adatainak módosítása. Csak a megadott mezők frissülnek.',
+    {
+      id:              z.string().describe('Termék ID'),
+      name:            z.string().optional(),
+      nameDE:          z.string().optional(),
+      sku:             z.string().optional(),
+      description:     z.string().optional(),
+      material:        z.string().optional(),
+      productType:     z.string().optional(),
+      site:            z.string().optional(),
+      city:            z.string().optional(),
+      locationCabinet: z.string().optional(),
+      locationShelf:   z.string().optional(),
+      locationBox:     z.string().optional(),
+      costPrice:       z.number().optional(),
+      salesPrice:      z.number().optional(),
+      minStock:        z.number().int().optional(),
+      unit:            z.string().optional(),
+      vatRate:         z.number().optional(),
+      active:          z.boolean().optional().describe('false = archivált'),
+    },
+    async ({ id, ...fields }) => {
+      const updateData: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(fields)) {
+        if (v !== undefined) updateData[k] = v
+      }
+      const data = await prisma.product.update({ where: { id }, data: updateData })
+      return { content: [{ type: 'text', text: `Termék frissítve: ${data.name} (${data.sku})` }] }
+    }
+  )
+
+  server.tool(
+    'adjust_stock',
+    'Raktárkészlet mozgás rögzítése (bevét vagy kiadás).',
+    {
+      productId: z.string().describe('Termék ID'),
+      type:      z.enum(['in', 'out']).describe('in = bevét, out = kiadás'),
+      quantity:  z.number().int().positive().describe('Mennyiség (pozitív egész)'),
+      note:      z.string().optional().describe('Megjegyzés'),
+      supplier:  z.string().optional().describe('Szállító neve (bevétnél)'),
+      reference: z.string().optional().describe('Hivatkozási szám'),
+    },
+    async ({ productId, type, quantity, note, supplier, reference }) => {
+      const [movement, product] = await prisma.$transaction([
+        prisma.stockMovement.create({
+          data: { productId, type, quantity, note: note || null, supplier: supplier || null, reference: reference || null },
+        }),
+        prisma.product.update({
+          where: { id: productId },
+          data: { stock: { [type === 'in' ? 'increment' : 'decrement']: quantity } },
+        }),
+      ])
+      return { content: [{ type: 'text', text: `Készletmozgás rögzítve: ${type === 'in' ? '+' : '-'}${quantity} db — Új készlet: ${product.stock} db` }] }
+    }
+  )
 
   server.tool(
     'list_tasks',
