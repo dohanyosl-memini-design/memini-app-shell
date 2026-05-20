@@ -130,6 +130,10 @@ export default function BookkeepingPage() {
   const [catSaving, setCatSaving] = useState(false)
   const [seeding, setSeeding] = useState(false)
 
+  // MNB rate fetch
+  const [fetchingRate, setFetchingRate] = useState(false)
+  const [rateError, setRateError] = useState<string | null>(null)
+
   // Invoice scan
   const invFileRef = useRef<HTMLInputElement>(null)
   const [showInvScanModal, setShowInvScanModal] = useState(false)
@@ -169,6 +173,7 @@ export default function BookkeepingPage() {
     setEditExpense(null)
     setForm(EMPTY_FORM)
     setScanResult(null)
+    setRateError(null)
     setShowModal(true)
   }
 
@@ -194,17 +199,24 @@ export default function BookkeepingPage() {
   }
 
   async function fetchMnbRate(date: string) {
+    setFetchingRate(true)
+    setRateError(null)
     try {
       const res = await fetch(`/api/mnb-rate?date=${date}`)
-      if (!res.ok) return
       const json = await res.json()
-      if (json.rate && form.totalAmount) {
-        const eur = Math.round((Number(form.totalAmount) / json.rate) * 100) / 100
-        setForm(f => ({ ...f, eurRate: String(json.rate), eurAmount: String(eur), eurRateDate: json.date }))
-      } else if (json.rate) {
-        setForm(f => ({ ...f, eurRate: String(json.rate), eurRateDate: json.date }))
+      if (!res.ok || json.error) {
+        setRateError('MNB árfolyam nem elérhető – próbáld máskor, vagy add meg kézzel.')
+        return
       }
-    } catch { /* ignore */ }
+      setForm(f => {
+        const eur = f.totalAmount ? String(Math.round((Number(f.totalAmount) / json.rate) * 100) / 100) : ''
+        return { ...f, eurRate: String(json.rate), eurAmount: eur, eurRateDate: json.date }
+      })
+    } catch {
+      setRateError('Hálózati hiba – próbáld újra.')
+    } finally {
+      setFetchingRate(false)
+    }
   }
 
   async function handleSaveExpense() {
@@ -916,11 +928,17 @@ export default function BookkeepingPage() {
                 <div className="col-span-2 bg-blue-50 rounded-xl p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <p className="text-xs font-medium text-blue-700">EUR átváltás (MNB árfolyam)</p>
-                    <button type="button" onClick={() => fetchMnbRate(form.date)}
-                      className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 bg-white border border-blue-200 px-2 py-1 rounded-lg">
-                      <RefreshCw size={11} /> Árfolyam lekérése
+                    <button type="button" onClick={() => fetchMnbRate(form.date)} disabled={fetchingRate}
+                      className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 bg-white border border-blue-200 px-2 py-1 rounded-lg disabled:opacity-60 disabled:cursor-wait transition-opacity">
+                      <RefreshCw size={11} className={fetchingRate ? 'animate-spin' : ''} />
+                      {fetchingRate ? 'Lekérés...' : 'Árfolyam lekérése'}
                     </button>
                   </div>
+                  {rateError && (
+                    <p className="text-xs text-red-500 flex items-center gap-1">
+                      <AlertCircle size={11} /> {rateError}
+                    </p>
+                  )}
                   {form.eurRate && (
                     <div className="grid grid-cols-2 gap-2">
                       <div>
@@ -938,7 +956,7 @@ export default function BookkeepingPage() {
                       </div>
                     </div>
                   )}
-                  {!form.eurRate && (
+                  {!form.eurRate && !rateError && (
                     <p className="text-xs text-blue-500">Kattints az &quot;Árfolyam lekérése&quot; gombra az MNB napi árfolyam betöltéséhez.</p>
                   )}
                 </div>

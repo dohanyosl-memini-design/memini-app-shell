@@ -30,8 +30,15 @@ async function fetchRateForDate(date: string): Promise<number | null> {
   })
 
   const xml = await res.text()
+  // MNB SOAP wraps the inner XML as HTML-encoded string inside the result element.
+  // Decode entities so the regex can match curr="EUR" correctly.
+  const decoded = xml
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
   // Rate value uses Hungarian decimal comma, e.g. "395,47"
-  const match = xml.match(/curr="EUR"[^>]*>([0-9,]+)</)
+  const match = decoded.match(/curr="EUR"[^>]*>([0-9,]+)</)
   if (!match) return null
   return parseFloat(match[1].replace(',', '.'))
 }
