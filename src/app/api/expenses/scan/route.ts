@@ -25,6 +25,8 @@ const CATEGORY_LIST = [
   'Biztosítás',
   'Kommunikáció',
   'Javítás & Karbantartás',
+  'Oktatás',
+  'Coaching',
   'Egyéb',
 ]
 
@@ -45,8 +47,48 @@ const CATEGORY_HINTS = `
 - Biztosítás: any insurance premiums (business, liability, property)
 - Kommunikáció: phone bills, internet, mobile plans, VoIP
 - Javítás & Karbantartás: repairs of equipment, maintenance services
+- Oktatás: courses, training, e-learning platforms, books, educational materials
+- Coaching: business coaching, mentoring, consulting sessions
 - Egyéb: anything that doesn't fit the above categories
 `
+
+function prevDay(dateStr: string): string {
+  const d = new Date(dateStr)
+  d.setDate(d.getDate() - 1)
+  return d.toISOString().slice(0, 10)
+}
+
+async function fetchMnbRate(date: string): Promise<{ rate: number; date: string } | null> {
+  let current = date
+  for (let i = 0; i < 7; i++) {
+    try {
+      const soap = `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <GetExchangeRates xmlns="http://www.mnb.hu/webservices/">
+      <startDate>${current}</startDate>
+      <endDate>${current}</endDate>
+      <currencyNames>EUR</currencyNames>
+    </GetExchangeRates>
+  </soap:Body>
+</soap:Envelope>`
+      const res = await fetch('https://www.mnb.hu/arfolyamok.asmx', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/xml; charset=utf-8',
+          'SOAPAction': 'http://www.mnb.hu/webservices/GetExchangeRates',
+        },
+        body: soap,
+        signal: AbortSignal.timeout(8000),
+      })
+      const xml = await res.text()
+      const match = xml.match(/curr="EUR"[^>]*>([0-9,]+)</)
+      if (match) return { rate: parseFloat(match[1].replace(',', '.')), date: current }
+    } catch { /* try previous day */ }
+    current = prevDay(current)
+  }
+  return null
+}
 
 export async function POST(request: NextRequest) {
   const formData = await request.formData()
@@ -122,6 +164,17 @@ If a field cannot be determined, use null. Return only the JSON object.`,
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     const extracted = jsonMatch ? JSON.parse(jsonMatch[0]) : {}
+
+    // Auto-convert HUF → EUR using MNB rate on the invoice date
+    if (extracted.currency === 'HUF' && extracted.totalAmount && extracted.date) {
+      const mnb = await fetchMnbRate(extracted.date)
+      if (mnb) {
+        extracted.eurRate   = mnb.rate
+        extracted.eurAmount = Math.round((extracted.totalAmount / mnb.rate) * 100) / 100
+        extracted.eurRateDate = mnb.date
+      }
+    }
+
     return NextResponse.json({ ok: true, data: extracted })
   } catch {
     return NextResponse.json({ ok: false, error: 'Could not parse response', raw: text })

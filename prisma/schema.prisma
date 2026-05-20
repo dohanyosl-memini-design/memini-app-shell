@@ -322,6 +322,8 @@ model Expense {
   reference   String?
   status      String   @default("pending")
   notes       String?
+  eurAmount   Float?
+  eurRate     Float?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

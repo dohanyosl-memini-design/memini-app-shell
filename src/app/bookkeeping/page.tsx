@@ -31,6 +31,8 @@ interface Expense {
   reference: string | null
   status: string
   notes: string | null
+  eurAmount: number | null
+  eurRate: number | null
 }
 
 interface RecurringExpense {
@@ -72,6 +74,7 @@ const EMPTY_FORM = {
   date: format(new Date(), 'yyyy-MM-dd'),
   vendor: '', description: '', amount: '', vatAmount: '', totalAmount: '',
   currency: 'EUR', category: '', reference: '', status: 'pending', notes: '',
+  eurAmount: '', eurRate: '', eurRateDate: '',
 }
 
 interface BulkResult {
@@ -183,8 +186,25 @@ export default function BookkeepingPage() {
       reference: exp.reference || '',
       status: exp.status || 'pending',
       notes: exp.notes || '',
+      eurAmount: exp.eurAmount != null ? String(exp.eurAmount) : '',
+      eurRate: exp.eurRate != null ? String(exp.eurRate) : '',
+      eurRateDate: '',
     })
     setShowModal(true)
+  }
+
+  async function fetchMnbRate(date: string) {
+    try {
+      const res = await fetch(`/api/mnb-rate?date=${date}`)
+      if (!res.ok) return
+      const json = await res.json()
+      if (json.rate && form.totalAmount) {
+        const eur = Math.round((Number(form.totalAmount) / json.rate) * 100) / 100
+        setForm(f => ({ ...f, eurRate: String(json.rate), eurAmount: String(eur), eurRateDate: json.date }))
+      } else if (json.rate) {
+        setForm(f => ({ ...f, eurRate: String(json.rate), eurRateDate: json.date }))
+      }
+    } catch { /* ignore */ }
   }
 
   async function handleSaveExpense() {
@@ -193,6 +213,8 @@ export default function BookkeepingPage() {
       amount: Number(form.amount),
       vatAmount: Number(form.vatAmount || 0),
       totalAmount: Number(form.totalAmount || 0),
+      eurAmount: form.eurAmount ? Number(form.eurAmount) : null,
+      eurRate:   form.eurRate   ? Number(form.eurRate)   : null,
     }
     const url = editExpense ? `/api/expenses/${editExpense.id}` : '/api/expenses'
     const method = editExpense ? 'PUT' : 'POST'
@@ -263,6 +285,9 @@ export default function BookkeepingPage() {
           reference: d.reference || f.reference,
           category: d.category || f.category,
           currency: d.currency || f.currency,
+          eurAmount: d.eurAmount != null ? String(d.eurAmount) : f.eurAmount,
+          eurRate:   d.eurRate   != null ? String(d.eurRate)   : f.eurRate,
+          eurRateDate: d.eurRateDate || f.eurRateDate,
         }))
         setScanResult('✓ Adatok kinyerve – ellenőrizd és mentsd!')
       } else {
@@ -311,6 +336,8 @@ export default function BookkeepingPage() {
               category: d.category || null,
               reference: d.reference || null,
               status: 'pending',
+              eurAmount: d.eurAmount != null ? Number(d.eurAmount) : null,
+              eurRate:   d.eurRate   != null ? Number(d.eurRate)   : null,
             }),
           })
           results.push({ filename: file.name, ok: true, data: d, saved: saveRes.ok })
@@ -460,8 +487,13 @@ export default function BookkeepingPage() {
     setInvSaving(false)
   }
 
+  // EUR equivalent: use eurAmount for HUF expenses, totalAmount for EUR expenses
+  function toEur(e: Expense) {
+    return e.currency === 'EUR' ? (e.totalAmount || e.amount) : (e.eurAmount ?? 0)
+  }
+
   // Summaries
-  const totalExpenses = expenses.reduce((s, e) => s + (e.totalAmount || e.amount), 0)
+  const totalExpenses = expenses.reduce((s, e) => s + toEur(e), 0)
   const totalIncome = invoices.reduce((s, i) => s + i.total, 0)
   const balance = totalIncome - totalExpenses
   const dueThisMonth = recurring.filter(r => r.active && r.nextDue.startsWith(monthKey))
@@ -614,7 +646,9 @@ export default function BookkeepingPage() {
               <div className="text-right shrink-0">
                 <p className="font-bold text-gray-900">{fmtAmount(exp.totalAmount || exp.amount, exp.currency)}</p>
                 {exp.vatAmount > 0 && <p className="text-xs text-gray-400">+ÁFA: {fmtAmount(exp.vatAmount, exp.currency)}</p>}
-                <p className="text-xs text-gray-400">{exp.currency}</p>
+                {exp.currency === 'HUF' && exp.eurAmount != null
+                  ? <p className="text-xs text-blue-600 font-medium">≈ {fmtEur(exp.eurAmount)}</p>
+                  : <p className="text-xs text-gray-400">{exp.currency}</p>}
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <button onClick={() => openEdit(exp)} className="p-1.5 text-gray-400 hover:text-blue-600"><Edit2 size={14} /></button>
@@ -672,18 +706,18 @@ export default function BookkeepingPage() {
           const COGS_CATS = new Set(['Termékköltség', 'Alapanyag', 'Gyártás'])
           const cogsExpenses = expenses.filter(e => COGS_CATS.has(e.category || ''))
           const opExpenses   = expenses.filter(e => !COGS_CATS.has(e.category || ''))
-          const totalCogs    = cogsExpenses.reduce((s, e) => s + (e.totalAmount || e.amount), 0)
-          const totalOp      = opExpenses.reduce((s, e) => s + (e.totalAmount || e.amount), 0)
+          const totalCogs    = cogsExpenses.reduce((s, e) => s + toEur(e), 0)
+          const totalOp      = opExpenses.reduce((s, e) => s + toEur(e), 0)
 
           const cogsByCategory = cogsExpenses.reduce<Record<string, number>>((acc, e) => {
             const cat = e.category || 'Egyéb'
-            acc[cat] = (acc[cat] || 0) + (e.totalAmount || e.amount)
+            acc[cat] = (acc[cat] || 0) + toEur(e)
             return acc
           }, {})
 
           const opByCategory = opExpenses.reduce<Record<string, number>>((acc, e) => {
             const cat = e.category || 'Egyéb'
-            acc[cat] = (acc[cat] || 0) + (e.totalAmount || e.amount)
+            acc[cat] = (acc[cat] || 0) + toEur(e)
             return acc
           }, {})
 
@@ -872,12 +906,43 @@ export default function BookkeepingPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Deviza</label>
-                <select value={form.currency} onChange={e => setForm(f => ({ ...f, currency: e.target.value }))}
+                <select value={form.currency} onChange={e => setForm(f => ({ ...f, currency: e.target.value, eurAmount: '', eurRate: '', eurRateDate: '' }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="EUR">EUR (€)</option>
                   <option value="HUF">HUF (Ft)</option>
                 </select>
               </div>
+              {form.currency === 'HUF' && (
+                <div className="col-span-2 bg-blue-50 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <p className="text-xs font-medium text-blue-700">EUR átváltás (MNB árfolyam)</p>
+                    <button type="button" onClick={() => fetchMnbRate(form.date)}
+                      className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 bg-white border border-blue-200 px-2 py-1 rounded-lg">
+                      <RefreshCw size={11} /> Árfolyam lekérése
+                    </button>
+                  </div>
+                  {form.eurRate && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs text-blue-600 mb-1">1 EUR = ? HUF (MNB{form.eurRateDate ? ` ${form.eurRateDate}` : ''})</label>
+                        <input type="number" value={form.eurRate} onChange={e => {
+                          const r = Number(e.target.value)
+                          const eur = r > 0 && form.totalAmount ? String(Math.round((Number(form.totalAmount) / r) * 100) / 100) : ''
+                          setForm(f => ({ ...f, eurRate: e.target.value, eurAmount: eur }))
+                        }} className="w-full px-2 py-1.5 border border-blue-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-blue-600 mb-1">EUR összeg (könyvelési érték)</label>
+                        <input type="number" value={form.eurAmount} onChange={e => setForm(f => ({ ...f, eurAmount: e.target.value }))}
+                          className="w-full px-2 py-1.5 border border-blue-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                      </div>
+                    </div>
+                  )}
+                  {!form.eurRate && (
+                    <p className="text-xs text-blue-500">Kattints az &quot;Árfolyam lekérése&quot; gombra az MNB napi árfolyam betöltéséhez.</p>
+                  )}
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Kategória</label>
                 <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}

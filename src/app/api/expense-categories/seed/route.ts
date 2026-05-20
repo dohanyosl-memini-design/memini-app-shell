@@ -20,7 +20,9 @@ const DEFAULT_CATEGORIES = [
   { name: 'Biztosítás',            color: '#475569', sortOrder: 14 },
   { name: 'Kommunikáció',          color: '#0EA5E9', sortOrder: 15 },
   { name: 'Javítás & Karbantartás', color: '#78716C', sortOrder: 16 },
-  { name: 'Egyéb',                 color: '#6B7280', sortOrder: 17 },
+  { name: 'Oktatás',               color: '#A78BFA', sortOrder: 17 },
+  { name: 'Coaching',              color: '#C084FC', sortOrder: 18 },
+  { name: 'Egyéb',                 color: '#6B7280', sortOrder: 19 },
 ]
 
 export async function POST() {

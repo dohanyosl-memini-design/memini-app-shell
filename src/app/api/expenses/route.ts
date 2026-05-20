@@ -46,6 +46,8 @@ export async function POST(request: NextRequest) {
       reference: body.reference || null,
       status: body.status || 'pending',
       notes: body.notes || null,
+      eurAmount: body.eurAmount != null ? Number(body.eurAmount) : null,
+      eurRate:   body.eurRate   != null ? Number(body.eurRate)   : null,
     },
   })
 
