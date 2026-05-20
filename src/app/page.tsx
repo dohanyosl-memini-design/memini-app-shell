@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import {
   Building2, TrendingUp, FileText, AlertTriangle, TrendingDown,
-  Clock, Euro, CheckSquare, CheckCircle2, Circle,
+  Clock, Euro, CheckSquare, CheckCircle2, Circle, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import { format, isToday, isTomorrow, isPast } from 'date-fns'
 import { hu } from 'date-fns/locale'
@@ -62,16 +62,13 @@ function fmtEur(v: number) {
   return `€${v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-function buildYearlyChart(transactions: Stats['allTransactions']) {
-  const currentYear = new Date().getFullYear()
+function buildYearlyChart(transactions: Stats['allCashflowEntries'], year: number) {
   const months: Record<string, { month: string; Bevétel: number; Kiadás: number }> = {}
-
   for (let m = 0; m < 12; m++) {
-    const date = new Date(currentYear, m, 1)
+    const date = new Date(year, m, 1)
     const key = format(date, 'yyyy-MM')
     months[key] = { month: format(date, 'MMM', { locale: hu }), Bevétel: 0, Kiadás: 0 }
   }
-
   transactions.forEach((t) => {
     const key = format(new Date(t.date), 'yyyy-MM')
     if (months[key]) {
@@ -79,7 +76,6 @@ function buildYearlyChart(transactions: Stats['allTransactions']) {
       else months[key].Kiadás += t.amount
     }
   })
-
   return Object.values(months)
 }
 
@@ -93,10 +89,12 @@ export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [doneTaskIds, setDoneTaskIds] = useState<Set<string>>(new Set())
+  const [year, setYear] = useState(new Date().getFullYear())
+  const [touchStartX, setTouchStartX] = useState<number | null>(null)
 
   useEffect(() => {
-    fetch('/api/stats').then((r) => r.json()).then((d) => { setStats(d); setLoading(false) })
-  }, [])
+    fetch(`/api/stats?year=${year}`).then((r) => r.json()).then((d) => { setStats(d); setLoading(false) })
+  }, [year])
 
   if (loading) {
     return <div className="p-6 flex items-center justify-center h-64 text-gray-400">Betöltés...</div>
@@ -108,15 +106,28 @@ export default function Dashboard() {
   const combinedLastMonthIncome = stats.combinedLastMonthIncome ?? stats.lastMonthIncome
   const combinedLastMonthExpenses = stats.combinedLastMonthExpenses ?? stats.lastMonthExpenses
   const monthBalance = combinedMonthlyIncome - combinedMonthlyExpenses
-  const chartData = buildYearlyChart(stats.allCashflowEntries ?? stats.allTransactions)
+  const chartData = buildYearlyChart(stats.allCashflowEntries ?? stats.allTransactions, year)
   const activeDeals = stats.dealsByStage.filter((s) => !['closed_won', 'closed_lost'].includes(s.stage))
   const pipelineValue = activeDeals.reduce((s, d) => s + (d._sum.value || 0), 0)
 
   const todayTasks = stats.upcomingTasks.filter((t) => t.dueDate && isToday(new Date(t.dueDate)))
   const upcomingOther = stats.upcomingTasks.filter((t) => !t.dueDate || !isToday(new Date(t.dueDate)))
 
+  function handleTouchStart(e: React.TouchEvent) {
+    setTouchStartX(e.touches[0].clientX)
+  }
+  function handleTouchEnd(e: React.TouchEvent) {
+    if (touchStartX === null) return
+    const diff = touchStartX - e.changedTouches[0].clientX
+    if (Math.abs(diff) > 60) {
+      if (diff > 0) setYear(y => y + 1)
+      else setYear(y => y - 1)
+    }
+    setTouchStartX(null)
+  }
+
   return (
-    <div className="p-4 md:p-6 space-y-4">
+    <div className="p-4 md:p-6 space-y-4" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -124,6 +135,15 @@ export default function Dashboard() {
           <p className="text-gray-500 mt-0.5 text-sm">
             Memini Design · Ulm, Deutschland · {format(new Date(), 'yyyy. MMMM d., EEEE', { locale: hu })}
           </p>
+        </div>
+        <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm select-none">
+          <button onClick={() => setYear(y => y - 1)} className="text-gray-400 hover:text-gray-700 transition-colors p-0.5">
+            <ChevronLeft size={18} />
+          </button>
+          <span className="text-base font-bold text-gray-900 mx-2 tabular-nums">{year}</span>
+          <button onClick={() => setYear(y => y + 1)} className="text-gray-400 hover:text-gray-700 transition-colors p-0.5">
+            <ChevronRight size={18} />
+          </button>
         </div>
       </div>
 
@@ -158,7 +178,7 @@ export default function Dashboard() {
           {/* Éves cashflow diagram */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
             <h2 className="text-sm font-semibold text-gray-700 mb-4">
-              Éves cashflow — {new Date().getFullYear()} (havi bontás)
+              Éves cashflow — {year} (havi bontás)
             </h2>
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={chartData}>
@@ -187,17 +207,17 @@ export default function Dashboard() {
             <div className="bg-green-50 rounded-xl shadow-sm border border-green-100 p-4">
               <p className="text-xs text-gray-500 mb-1">Éves bevétel</p>
               <p className="text-lg font-bold text-green-600">{fmtEur(stats.yearlyIncome ?? 0)}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{new Date().getFullYear()} összesen</p>
+              <p className="text-xs text-gray-400 mt-0.5">{year} összesen</p>
             </div>
             <div className="bg-red-50 rounded-xl shadow-sm border border-red-100 p-4">
               <p className="text-xs text-gray-500 mb-1">Éves kiadás</p>
               <p className="text-lg font-bold text-red-500">{fmtEur(stats.yearlyExpenses ?? 0)}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{new Date().getFullYear()} összesen</p>
+              <p className="text-xs text-gray-400 mt-0.5">{year} összesen</p>
             </div>
             <div className={`rounded-xl shadow-sm border p-4 ${(stats.yearlyBalance ?? 0) >= 0 ? 'bg-blue-50 border-blue-100' : 'bg-red-50 border-red-100'}`}>
               <p className="text-xs text-gray-500 mb-1">Éves egyenleg</p>
               <p className={`text-lg font-bold ${(stats.yearlyBalance ?? 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{fmtEur(stats.yearlyBalance ?? 0)}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{new Date().getFullYear()} nettó</p>
+              <p className="text-xs text-gray-400 mt-0.5">{year} nettó</p>
             </div>
           </div>
 

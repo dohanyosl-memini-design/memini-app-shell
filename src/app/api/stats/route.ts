@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -7,12 +7,15 @@ function expAmt(e: { totalAmount: number; amount: number }) {
   return e.totalAmount > 0 ? e.totalAmount : e.amount
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url)
   const now = new Date()
+  const year = parseInt(searchParams.get('year') || String(now.getFullYear()))
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
   const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
   const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
-  const startOfYear = new Date(now.getFullYear(), 0, 1)
+  const startOfYear = new Date(year, 0, 1)
+  const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999)
   const days90Ago = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
 
   const [
@@ -84,8 +87,8 @@ export async function GET() {
       where: { active: true },
       select: { id: true, name: true, sku: true, stock: true, minStock: true, costPrice: true, salesPrice: true },
     }),
-    prisma.stockMovement.aggregate({ where: { type: 'out', createdAt: { gte: startOfYear } }, _sum: { quantity: true } }),
-    prisma.stockMovement.aggregate({ where: { type: 'in', createdAt: { gte: startOfYear } }, _sum: { quantity: true } }),
+    prisma.stockMovement.aggregate({ where: { type: 'out', createdAt: { gte: startOfYear, lte: endOfYear } }, _sum: { quantity: true } }),
+    prisma.stockMovement.aggregate({ where: { type: 'in', createdAt: { gte: startOfYear, lte: endOfYear } }, _sum: { quantity: true } }),
     prisma.product.aggregate({ where: { active: true }, _sum: { stock: true } }),
     prisma.deal.count({ where: { stage: 'closed_won' } }),
     prisma.deal.count({ where: { stage: 'closed_lost' } }),
@@ -94,7 +97,7 @@ export async function GET() {
       select: { date: true, paidAt: true },
     }),
     prisma.invoiceItem.findMany({
-      where: { productId: { not: null }, invoice: { date: { gte: startOfYear } } },
+      where: { productId: { not: null }, invoice: { date: { gte: startOfYear, lte: endOfYear } } },
       select: { quantity: true, product: { select: { id: true, name: true, sku: true } } },
     }),
   ])
@@ -117,11 +120,11 @@ export async function GET() {
     .reduce((s, i) => s + i.total, 0)
 
   const billedThisYear = allInvoices
-    .filter(i => invoiceDateIn(i, startOfYear))
+    .filter(i => invoiceDateIn(i, startOfYear, endOfYear))
     .reduce((s, i) => s + i.total, 0)
 
   const receivedThisYear = allInvoices
-    .filter(i => i.status === 'paid' && i.paidAt && new Date(i.paidAt) >= startOfYear)
+    .filter(i => i.status === 'paid' && i.paidAt && new Date(i.paidAt) >= startOfYear && new Date(i.paidAt) <= endOfYear)
     .reduce((s, i) => s + i.total, 0)
 
   const openInvoices = allInvoices.filter(i => i.status !== 'paid' && i.status !== 'cancelled' && i.status !== 'storno')
@@ -139,7 +142,7 @@ export async function GET() {
     .reduce((s, e) => s + expAmt(e), 0)
 
   const expThisYear = allExpenses
-    .filter(e => new Date(e.date) >= startOfYear)
+    .filter(e => new Date(e.date) >= startOfYear && new Date(e.date) <= endOfYear)
     .reduce((s, e) => s + expAmt(e), 0)
 
   const txExpThisMonth = allTransactionExpenses
@@ -151,7 +154,7 @@ export async function GET() {
     .reduce((s, t) => s + t.amount, 0)
 
   const txExpThisYear = allTransactionExpenses
-    .filter(t => new Date(t.date) >= startOfYear)
+    .filter(t => new Date(t.date) >= startOfYear && new Date(t.date) <= endOfYear)
     .reduce((s, t) => s + t.amount, 0)
 
   const combinedMonthlyIncome = billedThisMonth
@@ -166,31 +169,36 @@ export async function GET() {
   // ─── CASHFLOW ENTRIES for chart (invoices + expenses + tx expenses) ──────────
   type CfEntry = { type: 'income' | 'expense'; amount: number; date: string; category: string | null }
   const allCashflowEntries: CfEntry[] = [
-    ...allInvoices.map(inv => ({
-      type: 'income' as const,
-      amount: inv.total,
-      date: inv.date instanceof Date ? inv.date.toISOString() : String(inv.date),
-      category: 'Értékesítés',
-    })),
-    ...allExpenses.map(exp => ({
-      type: 'expense' as const,
-      amount: expAmt(exp),
-      date: exp.date instanceof Date ? exp.date.toISOString() : String(exp.date),
-      category: exp.category,
-    })),
-    ...allTransactionExpenses.map(t => ({
-      type: 'expense' as const,
-      amount: t.amount,
-      date: t.date instanceof Date ? t.date.toISOString() : String(t.date),
-      category: t.category,
-    })),
+    ...allInvoices
+      .filter(inv => new Date(inv.date) >= startOfYear && new Date(inv.date) <= endOfYear)
+      .map(inv => ({
+        type: 'income' as const,
+        amount: inv.total,
+        date: inv.date instanceof Date ? inv.date.toISOString() : String(inv.date),
+        category: 'Értékesítés',
+      })),
+    ...allExpenses
+      .filter(exp => new Date(exp.date) >= startOfYear && new Date(exp.date) <= endOfYear)
+      .map(exp => ({
+        type: 'expense' as const,
+        amount: expAmt(exp),
+        date: exp.date instanceof Date ? exp.date.toISOString() : String(exp.date),
+        category: exp.category,
+      })),
+    ...allTransactionExpenses
+      .filter(t => new Date(t.date) >= startOfYear && new Date(t.date) <= endOfYear)
+      .map(t => ({
+        type: 'expense' as const,
+        amount: t.amount,
+        date: t.date instanceof Date ? t.date.toISOString() : String(t.date),
+        category: t.category,
+      })),
   ]
 
-  // ─── MONTHLY BREAKDOWN for current year ─────────────────────────────────────
-  const currentYear = now.getFullYear()
+  // ─── MONTHLY BREAKDOWN for selected year ─────────────────────────────────────
   const monthlyBreakdown = Array.from({ length: 12 }, (_, m) => {
-    const key = `${currentYear}-${String(m + 1).padStart(2, '0')}`
-    const label = new Date(currentYear, m, 1).toLocaleDateString('hu-HU', { month: 'short' })
+    const key = `${year}-${String(m + 1).padStart(2, '0')}`
+    const label = new Date(year, m, 1).toLocaleDateString('hu-HU', { month: 'short' })
     const income = allCashflowEntries
       .filter(e => e.type === 'income' && e.date.startsWith(key))
       .reduce((s, e) => s + e.amount, 0)
@@ -300,5 +308,6 @@ export async function GET() {
     avgPaymentDays,
     topSellingProducts,
     totalRevenue: billedThisYear,
+    selectedYear: year,
   })
 }

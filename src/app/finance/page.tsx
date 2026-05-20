@@ -44,16 +44,21 @@ const CATEGORY_COLORS: Record<string, string> = {
   Egyéb: 'bg-gray-100 text-gray-600',
 }
 
-function buildMonthlyCashflow(entries: { type: string; amount: number; date: string }[]) {
+function buildMonthlyCashflow(entries: { type: string; amount: number; date: string }[], year: string) {
   const months: Record<string, { month: string; bevétel: number; kiadás: number }> = {}
+  for (let m = 0; m < 12; m++) {
+    const key = `${year}-${String(m + 1).padStart(2, '0')}`
+    const label = format(new Date(parseInt(year), m, 1), 'MMM', { locale: hu })
+    months[key] = { month: label, bevétel: 0, kiadás: 0 }
+  }
   entries.forEach((t) => {
     const key = format(new Date(t.date), 'yyyy-MM')
-    const label = format(new Date(t.date), 'MMM', { locale: hu })
-    if (!months[key]) months[key] = { month: label, bevétel: 0, kiadás: 0 }
-    if (t.type === 'income') months[key].bevétel += t.amount
-    else months[key].kiadás += t.amount
+    if (months[key]) {
+      if (t.type === 'income') months[key].bevétel += t.amount
+      else months[key].kiadás += t.amount
+    }
   })
-  return Object.values(months).slice(-12)
+  return Object.values(months)
 }
 
 function fmtEur(v: number) {
@@ -117,7 +122,7 @@ export default function FinancePage() {
 
   // Chart: monthly breakdown for selected year
   const chartEntries = filteredByYear.filter(t => t.source !== 'invoice' || t.status === 'paid')
-  const monthlyData = buildMonthlyCashflow(chartEntries)
+  const monthlyData = buildMonthlyCashflow(chartEntries, yearFilter === 'all' ? String(new Date().getFullYear()) : yearFilter)
 
   const expenseByCategory = filteredByYear
     .filter((t) => t.type === 'expense' && t.category)
@@ -127,7 +132,8 @@ export default function FinancePage() {
     }, {})
 
   // Available years from data
-  const availableYears = Array.from(new Set(cashflow.map(t => t.date.slice(0, 4)))).sort().reverse()
+  const currentYearStr = String(new Date().getFullYear())
+  const availableYears = Array.from(new Set([currentYearStr, ...cashflow.map(t => t.date.slice(0, 4))])).sort().reverse()
 
   return (
     <div className="p-4 md:p-6">
