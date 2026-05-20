@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -44,8 +44,8 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string; icon: stri
   low:    { label: 'Alacsony', color: 'text-gray-500 bg-gray-50 border-gray-200',  icon: '🟢' },
 }
 
-export default function TaskDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+export default function TaskDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params
   const router = useRouter()
   const [task, setTask] = useState<Task | null>(null)
   const [loading, setLoading] = useState(true)
@@ -106,7 +106,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
   })()
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl mx-auto">
+    <div className="p-4 md:p-6 max-w-3xl mx-auto pb-20">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <button

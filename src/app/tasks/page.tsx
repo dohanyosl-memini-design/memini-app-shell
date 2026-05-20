@@ -219,7 +219,9 @@ export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [overdueInvoices, setOverdueInvoices] = useState<OverdueInvoice[]>([])
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<'kanban' | 'list'>('kanban')
+  const [view, setView] = useState<'kanban' | 'list'>(
+    typeof window !== 'undefined' && window.innerWidth < 640 ? 'list' : 'kanban'
+  )
   const [filterPriority, setFilterPriority] = useState('all')
   const [filterType, setFilterType] = useState('all')
   const [showModal, setShowModal] = useState(false)
@@ -306,14 +308,13 @@ export default function TasksPage() {
   return (
     <div className="p-4 md:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Feladatok</h1>
-          <p className="text-gray-500 mt-0.5">{filtered.length} feladat</p>
+          <p className="text-gray-500 mt-0.5 text-sm">{filtered.length} feladat</p>
         </div>
         <div className="flex items-center gap-2">
-          {/* View toggle */}
-          <div className="flex bg-gray-100 rounded-lg p-1">
+          <div className="hidden sm:flex bg-gray-100 rounded-lg p-1">
             <button
               onClick={() => setView('kanban')}
               className={`p-1.5 rounded-md transition-colors ${view === 'kanban' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
@@ -331,16 +332,16 @@ export default function TasksPage() {
           </div>
           <button
             onClick={() => handleAdd()}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
           >
             <Plus size={16} />
-            Új feladat
+            <span className="hidden sm:inline">Új feladat</span>
           </button>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="flex gap-2 mb-5 flex-wrap">
+      <div className="flex gap-2 mb-4 flex-wrap">
         <select
           value={filterPriority}
           onChange={(e) => setFilterPriority(e.target.value)}
@@ -448,11 +449,10 @@ export default function TasksPage() {
                       </span>
                       {typeInfo && <span className="text-xs text-gray-400">{typeInfo.icon} {typeInfo.label}</span>}
                     </div>
-                    <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-400 flex-wrap">
+                    <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400 flex-wrap">
                       {due && <span className={due.cls}>{due.text}</span>}
-                      {task.assignee && <span>{task.assignee.name}</span>}
-                      {task.company && <span>{task.company.name}</span>}
-                      {task.description && <span className="truncate max-w-xs text-gray-400">{task.description}</span>}
+                      {task.assignee && <span className="hidden sm:inline">{task.assignee.name}</span>}
+                      {task.company && <span className="truncate max-w-[120px]">{task.company.name}</span>}
                     </div>
                   </div>
                   <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${PRIORITY_BADGE[task.priority]}`}>
