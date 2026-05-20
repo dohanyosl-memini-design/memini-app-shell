@@ -3,12 +3,12 @@ import { prisma } from '@/lib/prisma'
 import fs from 'fs'
 import path from 'path'
 import {
-
-export const dynamic = 'force-dynamic'
   Document, Packer, Paragraph, Table, TableRow, TableCell,
   TextRun, ImageRun, AlignmentType, WidthType, BorderStyle,
   ShadingType, Header, Footer, convertInchesToTwip, VerticalAlign,
 } from 'docx'
+
+export const dynamic = 'force-dynamic'
 
 function fmtDE(n: number) {
   return n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'
