@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
         return {
           allowedContentTypes: ['image/jpeg', 'image/webp', 'image/jpg'],
           maximumSizeInBytes: 4 * 1024 * 1024,
+          addRandomSuffix: true,
         }
       },
       onUploadCompleted: async () => {},
