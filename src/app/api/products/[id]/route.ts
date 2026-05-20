@@ -23,7 +23,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         locationBox: body.locationBox || null,
         costPrice: parseFloat(body.costPrice) || 0,
         salesPrice: parseFloat(body.salesPrice) || 0,
-        minStock: parseInt(body.minStock) || 10,
+        minStock: !isNaN(parseInt(body.minStock)) ? parseInt(body.minStock) : 10,
         unit: body.unit || 'db',
         vatRate: parseFloat(body.vatRate) || 19,
         imageUrl: body.imageUrl !== undefined ? (body.imageUrl || null) : undefined,
