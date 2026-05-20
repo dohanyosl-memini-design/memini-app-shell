@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 const STD  = (m1:number,m2:number,m3:number,m4:number,m5:number,m6:number) =>
   [{qty:50,m:1},{qty:100,m:m1},{qty:200,m:m2},{qty:300,m:m3},{qty:500,m:m4},{qty:1000,m:m5},{qty:2000,m:m6}]
 

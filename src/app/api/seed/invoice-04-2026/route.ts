@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 // One-time seed route: creates invoice 04/2026 (Stadt Ulm – Die Einsteins Museum)
 // Safe to call multiple times – checks for existing invoice first
 export async function GET() {

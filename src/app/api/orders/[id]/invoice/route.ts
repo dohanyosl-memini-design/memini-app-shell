@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(_: NextRequest, { params }: { params: { id: string } }) {
   const order = await prisma.order.findUnique({
     where: { id: params.id },

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 const DEFAULT_CARRIERS = [
   { code: 'ko_grafitoptik_normal', name: 'Kő Grafitoptik GO – normál', nameDE: 'Stein Graphitoptik GO – normal', group: 'Kő',           sortOrder: 1 },
   { code: 'ko_grafitoptik_nagy',   name: 'Kő Grafitoptik GO – nagy',   nameDE: 'Stein Graphitoptik GO – groß',  group: 'Kő',           sortOrder: 2 },

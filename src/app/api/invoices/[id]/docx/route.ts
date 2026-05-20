@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import fs from 'fs'
 import path from 'path'
 import {
+
+export const dynamic = 'force-dynamic'
   Document, Packer, Paragraph, Table, TableRow, TableCell,
   TextRun, ImageRun, AlignmentType, WidthType, BorderStyle,
   ShadingType, Header, Footer, convertInchesToTwip, VerticalAlign,

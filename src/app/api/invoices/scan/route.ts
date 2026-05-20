@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import heicConvert from 'heic-convert'
 
+export const dynamic = 'force-dynamic'
+
 export const maxDuration = 60
 
 const client = new Anthropic()

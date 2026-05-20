@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 const HS_BASE = 'https://api.hubapi.com'
 
 async function hsFetch(token: string, path: string) {
