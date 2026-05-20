@@ -446,6 +446,122 @@ function buildServer() {
     }
   )
 
+  // ─── FELADATOK ───────────────────────────────────────────────────────────
+
+  server.tool(
+    'list_tasks',
+    'Feladatok listázása. Szűrhető státusz, prioritás, kapcsolat és cég alapján.',
+    {
+      status:    z.enum(['pending', 'in_progress', 'done', 'cancelled']).optional(),
+      priority:  z.enum(['low', 'medium', 'high']).optional(),
+      contactId: z.string().optional(),
+      companyId: z.string().optional(),
+    },
+    async ({ status, priority, contactId, companyId }) => {
+      const where: Record<string, unknown> = {}
+      if (status) where.status = status
+      if (priority) where.priority = priority
+      if (contactId) where.contactId = contactId
+      if (companyId) where.companyId = companyId
+      const data = await prisma.task.findMany({
+        where,
+        include: {
+          contact: { select: { id: true, firstName: true, lastName: true } },
+          company: { select: { id: true, name: true } },
+          assignee: { select: { id: true, name: true } },
+          subtasks: { orderBy: { createdAt: 'asc' } },
+        },
+        orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+      })
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'get_task',
+    'Egy feladat teljes részleteinek lekérése.',
+    { id: z.string() },
+    async ({ id }) => {
+      const data = await prisma.task.findUnique({
+        where: { id },
+        include: {
+          contact: true,
+          company: true,
+          deal: true,
+          assignee: { select: { id: true, name: true } },
+          subtasks: { orderBy: { createdAt: 'asc' } },
+        },
+      })
+      if (!data) return { content: [{ type: 'text', text: 'Feladat nem található.' }] }
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'create_task',
+    'Új feladat létrehozása. A dueDate YYYY-MM-DD formátumban adható meg.',
+    {
+      title:       z.string(),
+      description: z.string().optional(),
+      dueDate:     z.string().optional().describe('Határidő, YYYY-MM-DD formátum'),
+      priority:    z.enum(['low', 'medium', 'high']).optional(),
+      status:      z.enum(['pending', 'in_progress', 'done', 'cancelled']).optional(),
+      contactId:   z.string().optional(),
+      companyId:   z.string().optional(),
+      dealId:      z.string().optional(),
+      subtasks:    z.array(z.string()).optional().describe('Részfeladatok listája (szövegek tömbje)'),
+    },
+    async (body) => {
+      const data = await prisma.task.create({
+        data: {
+          title:       body.title,
+          description: body.description || null,
+          dueDate:     body.dueDate ? new Date(body.dueDate) : null,
+          priority:    body.priority || 'medium',
+          status:      body.status || 'pending',
+          contactId:   body.contactId || null,
+          companyId:   body.companyId || null,
+          dealId:      body.dealId || null,
+          subtasks:    body.subtasks?.length
+            ? { create: body.subtasks.map(s => ({ title: s })) }
+            : undefined,
+        },
+        include: {
+          contact: { select: { id: true, firstName: true, lastName: true } },
+          company: { select: { id: true, name: true } },
+          subtasks: true,
+        },
+      })
+      return { content: [{ type: 'text', text: `Feladat létrehozva: ${data.title} (${data.id})` }] }
+    }
+  )
+
+  server.tool(
+    'update_task',
+    'Feladat módosítása: státusz, prioritás, határidő, leírás.',
+    {
+      id:          z.string(),
+      status:      z.enum(['pending', 'in_progress', 'done', 'cancelled']).optional(),
+      priority:    z.enum(['low', 'medium', 'high']).optional(),
+      title:       z.string().optional(),
+      description: z.string().optional(),
+      dueDate:     z.string().optional().describe('Új határidő YYYY-MM-DD, vagy null a törléshez'),
+    },
+    async ({ id, status, priority, title, description, dueDate }) => {
+      const data = await prisma.task.update({
+        where: { id },
+        data: {
+          ...(status      ? { status }      : {}),
+          ...(priority    ? { priority }    : {}),
+          ...(title       ? { title }       : {}),
+          ...(description !== undefined ? { description } : {}),
+          ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
+        },
+      })
+      return { content: [{ type: 'text', text: `Feladat frissítve: ${data.title} → ${data.status}` }] }
+    }
+  )
+
   return server
 }
 
