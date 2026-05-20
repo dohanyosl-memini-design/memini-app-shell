@@ -139,6 +139,8 @@ export default function BookkeepingPage() {
   const [showInvScanModal, setShowInvScanModal] = useState(false)
   const [invScanning, setInvScanning] = useState(false)
   const [invSaving, setInvSaving] = useState(false)
+  const [invCompanyId, setInvCompanyId] = useState<string | null>(null)
+  const [invCompanyExists, setInvCompanyExists] = useState<boolean | null>(null)
   const [invForm, setInvForm] = useState({
     number: '', date: format(new Date(), 'yyyy-MM-dd'),
     dueDate: format(addDays(new Date(), 14), 'yyyy-MM-dd'),
@@ -168,6 +170,29 @@ export default function BookkeepingPage() {
   }, [monthKey])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  useEffect(() => {
+    if (!showInvScanModal || !invForm.billingName.trim()) {
+      setInvCompanyExists(null)
+      setInvCompanyId(null)
+      return
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/companies?search=${encodeURIComponent(invForm.billingName.trim())}`)
+        const list = await res.json()
+        const match = Array.isArray(list)
+          ? list.find((c: { id: string; name: string }) => c.name.toLowerCase() === invForm.billingName.trim().toLowerCase())
+          : null
+        setInvCompanyExists(!!match)
+        setInvCompanyId(match?.id || null)
+      } catch {
+        setInvCompanyExists(null)
+        setInvCompanyId(null)
+      }
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [invForm.billingName, showInvScanModal])
 
   function openNew() {
     setEditExpense(null)
@@ -467,6 +492,28 @@ export default function BookkeepingPage() {
   async function handleSaveInvoice() {
     if (!invForm.billingName || !invForm.dueDate || invItems.length === 0) return
     setInvSaving(true)
+    let companyId = invCompanyId
+
+    if (!companyId && invForm.billingName.trim()) {
+      try {
+        const newCoRes = await fetch('/api/companies', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: invForm.billingName.trim(),
+            address: invForm.billingAddress || null,
+            zip: invForm.billingZip || null,
+            city: invForm.billingCity || null,
+            country: invForm.billingCountry || null,
+          }),
+        })
+        if (newCoRes.ok) {
+          const newCo = await newCoRes.json()
+          companyId = newCo.id
+        }
+      } catch { /* non-fatal: invoice saves without companyId */ }
+    }
+
     const body = {
       number: invForm.number || undefined,
       date: invForm.date,
@@ -479,6 +526,7 @@ export default function BookkeepingPage() {
       currency: invForm.currency,
       status: invForm.status,
       paidAt: invForm.status === 'paid' ? invForm.date : null,
+      companyId: companyId || null,
       items: invItems.map(it => ({
         description: it.description,
         quantity: it.quantity,
@@ -1164,6 +1212,13 @@ export default function BookkeepingPage() {
               <label className="text-xs text-gray-500 mb-1 block">Vevő neve *</label>
               <input type="text" value={invForm.billingName} onChange={e => setInvForm(f => ({ ...f, billingName: e.target.value }))}
                 placeholder="Ügyfél neve..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+              {invForm.billingName.trim() && invCompanyExists !== null && (
+                <div className={`mt-1.5 flex items-center gap-1.5 text-xs font-medium ${invCompanyExists ? 'text-green-600' : 'text-blue-600'}`}>
+                  {invCompanyExists
+                    ? <><Check size={13} /> Létező cég a CRM-ben</>
+                    : <><Plus size={13} /> Új cégként rögzítjük a CRM-be</>}
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div>
