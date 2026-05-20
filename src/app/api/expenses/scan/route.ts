@@ -9,18 +9,44 @@ export const maxDuration = 60
 const client = new Anthropic()
 
 const CATEGORY_LIST = [
-  'Mobilszámla',
-  'Program / Applikáció',
-  'Tárhely',
-  'AI előfizetés',
-  'Alapanyagköltség',
   'Termékköltség',
-  'Szállítás',
+  'Alapanyag',
+  'Gyártás',
+  'Munkabér',
   'Marketing',
-  'Irodaszer',
-  'Könyvelő',
+  'Szoftver & App-ok',
+  'Tárhely',
+  'Könyvelés',
+  'Irodai kellékek',
+  'Utazás & Üzemanyag',
+  'Autóköltség',
+  'Szállítás (kimenő)',
+  'Bankköltség',
+  'Biztosítás',
+  'Kommunikáció',
+  'Javítás & Karbantartás',
   'Egyéb',
 ]
+
+const CATEGORY_HINTS = `
+- Termékköltség: finished goods bought for resale, merchandise purchase
+- Alapanyag: raw materials, ingredients used in production/manufacturing
+- Gyártás: production equipment, manufacturing tools, factory costs
+- Munkabér: salaries, wages, payroll, contractor payments, employee costs
+- Marketing: advertising, social media ads, design, promotion, branding
+- Szoftver & App-ok: software subscriptions, SaaS tools, apps, licenses, AI tools
+- Tárhely: web hosting, cloud storage, domain names, server costs
+- Könyvelés: accounting services, bookkeeping, tax consulting, auditing
+- Irodai kellékek: office supplies, stationery, paper, pens, printer ink
+- Utazás & Üzemanyag: business travel, fuel for work trips, train/flight tickets
+- Autóköltség: car maintenance, vehicle repairs, car insurance, leasing
+- Szállítás (kimenő): shipping products to customers, courier services, freight
+- Bankköltség: bank fees, wire transfer fees, payment processing fees
+- Biztosítás: any insurance premiums (business, liability, property)
+- Kommunikáció: phone bills, internet, mobile plans, VoIP
+- Javítás & Karbantartás: repairs of equipment, maintenance services
+- Egyéb: anything that doesn't fit the above categories
+`
 
 export async function POST(request: NextRequest) {
   const formData = await request.formData()
@@ -78,8 +104,11 @@ export async function POST(request: NextRequest) {
   "currency": "EUR or HUF based on the currency shown on the receipt"
 }
 
-Category list (pick the best match or null if none fits):
+Pick the best matching category from this list (or null if nothing fits):
 ${CATEGORY_LIST.join(', ')}
+
+Category matching guide:
+${CATEGORY_HINTS}
 
 If a field cannot be determined, use null. Return only the JSON object.`,
           },

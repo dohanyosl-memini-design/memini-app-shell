@@ -125,6 +125,7 @@ export default function BookkeepingPage() {
   // Category management
   const [catForm, setCatForm] = useState({ name: '', color: '#6B7280' })
   const [catSaving, setCatSaving] = useState(false)
+  const [seeding, setSeeding] = useState(false)
 
   // Invoice scan
   const invFileRef = useRef<HTMLInputElement>(null)
@@ -369,6 +370,13 @@ export default function BookkeepingPage() {
   async function handleDeleteCategory(id: string, name: string) {
     if (!confirm(`Törlöd a "${name}" kategóriát?`)) return
     await fetch(`/api/expense-categories/${id}`, { method: 'DELETE' })
+    fetchData()
+  }
+
+  async function handleSeedCategories() {
+    setSeeding(true)
+    await fetch('/api/expense-categories/seed', { method: 'POST' })
+    setSeeding(false)
     fetchData()
   }
 
@@ -660,58 +668,119 @@ export default function BookkeepingPage() {
       ) : tab === 'summary' ? (
 
         /* ── ÖSSZESÍTŐ ── */
-        <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Kiadások kategória szerint</h3>
-            {expenses.length === 0 ? <p className="text-gray-400 text-sm">Nincs adat</p> : (() => {
-              const byCategory = expenses.reduce<Record<string, number>>((acc, e) => {
-                const cat = e.category || 'Egyéb'
-                acc[cat] = (acc[cat] || 0) + (e.totalAmount || e.amount)
-                return acc
-              }, {})
-              const sorted = Object.entries(byCategory).sort((a, b) => b[1] - a[1])
-              const max = sorted[0]?.[1] || 1
-              return (
-                <div className="space-y-2">
-                  {sorted.map(([cat, amount]) => {
-                    const catColor = categories.find(c => c.name === cat)?.color || '#6B7280'
-                    return (
-                      <div key={cat}>
-                        <div className="flex justify-between text-xs text-gray-600 mb-0.5">
-                          <span>{cat}</span><span className="font-medium">{fmtEur(amount)}</span>
-                        </div>
-                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full" style={{ width: `${(amount / max) * 100}%`, backgroundColor: catColor }} />
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )
-            })()}
-          </div>
-          <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Befizetett számlák (bevétel)</h3>
-            {invoices.length === 0 ? <p className="text-gray-400 text-sm">Nincs befizetett számla ebben a hónapban</p> : (
-              <div className="space-y-1.5">
-                {invoices.map(inv => (
-                  <div key={inv.id} className="flex justify-between text-sm">
-                    <span className="font-mono text-gray-600">{inv.number} – {inv.company?.name || '—'}</span>
-                    <span className="font-semibold text-green-700">{fmtEur(inv.total)}</span>
+        (() => {
+          const COGS_CATS = new Set(['Termékköltség', 'Alapanyag', 'Gyártás'])
+          const cogsExpenses = expenses.filter(e => COGS_CATS.has(e.category || ''))
+          const opExpenses   = expenses.filter(e => !COGS_CATS.has(e.category || ''))
+          const totalCogs    = cogsExpenses.reduce((s, e) => s + (e.totalAmount || e.amount), 0)
+          const totalOp      = opExpenses.reduce((s, e) => s + (e.totalAmount || e.amount), 0)
+
+          const cogsByCategory = cogsExpenses.reduce<Record<string, number>>((acc, e) => {
+            const cat = e.category || 'Egyéb'
+            acc[cat] = (acc[cat] || 0) + (e.totalAmount || e.amount)
+            return acc
+          }, {})
+
+          const opByCategory = opExpenses.reduce<Record<string, number>>((acc, e) => {
+            const cat = e.category || 'Egyéb'
+            acc[cat] = (acc[cat] || 0) + (e.totalAmount || e.amount)
+            return acc
+          }, {})
+
+          const cogsSorted = Object.entries(cogsByCategory).sort((a, b) => b[1] - a[1])
+          const opSorted   = Object.entries(opByCategory).sort((a, b) => b[1] - a[1])
+          const opMax      = opSorted[0]?.[1] || 1
+
+          return (
+            <div className="space-y-4">
+              {/* COGS block */}
+              {(cogsExpenses.length > 0 || expenses.length === 0) && (
+                <div className="bg-red-50 rounded-xl border border-red-200 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-red-800">Közvetlen költségek (COGS)</h3>
+                    <span className="text-base font-bold text-red-700">{fmtEur(totalCogs)}</span>
                   </div>
-                ))}
-                <div className="flex justify-between text-sm font-bold border-t border-gray-100 pt-2 mt-2">
-                  <span>Összesen:</span><span className="text-green-700">{fmtEur(totalIncome)}</span>
+                  {cogsSorted.length === 0 ? (
+                    <p className="text-xs text-red-400">Nincs Termékköltség / Alapanyag / Gyártás kategóriájú kiadás</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {cogsSorted.map(([cat, amount]) => {
+                        const catColor = categories.find(c => c.name === cat)?.color || '#EF4444'
+                        return (
+                          <div key={cat}>
+                            <div className="flex justify-between text-xs text-red-700 mb-0.5">
+                              <span>{cat}</span><span className="font-medium">{fmtEur(amount)}</span>
+                            </div>
+                            <div className="h-1.5 bg-red-100 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: `${(amount / Math.max(totalCogs, 1)) * 100}%`, backgroundColor: catColor }} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
+              )}
+
+              {/* Operating expenses */}
+              <div className="bg-white rounded-xl border border-gray-100 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-gray-700">Működési kiadások</h3>
+                  {opSorted.length > 0 && <span className="text-sm font-bold text-gray-800">{fmtEur(totalOp)}</span>}
+                </div>
+                {opSorted.length === 0 ? <p className="text-gray-400 text-sm">Nincs adat</p> : (
+                  <div className="space-y-2">
+                    {opSorted.map(([cat, amount]) => {
+                      const catColor = categories.find(c => c.name === cat)?.color || '#6B7280'
+                      return (
+                        <div key={cat}>
+                          <div className="flex justify-between text-xs text-gray-600 mb-0.5">
+                            <span>{cat}</span><span className="font-medium">{fmtEur(amount)}</span>
+                          </div>
+                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: `${(amount / opMax) * 100}%`, backgroundColor: catColor }} />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
+
+              {/* Income */}
+              <div className="bg-white rounded-xl border border-gray-100 p-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Befizetett számlák (bevétel)</h3>
+                {invoices.length === 0 ? <p className="text-gray-400 text-sm">Nincs befizetett számla ebben a hónapban</p> : (
+                  <div className="space-y-1.5">
+                    {invoices.map(inv => (
+                      <div key={inv.id} className="flex justify-between text-sm">
+                        <span className="font-mono text-gray-600">{inv.number} – {inv.company?.name || '—'}</span>
+                        <span className="font-semibold text-green-700">{fmtEur(inv.total)}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between text-sm font-bold border-t border-gray-100 pt-2 mt-2">
+                      <span>Összesen:</span><span className="text-green-700">{fmtEur(totalIncome)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })()
 
       ) : (
 
         /* ── KATEGÓRIÁK ── */
         <div className="space-y-4">
+          {categories.length === 0 && (
+            <div className="bg-blue-50 rounded-xl border border-blue-200 p-4 flex items-center justify-between gap-4">
+              <p className="text-sm text-blue-700">Töltsd be az alapértelmezett kategóriákat egy kattintással.</p>
+              <button onClick={handleSeedCategories} disabled={seeding}
+                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 shrink-0">
+                {seeding ? <><RefreshCw size={13} className="animate-spin" /> Betöltés...</> : 'Alap kategóriák betöltése'}
+              </button>
+            </div>
+          )}
           <div className="bg-white rounded-xl border border-gray-100 p-4">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">Kategória hozzáadása</h3>
             <div className="flex gap-2">

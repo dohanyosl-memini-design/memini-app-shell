@@ -685,6 +685,58 @@ function buildServer() {
     }
   )
 
+  // ─── KIADÁSOK ────────────────────────────────────────────────────────────
+
+  server.tool(
+    'list_expenses',
+    'Kiadások listázása. Szűrhető hónap (YYYY-MM) és kategória szerint.',
+    {
+      month:    z.string().optional().describe('Hónap YYYY-MM formátumban, pl. 2026-05'),
+      category: z.string().optional().describe('Kategória neve, pl. Marketing'),
+      status:   z.enum(['pending', 'verified']).optional(),
+      limit:    z.number().int().positive().max(200).optional().describe('Max találat, alapértelmezett 100'),
+    },
+    async ({ month, category, status, limit }) => {
+      const where: Record<string, unknown> = {}
+      if (month) {
+        const start = new Date(`${month}-01`)
+        const end   = new Date(start.getFullYear(), start.getMonth() + 1, 1)
+        where.date  = { gte: start, lt: end }
+      }
+      if (category) where.category = category
+      if (status)   where.status   = status
+      const data = await prisma.expense.findMany({
+        where,
+        orderBy: { date: 'desc' },
+        take: limit ?? 100,
+      })
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'update_expense',
+    'Kiadás módosítása — elsősorban kategória átsoroláshoz. Csak az átadott mezők frissülnek.',
+    {
+      id:          z.string().describe('Kiadás ID'),
+      category:    z.string().optional().describe('Új kategória neve'),
+      status:      z.enum(['pending', 'verified']).optional(),
+      notes:       z.string().optional(),
+      vendor:      z.string().optional(),
+      description: z.string().optional(),
+    },
+    async ({ id, category, status, notes, vendor, description }) => {
+      const updateData: Record<string, unknown> = {}
+      if (category    !== undefined) updateData.category    = category || null
+      if (status      !== undefined) updateData.status      = status
+      if (notes       !== undefined) updateData.notes       = notes || null
+      if (vendor      !== undefined) updateData.vendor      = vendor
+      if (description !== undefined) updateData.description = description
+      const data = await prisma.expense.update({ where: { id }, data: updateData })
+      return { content: [{ type: 'text', text: `Kiadás frissítve: ${data.vendor} — kategória: ${data.category ?? 'nincs'}` }] }
+    }
+  )
+
   return server
 }
 
