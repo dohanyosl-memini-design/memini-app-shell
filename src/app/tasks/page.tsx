@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, Edit2, Trash2, LayoutGrid, List, User, Building2, AlertCircle, Calendar, CheckSquare } from 'lucide-react'
+import { Plus, Edit2, Trash2, LayoutGrid, List, User, Building2, AlertCircle, Calendar, CheckSquare, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
 import TaskForm, { TASK_TYPES } from '@/components/TaskForm'
 import { format, isPast, isToday, isTomorrow } from 'date-fns'
@@ -68,6 +69,7 @@ function TaskCard({
   onDragEnd: () => void
   isDragging: boolean
 }) {
+  const router = useRouter()
   const typeInfo = TASK_TYPES.find((t) => t.value === task.taskType)
   const due = dueBadge(task.dueDate)
   const doneSubtasks = task.subtasks.filter((s) => s.completed).length
@@ -78,8 +80,9 @@ function TaskCard({
       draggable
       onDragStart={() => onDragStart(task)}
       onDragEnd={onDragEnd}
-      className={`bg-white rounded-xl border border-gray-100 p-3.5 shadow-sm cursor-grab active:cursor-grabbing transition-all select-none group ${
-        isDragging ? 'opacity-40 scale-95' : 'hover:shadow-md hover:-translate-y-0.5'
+      onClick={() => router.push(`/tasks/${task.id}`)}
+      className={`bg-white rounded-xl border border-gray-100 p-3.5 shadow-sm cursor-pointer transition-all select-none group ${
+        isDragging ? 'opacity-40 scale-95 cursor-grabbing' : 'hover:shadow-md hover:-translate-y-0.5'
       } ${task.status === 'completed' ? 'opacity-60' : ''}`}
     >
       {/* Type + priority row */}
@@ -92,10 +95,10 @@ function TaskCard({
           )}
         </div>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => onEdit(task)} className="p-1 text-gray-400 hover:text-blue-600 rounded">
+          <button onClick={(e) => { e.stopPropagation(); onEdit(task) }} className="p-1 text-gray-400 hover:text-blue-600 rounded">
             <Edit2 size={12} />
           </button>
-          <button onClick={() => onDelete(task.id)} className="p-1 text-gray-400 hover:text-red-600 rounded">
+          <button onClick={(e) => { e.stopPropagation(); onDelete(task.id) }} className="p-1 text-gray-400 hover:text-red-600 rounded">
             <Trash2 size={12} />
           </button>
         </div>
@@ -432,28 +435,33 @@ export default function TasksPage() {
               const due = dueBadge(task.dueDate)
               const col = COLUMNS.find((c) => c.id === task.status)
               return (
-                <div key={task.id} className={`bg-white rounded-xl border border-gray-100 px-4 py-3 hover:shadow-sm transition-shadow flex items-center gap-3 ${task.status === 'completed' ? 'opacity-60' : ''}`}>
+                <div
+                  key={task.id}
+                  onClick={() => window.location.href = `/tasks/${task.id}`}
+                  className={`bg-white rounded-xl border border-gray-100 px-4 py-3 hover:shadow-sm transition-shadow flex items-center gap-3 cursor-pointer hover:bg-gray-50 ${task.status === 'completed' ? 'opacity-60' : ''}`}
+                >
                   <span className={`w-2 h-2 rounded-full shrink-0 ${col?.dot || 'bg-gray-300'}`} />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2">
+                    <div className="flex items-baseline gap-2 flex-wrap">
                       <span className={`text-sm font-medium text-gray-900 ${task.status === 'completed' ? 'line-through text-gray-400' : ''}`}>
                         {task.title}
                       </span>
                       {typeInfo && <span className="text-xs text-gray-400">{typeInfo.icon} {typeInfo.label}</span>}
                     </div>
-                    <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-400">
+                    <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-400 flex-wrap">
                       {due && <span className={due.cls}>{due.text}</span>}
                       {task.assignee && <span>{task.assignee.name}</span>}
                       {task.company && <span>{task.company.name}</span>}
+                      {task.description && <span className="truncate max-w-xs text-gray-400">{task.description}</span>}
                     </div>
                   </div>
                   <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${PRIORITY_BADGE[task.priority]}`}>
                     {PRIORITY_LABEL[task.priority]}
                   </span>
-                  <button onClick={() => handleEdit(task)} className="text-gray-400 hover:text-blue-600 transition-colors shrink-0">
+                  <button onClick={(e) => { e.stopPropagation(); handleEdit(task) }} className="text-gray-400 hover:text-blue-600 transition-colors shrink-0">
                     <Edit2 size={14} />
                   </button>
-                  <button onClick={() => handleDelete(task.id)} className="text-gray-400 hover:text-red-600 transition-colors shrink-0">
+                  <button onClick={(e) => { e.stopPropagation(); handleDelete(task.id) }} className="text-gray-400 hover:text-red-600 transition-colors shrink-0">
                     <Trash2 size={14} />
                   </button>
                 </div>

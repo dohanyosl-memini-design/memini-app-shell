@@ -11,6 +11,12 @@ const include = {
   subtasks: { orderBy: { createdAt: 'asc' as const } },
 }
 
+export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+  const task = await prisma.task.findUnique({ where: { id: params.id }, include })
+  if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  return NextResponse.json(task)
+}
+
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   const body = await request.json()
 
