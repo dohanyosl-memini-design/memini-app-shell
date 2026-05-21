@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
+import { getMnbRate } from '@/lib/mnb'
 
 export const dynamic = 'force-dynamic'
 
@@ -711,6 +712,27 @@ function buildServer() {
         take: limit ?? 100,
       })
       return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'get_mnb_rate',
+    'MNB EUR/HUF középárfolyam lekérése adott dátumra. Hétvégén/ünnepnapon automatikusan az előző munkanapra esik vissza (max 7 nap). HUF kiadások EUR-ra váltásához szükséges.',
+    {
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('Dátum YYYY-MM-DD formátumban — általában a számla kelte'),
+    },
+    async ({ date }) => {
+      const result = await getMnbRate(date)
+      if (!result) {
+        return { content: [{ type: 'text', text: `MNB árfolyam nem elérhető a(z) ${date} dátumra (7 napos visszakeresés is sikertelen).` }] }
+      }
+      const eurAmount_example = Math.round((100000 / result.rate) * 100) / 100
+      return {
+        content: [{
+          type: 'text',
+          text: `EUR/HUF árfolyam: ${result.rate} (${result.date})\nKéplet: eurAmount = totalAmount / ${result.rate}\nPélda: 100 000 HUF = ${eurAmount_example} EUR`,
+        }],
+      }
     }
   )
 
