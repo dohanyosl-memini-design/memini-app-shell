@@ -129,6 +129,26 @@ export default function InvoicesPage() {
   const [editDN, setEditDN] = useState<DeliveryNote | null>(null)
   const [generatingInvoiceId, setGeneratingInvoiceId] = useState<string | null>(null)
 
+  // Sorting — invoices
+  type InvCol = 'number' | 'company' | 'date' | 'dueDate' | 'total' | 'status'
+  const [invSortCol, setInvSortCol] = useState<InvCol>('date')
+  const [invSortDir, setInvSortDir] = useState<'asc' | 'desc'>('desc')
+
+  function handleInvSort(col: InvCol) {
+    if (col === invSortCol) setInvSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setInvSortCol(col); setInvSortDir('asc') }
+  }
+
+  // Sorting — delivery notes
+  type DnCol = 'number' | 'company' | 'date' | 'total' | 'status'
+  const [dnSortCol, setDnSortCol] = useState<DnCol>('date')
+  const [dnSortDir, setDnSortDir] = useState<'asc' | 'desc'>('desc')
+
+  function handleDnSort(col: DnCol) {
+    if (col === dnSortCol) setDnSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setDnSortCol(col); setDnSortDir('asc') }
+  }
+
   const fetchInvoices = useCallback(async () => {
     setInvoicesLoading(true)
     const params = new URLSearchParams()
@@ -251,6 +271,27 @@ export default function InvoicesPage() {
     )
   })
 
+  const sortedInvoices = [...filteredInvoices].sort((a, b) => {
+    let cmp = 0
+    if (invSortCol === 'number')  cmp = a.number.localeCompare(b.number, undefined, { numeric: true, sensitivity: 'base' })
+    else if (invSortCol === 'company') cmp = (a.company?.name || '').localeCompare(b.company?.name || '')
+    else if (invSortCol === 'date')    cmp = new Date(a.date).getTime() - new Date(b.date).getTime()
+    else if (invSortCol === 'dueDate') cmp = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+    else if (invSortCol === 'total')   cmp = a.total - b.total
+    else if (invSortCol === 'status')  cmp = a.status.localeCompare(b.status)
+    return invSortDir === 'asc' ? cmp : -cmp
+  })
+
+  const sortedDNs = [...filteredDNs].sort((a, b) => {
+    let cmp = 0
+    if (dnSortCol === 'number')  cmp = a.number.localeCompare(b.number, undefined, { numeric: true, sensitivity: 'base' })
+    else if (dnSortCol === 'company') cmp = (a.company?.name || '').localeCompare(b.company?.name || '')
+    else if (dnSortCol === 'date')    cmp = new Date(a.date).getTime() - new Date(b.date).getTime()
+    else if (dnSortCol === 'total')   cmp = a.total - b.total
+    else if (dnSortCol === 'status')  cmp = a.status.localeCompare(b.status)
+    return dnSortDir === 'asc' ? cmp : -cmp
+  })
+
   const now = new Date()
   const openTotal = invoices.filter((i) => i.status === 'open').reduce((s, i) => s + i.total, 0)
   const overdueCount = invoices.filter((i) => i.status === 'open' && new Date(i.dueDate) < now).length
@@ -337,12 +378,24 @@ export default function InvoicesPage() {
               <table className="w-full min-w-[640px]">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Számlaszám</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Ügyfél / Cég</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Kiállítás</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Határidő</th>
-                    <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Összeg</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Státusz</th>
+                    {([
+                      { col: 'number',  label: 'Számlaszám',   align: 'text-left'  },
+                      { col: 'company', label: 'Ügyfél / Cég', align: 'text-left'  },
+                      { col: 'date',    label: 'Kiállítás',    align: 'text-left'  },
+                      { col: 'dueDate', label: 'Határidő',     align: 'text-left'  },
+                      { col: 'total',   label: 'Összeg',       align: 'text-right' },
+                      { col: 'status',  label: 'Státusz',      align: 'text-left'  },
+                    ] as { col: InvCol; label: string; align: string }[]).map(({ col, label, align }) => (
+                      <th key={col} className={`${align} px-5 py-3 text-xs font-semibold text-gray-500 uppercase`}>
+                        <button
+                          type="button"
+                          onClick={() => handleInvSort(col)}
+                          className="hover:text-gray-800 transition-colors cursor-pointer select-none"
+                        >
+                          {label}{invSortCol === col ? (invSortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                        </button>
+                      </th>
+                    ))}
                     <th className="text-center px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Műveletek</th>
                   </tr>
                 </thead>
@@ -351,7 +404,7 @@ export default function InvoicesPage() {
                     <tr><td colSpan={7} className="px-5 py-12 text-center text-gray-400">Betöltés...</td></tr>
                   ) : filteredInvoices.length === 0 ? (
                     <tr><td colSpan={7} className="px-5 py-12 text-center text-gray-400">Nem található számla</td></tr>
-                  ) : filteredInvoices.map((invoice) => {
+                  ) : sortedInvoices.map((invoice) => {
                     const isOverdue = invoice.status === 'open' && new Date(invoice.dueDate) < now
                     const isStornoDoc = !!invoice.stornoOf
                     const statusKey = isStornoDoc ? 'storno' : isOverdue ? 'overdue' : invoice.status
@@ -465,12 +518,24 @@ export default function InvoicesPage() {
               <table className="w-full min-w-[580px]">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Szállítólevél szám</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Ügyfél / Cég</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Kiállítás</th>
+                    {([
+                      { col: 'number',  label: 'Szállítólevél szám', align: 'text-left'  },
+                      { col: 'company', label: 'Ügyfél / Cég',       align: 'text-left'  },
+                      { col: 'date',    label: 'Kiállítás',           align: 'text-left'  },
+                      { col: 'total',   label: 'Összeg',              align: 'text-right' },
+                      { col: 'status',  label: 'Státusz',             align: 'text-left'  },
+                    ] as { col: DnCol; label: string; align: string }[]).map(({ col, label, align }) => (
+                      <th key={col} className={`${align} px-5 py-3 text-xs font-semibold text-gray-500 uppercase`}>
+                        <button
+                          type="button"
+                          onClick={() => handleDnSort(col)}
+                          className="hover:text-gray-800 transition-colors cursor-pointer select-none"
+                        >
+                          {label}{dnSortCol === col ? (dnSortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                        </button>
+                      </th>
+                    ))}
                     <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Lieferdatum</th>
-                    <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Összeg</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Státusz</th>
                     <th className="text-center px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Műveletek</th>
                   </tr>
                 </thead>
@@ -479,7 +544,7 @@ export default function InvoicesPage() {
                     <tr><td colSpan={7} className="px-5 py-12 text-center text-gray-400">Betöltés...</td></tr>
                   ) : filteredDNs.length === 0 ? (
                     <tr><td colSpan={7} className="px-5 py-12 text-center text-gray-400">Nem található szállítólevél</td></tr>
-                  ) : filteredDNs.map((dn) => {
+                  ) : sortedDNs.map((dn) => {
                     const status = DN_STATUS_CONFIG[dn.status] || DN_STATUS_CONFIG.draft
                     return (
                       <tr key={dn.id} className="hover:bg-gray-50 transition-colors">
