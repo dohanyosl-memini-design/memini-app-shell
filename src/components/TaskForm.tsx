@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Plus, X } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Plus, X, CheckSquare, Square } from 'lucide-react'
 
 interface Contact { id: string; firstName: string; lastName: string }
 interface Company { id: string; name: string }
 interface AppUser { id: string; name: string }
+interface SubTask { id: string; title: string; completed: boolean }
 
 export const TASK_TYPES = [
   { value: 'gyartas',     label: 'Gyártás',        icon: '🏭', color: 'bg-purple-100 text-purple-700 border-purple-300' },
@@ -32,6 +33,7 @@ interface TaskData {
   contactId: string | null
   companyId: string | null
   dealId: string | null
+  subtasks?: SubTask[]
 }
 
 interface TaskFormProps {
@@ -48,8 +50,13 @@ export default function TaskForm({ task, defaultStatus = 'pending', defaultCompa
   const [companies, setCompanies] = useState<Company[]>([])
   const [users, setUsers] = useState<AppUser[]>([])
   const [loading, setLoading] = useState(false)
-  const [newSubtask, setNewSubtask] = useState('')
-  const [subtasks, setSubtasks] = useState<string[]>([])
+
+  // Existing subtasks (edit mode) — managed with immediate API calls
+  const [existingSubtasks, setExistingSubtasks] = useState<SubTask[]>(task?.subtasks ?? [])
+  // Pending subtasks (create mode) — batched on submit
+  const [pendingSubtasks, setPendingSubtasks] = useState<string[]>([])
+  const [subtaskInput, setSubtaskInput] = useState('')
+  const subtaskRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState({
     title: task?.title || '',
@@ -66,16 +73,47 @@ export default function TaskForm({ task, defaultStatus = 'pending', defaultCompa
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/contacts').then((r) => r.json()),
-      fetch('/api/companies').then((r) => r.json()),
-      fetch('/api/users').then((r) => r.json()),
+      fetch('/api/contacts').then(r => r.json()),
+      fetch('/api/companies').then(r => r.json()),
+      fetch('/api/users').then(r => r.json()),
     ]).then(([c, co, u]) => { setContacts(c); setCompanies(co); setUsers(u) })
   }, [])
 
-  function addSubtask() {
-    if (!newSubtask.trim()) return
-    setSubtasks([...subtasks, newSubtask.trim()])
-    setNewSubtask('')
+  async function handleAddSubtask() {
+    const title = subtaskInput.trim()
+    if (!title) return
+
+    if (task) {
+      // Edit mode: save to API immediately so it gets an ID
+      const res = await fetch(`/api/tasks/${task.id}/subtasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      })
+      if (res.ok) {
+        const created = await res.json()
+        setExistingSubtasks(prev => [...prev, created])
+      }
+    } else {
+      setPendingSubtasks(prev => [...prev, title])
+    }
+    setSubtaskInput('')
+    subtaskRef.current?.focus()
+  }
+
+  async function toggleExistingSubtask(id: string) {
+    const updated = existingSubtasks.map(s => s.id === id ? { ...s, completed: !s.completed } : s)
+    setExistingSubtasks(updated)
+    await fetch(`/api/subtasks/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ completed: updated.find(s => s.id === id)?.completed }),
+    })
+  }
+
+  async function deleteExistingSubtask(id: string) {
+    setExistingSubtasks(prev => prev.filter(s => s.id !== id))
+    await fetch(`/api/subtasks/${id}`, { method: 'DELETE' })
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -88,7 +126,7 @@ export default function TaskForm({ task, defaultStatus = 'pending', defaultCompa
     await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, subtasks }),
+      body: JSON.stringify({ ...form, subtasks: pendingSubtasks }),
     })
 
     setLoading(false)
@@ -96,20 +134,22 @@ export default function TaskForm({ task, defaultStatus = 'pending', defaultCompa
   }
 
   const selectedType = TASK_TYPES.find(t => t.value === form.taskType)
+  const allSubtasks = task ? existingSubtasks : pendingSubtasks.map((t, i) => ({ id: String(i), title: t, completed: false }))
+  const doneCount = existingSubtasks.filter(s => s.completed).length
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-4">
 
       {/* Feladat típusa */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">Feladat típusa</label>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
           {TASK_TYPES.map((t) => (
             <button
               key={t.value}
               type="button"
               onClick={() => setForm({ ...form, taskType: form.taskType === t.value ? '' : t.value })}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
+              className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-medium transition-all ${
                 form.taskType === t.value
                   ? t.color + ' ring-2 ring-offset-1 ring-current'
                   : 'border-gray-200 text-gray-500 hover:bg-gray-50'
@@ -135,8 +175,108 @@ export default function TaskForm({ task, defaultStatus = 'pending', defaultCompa
         />
       </div>
 
+      {/* Leírás — nagyobb mező */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Leírás / Részletek</label>
+        <textarea
+          rows={5}
+          value={form.description}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
+          placeholder="Részletek, instrukciók, megjegyzések..."
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y text-sm leading-relaxed"
+        />
+      </div>
+
+      {/* Alfeladatok */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Alfeladatok
+            {task && existingSubtasks.length > 0 && (
+              <span className="ml-2 text-xs font-normal text-gray-400">{doneCount}/{existingSubtasks.length} kész</span>
+            )}
+          </label>
+        </div>
+
+        {/* Progress bar (edit mode only) */}
+        {task && existingSubtasks.length > 0 && (
+          <div className="w-full bg-gray-100 rounded-full h-1 mb-3">
+            <div
+              className="bg-green-500 h-1 rounded-full transition-all duration-300"
+              style={{ width: `${(doneCount / existingSubtasks.length) * 100}%` }}
+            />
+          </div>
+        )}
+
+        {/* Existing subtasks (edit) or pending (create) */}
+        {allSubtasks.length > 0 && (
+          <div className="space-y-1 mb-2">
+            {allSubtasks.map((s) => (
+              <div key={s.id} className={`flex items-center gap-2 rounded-lg px-3 py-2 group transition-colors ${
+                s.completed ? 'bg-green-50' : 'bg-gray-50 hover:bg-gray-100'
+              }`}>
+                {task ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleExistingSubtask(s.id)}
+                    className="shrink-0 text-gray-400 hover:text-green-600 transition-colors"
+                  >
+                    {s.completed
+                      ? <CheckSquare size={15} className="text-green-500" />
+                      : <Square size={15} />
+                    }
+                  </button>
+                ) : (
+                  <Square size={15} className="shrink-0 text-gray-300" />
+                )}
+                <span className={`flex-1 text-sm leading-snug ${s.completed ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                  {s.title}
+                </span>
+                {task ? (
+                  <button
+                    type="button"
+                    onClick={() => deleteExistingSubtask(s.id)}
+                    className="shrink-0 opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all"
+                  >
+                    <X size={13} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setPendingSubtasks(prev => prev.filter((_, i) => String(i) !== s.id))}
+                    className="shrink-0 opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add input */}
+        <div className="flex gap-2">
+          <input
+            ref={subtaskRef}
+            type="text"
+            value={subtaskInput}
+            onChange={(e) => setSubtaskInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddSubtask() } }}
+            placeholder="Alfeladat hozzáadása… (Enter)"
+            className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          />
+          <button
+            type="button"
+            onClick={handleAddSubtask}
+            className="px-3 py-1.5 bg-gray-100 hover:bg-blue-50 hover:text-blue-600 rounded-lg text-gray-500 transition-colors"
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+      </div>
+
       {/* Cég + Ügyfél */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Cég</label>
           <select value={form.companyId} onChange={(e) => setForm({ ...form, companyId: e.target.value })}
@@ -156,7 +296,7 @@ export default function TaskForm({ task, defaultStatus = 'pending', defaultCompa
       </div>
 
       {/* Felelős + Prioritás + Határidő */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-3">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Felelős</label>
           <select value={form.assigneeId} onChange={(e) => setForm({ ...form, assigneeId: e.target.value })}
@@ -181,45 +321,13 @@ export default function TaskForm({ task, defaultStatus = 'pending', defaultCompa
         </div>
       </div>
 
-      {/* Leírás */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Leírás / Részletek</label>
-        <textarea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
-          placeholder="Részletek, instrukciók..."
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm" />
-      </div>
-
-      {/* Alfeladatok — csak új feladatnál */}
-      {!task && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Alfeladatok</label>
-          <div className="space-y-1.5 mb-2">
-            {subtasks.map((s, i) => (
-              <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5 text-sm">
-                <span className="flex-1 text-gray-700">{s}</span>
-                <button type="button" onClick={() => setSubtasks(subtasks.filter((_, j) => j !== i))}
-                  className="text-gray-400 hover:text-red-500"><X size={13} /></button>
-              </div>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <input type="text" value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSubtask() } }}
-              placeholder="Alfeladat hozzáadása..."
-              className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
-            <button type="button" onClick={addSubtask}
-              className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-600 transition-colors">
-              <Plus size={16} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="flex justify-end gap-3 pt-2">
+      <div className="flex justify-end gap-3 pt-1">
         <button type="button" onClick={onCancel}
-          className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">Mégse</button>
+          className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors text-sm">
+          Mégse
+        </button>
         <button type="submit" disabled={loading}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm">
           {loading ? 'Mentés...' : task ? 'Módosítás' : 'Feladat létrehozása'}
         </button>
       </div>

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, Edit2, Trash2, Calendar, User, Building2,
-  CheckSquare, Square, Clock, Flag, Tag,
+  CheckSquare, Square, Clock, Flag, Tag, Plus, X,
 } from 'lucide-react'
 import Modal from '@/components/Modal'
 import TaskForm, { TASK_TYPES } from '@/components/TaskForm'
@@ -51,6 +51,8 @@ export default function TaskDetailPage({ params }: { params: { id: string } }) {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [subtasks, setSubtasks] = useState<SubTask[]>([])
+  const [newSubtaskInput, setNewSubtaskInput] = useState('')
+  const [addingSubtask, setAddingSubtask] = useState(false)
 
   useEffect(() => {
     fetch(`/api/tasks/${id}`)
@@ -68,10 +70,32 @@ export default function TaskDetailPage({ params }: { params: { id: string } }) {
     )
     setSubtasks(updated)
     await fetch(`/api/subtasks/${subtaskId}`, {
-      method: 'PUT',
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ completed: updated.find(s => s.id === subtaskId)?.completed }),
     })
+  }
+
+  async function deleteSubtask(subtaskId: string) {
+    setSubtasks(prev => prev.filter(s => s.id !== subtaskId))
+    await fetch(`/api/subtasks/${subtaskId}`, { method: 'DELETE' })
+  }
+
+  async function addSubtask() {
+    const title = newSubtaskInput.trim()
+    if (!title) return
+    setAddingSubtask(true)
+    const res = await fetch(`/api/tasks/${id}/subtasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    })
+    if (res.ok) {
+      const created = await res.json()
+      setSubtasks(prev => [...prev, created])
+      setNewSubtaskInput('')
+    }
+    setAddingSubtask(false)
   }
 
   async function handleDelete() {
@@ -244,39 +268,73 @@ export default function TaskDetailPage({ params }: { params: { id: string } }) {
       </div>
 
       {/* Subtasks */}
-      {subtasks.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-700">Részfeladatok</h2>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-gray-700">Részfeladatok</h2>
+          {subtasks.length > 0 && (
             <span className="text-xs text-gray-400">{doneSubtasks}/{subtasks.length} kész</span>
-          </div>
+          )}
+        </div>
+
+        {subtasks.length > 0 && (
           <div className="w-full bg-gray-100 rounded-full h-1 mb-4">
             <div
-              className="bg-green-500 h-1 rounded-full transition-all"
-              style={{ width: `${subtasks.length > 0 ? (doneSubtasks / subtasks.length) * 100 : 0}%` }}
+              className="bg-green-500 h-1 rounded-full transition-all duration-300"
+              style={{ width: `${(doneSubtasks / subtasks.length) * 100}%` }}
             />
           </div>
-          <div className="space-y-2">
-            {subtasks.map(s => (
+        )}
+
+        <div className="space-y-1.5 mb-3">
+          {subtasks.map(s => (
+            <div key={s.id} className={`flex items-center gap-3 rounded-xl px-3 py-2 group transition-colors ${
+              s.completed ? 'bg-green-50' : 'bg-gray-50 hover:bg-gray-100'
+            }`}>
               <button
-                key={s.id}
                 onClick={() => toggleSubtask(s.id)}
-                className="w-full flex items-start gap-3 text-left group"
+                className="shrink-0 text-gray-400 hover:text-green-600 transition-colors"
               >
-                <span className="mt-0.5 shrink-0 text-gray-400 group-hover:text-blue-500 transition-colors">
-                  {s.completed
-                    ? <CheckSquare size={16} className="text-green-500" />
-                    : <Square size={16} />
-                  }
-                </span>
-                <span className={`text-sm leading-snug ${s.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
-                  {s.title}
-                </span>
+                {s.completed
+                  ? <CheckSquare size={16} className="text-green-500" />
+                  : <Square size={16} />
+                }
               </button>
-            ))}
-          </div>
+              <span className={`flex-1 text-sm leading-snug ${s.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                {s.title}
+              </span>
+              <button
+                onClick={() => deleteSubtask(s.id)}
+                className="shrink-0 opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          ))}
+
+          {subtasks.length === 0 && (
+            <p className="text-xs text-gray-400 py-1">Még nincs alfeladat.</p>
+          )}
         </div>
-      )}
+
+        {/* Quick-add */}
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newSubtaskInput}
+            onChange={e => setNewSubtaskInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSubtask() } }}
+            placeholder="Alfeladat hozzáadása… (Enter)"
+            className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          />
+          <button
+            onClick={addSubtask}
+            disabled={addingSubtask || !newSubtaskInput.trim()}
+            className="px-3 py-1.5 bg-gray-100 hover:bg-blue-50 hover:text-blue-600 rounded-lg text-gray-500 transition-colors disabled:opacity-40"
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+      </div>
 
       {showModal && (
         <Modal title="Feladat szerkesztése" onClose={() => setShowModal(false)} size="lg">
