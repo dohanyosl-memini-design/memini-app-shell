@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
       orderBy: { date: 'asc' },
       select: {
         id: true, number: true, date: true, status: true, paidAt: true,
-        total: true, currency: true, dueDate: true,
+        total: true, subtotal: true, currency: true, dueDate: true,
         billingName: true, company: { select: { id: true, name: true } },
       },
     }),
@@ -123,6 +123,13 @@ export async function GET(request: NextRequest) {
     .filter(i => invoiceDateIn(i, startOfYear, endOfYear))
     .reduce((s, i) => s + i.total, 0)
 
+  const billedNetThisYear = allInvoices
+    .filter(i => invoiceDateIn(i, startOfYear, endOfYear))
+    .reduce((s, i) => s + (i.subtotal ?? i.total), 0)
+
+  const invoiceCountThisYear = allInvoices
+    .filter(i => invoiceDateIn(i, startOfYear, endOfYear)).length
+
   const receivedThisYear = allInvoices
     .filter(i => i.status === 'paid' && i.paidAt && new Date(i.paidAt) >= startOfYear && new Date(i.paidAt) <= endOfYear)
     .reduce((s, i) => s + i.total, 0)
@@ -196,16 +203,20 @@ export async function GET(request: NextRequest) {
   ]
 
   // ─── MONTHLY BREAKDOWN for selected year ─────────────────────────────────────
+  const yearInvoices = allInvoices.filter(i => invoiceDateIn(i, startOfYear, endOfYear))
   const monthlyBreakdown = Array.from({ length: 12 }, (_, m) => {
     const key = `${year}-${String(m + 1).padStart(2, '0')}`
     const label = new Date(year, m, 1).toLocaleDateString('hu-HU', { month: 'short' })
-    const income = allCashflowEntries
-      .filter(e => e.type === 'income' && e.date.startsWith(key))
-      .reduce((s, e) => s + e.amount, 0)
+    const monthInvoices = yearInvoices.filter(i => {
+      const d = i.date instanceof Date ? i.date.toISOString() : String(i.date)
+      return d.startsWith(key)
+    })
+    const grossIncome = monthInvoices.reduce((s, i) => s + i.total, 0)
+    const netIncome = monthInvoices.reduce((s, i) => s + (i.subtotal ?? i.total), 0)
     const expenses = allCashflowEntries
       .filter(e => e.type === 'expense' && e.date.startsWith(key))
       .reduce((s, e) => s + e.amount, 0)
-    return { month: label, monthKey: key, income, expenses, balance: income - expenses }
+    return { month: label, monthKey: key, income: grossIncome, grossIncome, netIncome, expenses, balance: netIncome - expenses }
   })
 
   // ─── TOP CUSTOMERS ────────────────────────────────────────────────────────────
@@ -271,9 +282,12 @@ export async function GET(request: NextRequest) {
     lastMonthExpenses: combinedLastMonthExpenses,
     // Yearly KPIs
     yearlyIncome,
+    yearlyNetIncome: billedNetThisYear,
     yearlyExpenses,
     yearlyBalance,
+    yearlyNetBalance: billedNetThisYear - (expThisYear + txExpThisYear),
     receivedThisYear,
+    invoiceCountThisYear,
     // Chart data
     allCashflowEntries,
     allTransactions: allTransactionExpenses,

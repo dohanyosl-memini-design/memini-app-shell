@@ -2,17 +2,26 @@
 
 import { useState, useEffect } from 'react'
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
 } from 'recharts'
 import {
   TrendingUp, TrendingDown, FileText, Clock, Package, Users, Target,
-  ShoppingCart, ChevronLeft, ChevronRight, Euro,
+  ShoppingCart, ChevronLeft, ChevronRight, Euro, Receipt, Percent,
+  Star, BarChart2,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { hu } from 'date-fns/locale'
 
-interface MonthRow { month: string; monthKey: string; income: number; expenses: number; balance: number }
+interface MonthRow {
+  month: string
+  monthKey: string
+  income: number
+  grossIncome: number
+  netIncome: number
+  expenses: number
+  balance: number
+}
 
 interface StatsData {
   openInvoicesTotal: number
@@ -29,9 +38,12 @@ interface StatsData {
   allCashflowEntries: { type: string; amount: number; date: string; category: string | null }[]
   dormantCompanies: { id: string; name: string; classification: string | null; city: string | null }[]
   yearlyIncome: number
+  yearlyNetIncome: number
+  yearlyNetBalance: number
   yearlyExpenses: number
   yearlyBalance: number
   receivedThisYear: number
+  invoiceCountThisYear: number
   monthlyBreakdown: MonthRow[]
   stockSoldThisYear: number
   stockPurchasedThisYear: number
@@ -52,6 +64,10 @@ function pct(current: number, prev: number) {
   if (!prev) return null
   const d = ((current - prev) / prev) * 100
   return { value: Math.abs(d).toFixed(0), up: d >= 0 }
+}
+
+function SkeletonCell() {
+  return <div className="h-3 bg-gray-100 rounded w-16 ml-auto animate-pulse" />
 }
 
 export default function ReportsPage() {
@@ -86,19 +102,29 @@ export default function ReportsPage() {
   const incomePct = stats ? pct(stats.combinedMonthlyIncome, stats.combinedLastMonthIncome) : null
   const expPct = stats ? pct(stats.combinedMonthlyExpenses, stats.combinedLastMonthExpenses) : null
 
-  // Build chart data from allCashflowEntries (already filtered server-side by year)
+  // Cashflow area chart data
   const chartData = Array.from({ length: 12 }, (_, m) => {
     const key = `${year}-${String(m + 1).padStart(2, '0')}`
     const label = new Date(year, m, 1).toLocaleDateString('hu-HU', { month: 'short' })
     const entries = stats?.allCashflowEntries ?? []
     const income = entries.filter(e => e.type === 'income' && e.date.startsWith(key)).reduce((s, e) => s + e.amount, 0)
     const expenses = entries.filter(e => e.type === 'expense' && e.date.startsWith(key)).reduce((s, e) => s + e.amount, 0)
-    return { month: label, Bevétel: income, Kiadás: expenses }
+    return { month: label, 'Bruttó bev.': income, Kiadás: expenses }
   })
 
-  const profitMargin = stats && stats.yearlyIncome > 0
-    ? Math.round((stats.yearlyBalance / stats.yearlyIncome) * 100)
-    : 0
+  // Derived metrics
+  const collectionRate = stats && stats.yearlyIncome > 0
+    ? Math.round((stats.receivedThisYear / stats.yearlyIncome) * 100) : 0
+  const vatObligation = stats ? stats.yearlyIncome - (stats.yearlyNetIncome ?? stats.yearlyIncome) : 0
+  const avgInvoiceValue = stats && (stats.invoiceCountThisYear ?? 0) > 0
+    ? stats.yearlyIncome / stats.invoiceCountThisYear : 0
+  const expenseRatio = stats && (stats.yearlyNetIncome ?? 0) > 0
+    ? Math.round((stats.yearlyExpenses / stats.yearlyNetIncome) * 100) : 0
+  const bestMonth = stats
+    ? stats.monthlyBreakdown.reduce((best, row) => row.netIncome > (best?.netIncome ?? 0) ? row : best, stats.monthlyBreakdown[0])
+    : null
+  const profitMargin = stats && (stats.yearlyNetIncome ?? 0) > 0
+    ? Math.round(((stats.yearlyNetBalance ?? stats.yearlyBalance) / stats.yearlyNetIncome) * 100) : 0
 
   return (
     <div className="p-4 md:p-6 space-y-6" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
@@ -118,18 +144,18 @@ export default function ReportsPage() {
             <ChevronLeft size={18} />
           </button>
           <span className="text-base font-bold text-gray-900 mx-2 tabular-nums">{year}</span>
-          <button onClick={() => setYear(y => y + 1)} disabled={year >= currentYear} className="text-gray-400 hover:text-gray-700 transition-colors p-0.5 disabled:opacity-30">
+          <button onClick={() => setYear(y => y + 1)} disabled={year >= currentYear}
+            className="text-gray-400 hover:text-gray-700 transition-colors p-0.5 disabled:opacity-30">
             <ChevronRight size={18} />
           </button>
         </div>
       </div>
 
-      {/* ── Éves összesítő (dashboard-stílusú) ── */}
+      {/* ── Éves összesítő KPI kártyák ── */}
       <div>
         <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">{year}. Éves összesítő</h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
 
-          {/* Bevétel */}
           <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-100 rounded-2xl p-5 relative overflow-hidden">
             <div className="absolute top-3 right-3 w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
               <TrendingUp size={15} className="text-green-600" />
@@ -140,12 +166,12 @@ export default function ReportsPage() {
             </p>
             <p className="text-xs text-gray-400 mt-1.5">
               {year === currentYear && incomePct
-                ? <>Havi: {fmtEur(stats?.combinedMonthlyIncome ?? 0)} <span className={incomePct.up ? 'text-green-500' : 'text-red-400'}>({incomePct.up ? '+' : '-'}{incomePct.value}%)</span></>
-                : `${year} összesen`}
+                ? <>Havi: {fmtEur(stats?.combinedMonthlyIncome ?? 0)}{' '}
+                    <span className={incomePct.up ? 'text-green-500' : 'text-red-400'}>({incomePct.up ? '+' : '-'}{incomePct.value}%)</span></>
+                : `${year} bruttó összesen`}
             </p>
           </div>
 
-          {/* Kiadás */}
           <div className="bg-gradient-to-br from-red-50 to-rose-50 border border-red-100 rounded-2xl p-5 relative overflow-hidden">
             <div className="absolute top-3 right-3 w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
               <TrendingDown size={15} className="text-red-500" />
@@ -156,29 +182,36 @@ export default function ReportsPage() {
             </p>
             <p className="text-xs text-gray-400 mt-1.5">
               {year === currentYear && expPct
-                ? <>Havi: {fmtEur(stats?.combinedMonthlyExpenses ?? 0)} <span className={!expPct.up ? 'text-green-500' : 'text-red-400'}>({expPct.up ? '+' : '-'}{expPct.value}%)</span></>
+                ? <>Havi: {fmtEur(stats?.combinedMonthlyExpenses ?? 0)}{' '}
+                    <span className={!expPct.up ? 'text-green-500' : 'text-red-400'}>({expPct.up ? '+' : '-'}{expPct.value}%)</span></>
                 : `${year} összesen`}
             </p>
           </div>
 
-          {/* Egyenleg */}
-          <div className={`rounded-2xl p-5 relative overflow-hidden border ${!loading && (stats?.yearlyBalance ?? 0) < 0 ? 'bg-gradient-to-br from-orange-50 to-red-50 border-orange-100' : 'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100'}`}>
-            <div className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center ${!loading && (stats?.yearlyBalance ?? 0) < 0 ? 'bg-orange-100' : 'bg-blue-100'}`}>
-              <Euro size={15} className={!loading && (stats?.yearlyBalance ?? 0) < 0 ? 'text-orange-600' : 'text-blue-600'} />
+          <div className={`rounded-2xl p-5 relative overflow-hidden border ${
+            !loading && (stats?.yearlyNetBalance ?? 0) < 0
+              ? 'bg-gradient-to-br from-orange-50 to-red-50 border-orange-100'
+              : 'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100'}`}>
+            <div className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center ${
+              !loading && (stats?.yearlyNetBalance ?? 0) < 0 ? 'bg-orange-100' : 'bg-blue-100'}`}>
+              <Euro size={15} className={!loading && (stats?.yearlyNetBalance ?? 0) < 0 ? 'text-orange-600' : 'text-blue-600'} />
             </div>
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Éves egyenleg</p>
-            <p className={`text-2xl font-black mt-1 ${!loading && (stats?.yearlyBalance ?? 0) < 0 ? 'text-orange-600' : 'text-blue-600'}`}>
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Éves haszon</p>
+            <p className={`text-2xl font-black mt-1 ${!loading && (stats?.yearlyNetBalance ?? 0) < 0 ? 'text-orange-600' : 'text-blue-600'}`}>
               {loading ? <span className="text-gray-300 animate-pulse">––</span>
-                : <>{(stats?.yearlyBalance ?? 0) >= 0 ? '+' : ''}{fmtEur(stats?.yearlyBalance ?? 0)}</>}
+                : <>{(stats?.yearlyNetBalance ?? 0) >= 0 ? '+' : ''}{fmtEur(stats?.yearlyNetBalance ?? stats?.yearlyBalance ?? 0)}</>}
             </p>
             <p className="text-xs text-gray-400 mt-1.5">
-              {loading ? '' : `Margin: ${profitMargin}% · ${year} nettó`}
+              {loading ? '' : `Margin: ${profitMargin}% · nettó profit`}
             </p>
           </div>
 
-          {/* Nyitott számlák */}
-          <div className={`rounded-2xl p-5 relative overflow-hidden border ${!loading && (stats?.overdueInvoices ?? 0) > 0 ? 'bg-gradient-to-br from-red-50 to-rose-50 border-red-200' : 'bg-white border-gray-100'}`}>
-            <div className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center ${!loading && (stats?.overdueInvoices ?? 0) > 0 ? 'bg-red-100' : 'bg-gray-100'}`}>
+          <div className={`rounded-2xl p-5 relative overflow-hidden border ${
+            !loading && (stats?.overdueInvoices ?? 0) > 0
+              ? 'bg-gradient-to-br from-red-50 to-rose-50 border-red-200'
+              : 'bg-white border-gray-100'}`}>
+            <div className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center ${
+              !loading && (stats?.overdueInvoices ?? 0) > 0 ? 'bg-red-100' : 'bg-gray-100'}`}>
               <FileText size={15} className={!loading && (stats?.overdueInvoices ?? 0) > 0 ? 'text-red-600' : 'text-gray-500'} />
             </div>
             <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Nyitott számlák</p>
@@ -186,7 +219,8 @@ export default function ReportsPage() {
               {loading ? <span className="text-gray-300 animate-pulse">––</span> : fmtEur(stats?.openInvoicesTotal ?? 0)}
             </p>
             <p className="text-xs text-gray-400 mt-1.5">
-              {loading ? '' : <>{stats?.openInvoicesCount} db{(stats?.overdueInvoices ?? 0) > 0 && <span className="text-red-500 font-medium ml-1">· {stats?.overdueInvoices} lejárt!</span>}</>}
+              {loading ? '' : <>{stats?.openInvoicesCount} db{(stats?.overdueInvoices ?? 0) > 0 &&
+                <span className="text-red-500 font-medium ml-1">· {stats?.overdueInvoices} lejárt!</span>}</>}
             </p>
           </div>
         </div>
@@ -197,7 +231,7 @@ export default function ReportsPage() {
         <h2 className="text-base font-semibold text-gray-900 mb-4">{year}. évi havi cashflow</h2>
         {loading ? (
           <div className="h-52 flex items-center justify-center text-gray-300 text-sm animate-pulse">Betöltés...</div>
-        ) : chartData.every(d => d.Bevétel === 0 && d.Kiadás === 0) ? (
+        ) : chartData.every(d => d['Bruttó bev.'] === 0 && d.Kiadás === 0) ? (
           <p className="text-sm text-gray-400 py-10 text-center">Még nincs elegendő adat ehhez az évhez.</p>
         ) : (
           <ResponsiveContainer width="100%" height={220}>
@@ -217,59 +251,73 @@ export default function ReportsPage() {
               <YAxis tickFormatter={v => `€${v}`} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={55} />
               <Tooltip formatter={(v: number) => [`€${v.toFixed(2)}`]} contentStyle={{ borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '12px' }} />
               <Legend formatter={v => <span style={{ fontSize: '12px' }}>{v}</span>} />
-              <Area type="monotone" dataKey="Bevétel" stroke="#4ade80" fill="url(#gradBev)" strokeWidth={2} />
+              <Area type="monotone" dataKey="Bruttó bev." stroke="#4ade80" fill="url(#gradBev)" strokeWidth={2} />
               <Area type="monotone" dataKey="Kiadás" stroke="#f87171" fill="url(#gradKiad)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
         )}
       </div>
 
-      {/* ── Havi bontás táblázat + Bar chart ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-        {/* Táblázat */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100">
-            <h2 className="text-base font-semibold text-gray-900">Havi részletezés — {year}</h2>
-          </div>
+      {/* ── Havi részletezés (teljes szélesség, 5 oszlop) ── */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <h2 className="text-base font-semibold text-gray-900">Havi részletezés — {year}</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Bruttó = ÁFÁ-val · Nettó = ÁFA nélkül · Haszon = Nettó − Kiadás</p>
+        </div>
+        <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50">
-                <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase">Hónap</th>
-                <th className="text-right px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase">Bevétel</th>
-                <th className="text-right px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase">Kiadás</th>
-                <th className="text-right px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase">Egyenleg</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">Hónap</th>
+                <th className="text-right px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">Bruttó bev.</th>
+                <th className="text-right px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">Nettó bev.</th>
+                <th className="text-right px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">Kiadás</th>
+                <th className="text-right px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">Haszon</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {loading
                 ? Array.from({ length: 12 }).map((_, i) => (
-                    <tr key={i} className="animate-pulse">
-                      <td className="px-4 py-2.5"><div className="h-3 bg-gray-100 rounded w-12" /></td>
-                      <td className="px-4 py-2.5"><div className="h-3 bg-gray-100 rounded w-16 ml-auto" /></td>
-                      <td className="px-4 py-2.5"><div className="h-3 bg-gray-100 rounded w-16 ml-auto" /></td>
-                      <td className="px-4 py-2.5"><div className="h-3 bg-gray-100 rounded w-16 ml-auto" /></td>
+                    <tr key={i}>
+                      <td className="px-4 py-2.5"><div className="h-3 bg-gray-100 rounded w-12 animate-pulse" /></td>
+                      {[1,2,3,4].map(j => <td key={j} className="px-4 py-2.5"><SkeletonCell /></td>)}
                     </tr>
                   ))
-                : (stats?.monthlyBreakdown ?? []).map(row => (
-                    <tr key={row.monthKey} className={`hover:bg-gray-50 transition-colors ${row.monthKey === format(now, 'yyyy-MM') ? 'bg-blue-50/40 font-medium' : ''}`}>
-                      <td className="px-4 py-2.5 text-gray-700 capitalize">{row.month}</td>
-                      <td className="px-4 py-2.5 text-right text-green-600">{row.income > 0 ? fmtEur(row.income) : '—'}</td>
-                      <td className="px-4 py-2.5 text-right text-red-500">{row.expenses > 0 ? fmtEur(row.expenses) : '—'}</td>
-                      <td className={`px-4 py-2.5 text-right font-medium ${row.balance > 0 ? 'text-green-700' : row.balance < 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                        {row.income === 0 && row.expenses === 0 ? '—' : (row.balance >= 0 ? '+' : '') + fmtEur(row.balance)}
-                      </td>
-                    </tr>
-                  ))}
+                : (stats?.monthlyBreakdown ?? []).map(row => {
+                    const isCurrent = row.monthKey === format(now, 'yyyy-MM')
+                    const netBalance = row.netIncome - row.expenses
+                    return (
+                      <tr key={row.monthKey} className={`hover:bg-gray-50/80 transition-colors ${isCurrent ? 'bg-blue-50/50' : ''}`}>
+                        <td className={`px-4 py-2.5 font-medium capitalize ${isCurrent ? 'text-blue-700' : 'text-gray-700'}`}>
+                          {row.month}{isCurrent && <span className="ml-1.5 text-xs text-blue-400 font-normal">← aktuális</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-green-600 tabular-nums">
+                          {row.grossIncome > 0 ? fmtEur(row.grossIncome) : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-emerald-700 tabular-nums font-medium">
+                          {row.netIncome > 0 ? fmtEur(row.netIncome) : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-red-500 tabular-nums">
+                          {row.expenses > 0 ? fmtEur(row.expenses) : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className={`px-4 py-2.5 text-right font-bold tabular-nums ${
+                          netBalance > 0 ? 'text-blue-600' : netBalance < 0 ? 'text-red-600' : 'text-gray-300'}`}>
+                          {row.netIncome === 0 && row.expenses === 0 ? '—'
+                            : (netBalance >= 0 ? '+' : '') + fmtEur(netBalance)}
+                        </td>
+                      </tr>
+                    )
+                  })}
             </tbody>
             {!loading && stats && (
               <tfoot className="border-t-2 border-gray-200 bg-gray-50">
                 <tr>
-                  <td className="px-4 py-2.5 text-xs font-bold text-gray-700 uppercase">Összesen</td>
-                  <td className="px-4 py-2.5 text-right font-bold text-green-700">{fmtEur(stats.yearlyIncome)}</td>
-                  <td className="px-4 py-2.5 text-right font-bold text-red-600">{fmtEur(stats.yearlyExpenses)}</td>
-                  <td className={`px-4 py-2.5 text-right font-bold ${stats.yearlyBalance >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                    {stats.yearlyBalance >= 0 ? '+' : ''}{fmtEur(stats.yearlyBalance)}
+                  <td className="px-4 py-3 text-xs font-bold text-gray-700 uppercase">Összesen</td>
+                  <td className="px-4 py-3 text-right font-bold text-green-700 tabular-nums">{fmtEur(stats.yearlyIncome)}</td>
+                  <td className="px-4 py-3 text-right font-bold text-emerald-700 tabular-nums">{fmtEur(stats.yearlyNetIncome ?? stats.yearlyIncome)}</td>
+                  <td className="px-4 py-3 text-right font-bold text-red-600 tabular-nums">{fmtEur(stats.yearlyExpenses)}</td>
+                  <td className={`px-4 py-3 text-right font-bold tabular-nums ${(stats.yearlyNetBalance ?? stats.yearlyBalance) >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
+                    {(stats.yearlyNetBalance ?? stats.yearlyBalance) >= 0 ? '+' : ''}{fmtEur(stats.yearlyNetBalance ?? stats.yearlyBalance)}
                   </td>
                 </tr>
               </tfoot>
@@ -277,26 +325,101 @@ export default function ReportsPage() {
           </table>
         </div>
 
-        {/* Bar chart — összevetés */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-          <h2 className="text-base font-semibold text-gray-900 mb-4">Havi összehasonlítás</h2>
-          {loading ? (
-            <div className="h-52 flex items-center justify-center text-gray-300 text-sm animate-pulse">Betöltés...</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={chartData} barCategoryGap="35%" margin={{ left: -20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis tickFormatter={v => `€${v}`} tick={{ fontSize: 9, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <Tooltip formatter={(v: number) => [`€${v.toFixed(2)}`]} contentStyle={{ borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '12px' }} />
-                <Legend formatter={v => <span style={{ fontSize: '11px' }}>{v}</span>} />
-                <Bar dataKey="Bevétel" fill="#4ade80" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="Kiadás" fill="#f87171" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
+        {/* ── Éves összesítő boxok a táblázat alatt ── */}
+        {!loading && stats && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-gray-100 border-t border-gray-100">
+            <div className="p-4 text-center">
+              <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Éves bruttó bevétel</p>
+              <p className="text-xl font-black text-green-600">{fmtEur(stats.yearlyIncome)}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{stats.invoiceCountThisYear ?? '—'} számla · {year}</p>
+            </div>
+            <div className="p-4 text-center">
+              <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Éves nettó bevétel</p>
+              <p className="text-xl font-black text-emerald-700">{fmtEur(stats.yearlyNetIncome ?? stats.yearlyIncome)}</p>
+              <p className="text-xs text-gray-400 mt-0.5">ÁFA nélkül · {year}</p>
+            </div>
+            <div className="p-4 text-center">
+              <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Éves teljes kiadás</p>
+              <p className="text-xl font-black text-red-600">{fmtEur(stats.yearlyExpenses)}</p>
+              <p className="text-xs text-gray-400 mt-0.5">Könyvelési kiadások · {year}</p>
+            </div>
+            <div className="p-4 text-center">
+              <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Éves haszon</p>
+              <p className={`text-xl font-black ${(stats.yearlyNetBalance ?? stats.yearlyBalance) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                {(stats.yearlyNetBalance ?? stats.yearlyBalance) >= 0 ? '+' : ''}{fmtEur(stats.yearlyNetBalance ?? stats.yearlyBalance)}
+              </p>
+              <p className="text-xs text-gray-400 mt-0.5">Margin: {profitMargin}% · {year}</p>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* ── Kiegészítő mutatók ── */}
+      {!loading && stats && (
+        <div>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Kiegészítő mutatók — {year}</h2>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Receipt size={14} className="text-indigo-500" />
+                <p className="text-xs text-gray-500 font-medium">Behajtási ráta</p>
+              </div>
+              <p className="text-2xl font-bold text-gray-900">{collectionRate}<span className="text-sm font-normal text-gray-400 ml-0.5">%</span></p>
+              <div className="h-1.5 bg-gray-100 rounded-full mt-2">
+                <div className="h-1.5 rounded-full bg-indigo-400 transition-all" style={{ width: `${Math.min(collectionRate, 100)}%` }} />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Befolyt / Kiállított</p>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Percent size={14} className="text-amber-500" />
+                <p className="text-xs text-gray-500 font-medium">Kiadás arány</p>
+              </div>
+              <p className={`text-2xl font-bold ${expenseRatio > 80 ? 'text-red-600' : expenseRatio > 60 ? 'text-amber-600' : 'text-gray-900'}`}>
+                {expenseRatio}<span className="text-sm font-normal text-gray-400 ml-0.5">%</span>
+              </p>
+              <div className="h-1.5 bg-gray-100 rounded-full mt-2">
+                <div className={`h-1.5 rounded-full transition-all ${expenseRatio > 80 ? 'bg-red-400' : expenseRatio > 60 ? 'bg-amber-400' : 'bg-green-400'}`}
+                  style={{ width: `${Math.min(expenseRatio, 100)}%` }} />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Kiadás / Nettó bev.</p>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Euro size={14} className="text-blue-500" />
+                <p className="text-xs text-gray-500 font-medium">Átl. számlaérték</p>
+              </div>
+              <p className="text-lg font-bold text-gray-900">{avgInvoiceValue > 0 ? fmtEur(avgInvoiceValue) : '—'}</p>
+              <p className="text-xs text-gray-400 mt-1">{stats.invoiceCountThisYear ?? 0} kiállított számla</p>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Star size={14} className="text-yellow-500" />
+                <p className="text-xs text-gray-500 font-medium">Legjobb hónap</p>
+              </div>
+              {bestMonth && bestMonth.netIncome > 0 ? (
+                <>
+                  <p className="text-lg font-bold text-gray-900 capitalize">{bestMonth.month}</p>
+                  <p className="text-xs text-gray-400 mt-1">{fmtEur(bestMonth.netIncome)} nettó</p>
+                </>
+              ) : <p className="text-sm text-gray-400">Nincs adat</p>}
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <BarChart2 size={14} className="text-purple-500" />
+                <p className="text-xs text-gray-500 font-medium">ÁFA kötelezettség</p>
+              </div>
+              <p className="text-lg font-bold text-gray-900">{vatObligation > 0 ? fmtEur(vatObligation) : '—'}</p>
+              <p className="text-xs text-gray-400 mt-1">Bruttó − Nettó bev.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Raktár & Értékesítés ── */}
       <div>
