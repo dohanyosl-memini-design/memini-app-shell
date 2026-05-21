@@ -271,9 +271,22 @@ export default function InvoicesPage() {
     )
   })
 
+  function parseInvNumber(num: string) {
+    const clean = num.replace(/^K-/i, '')
+    const yearMatch = clean.match(/(\d{4})/)
+    const year = yearMatch ? parseInt(yearMatch[1]) : 0
+    const seqMatch = clean.replace(/\d{4}/, '').match(/(\d+)/)
+    const seq = seqMatch ? parseInt(seqMatch[1]) : 0
+    return { year, seq }
+  }
+
   const sortedInvoices = [...filteredInvoices].sort((a, b) => {
     let cmp = 0
-    if (invSortCol === 'number')  cmp = a.number.localeCompare(b.number, undefined, { numeric: true, sensitivity: 'base' })
+    if (invSortCol === 'number') {
+      const pa = parseInvNumber(a.number)
+      const pb = parseInvNumber(b.number)
+      cmp = pa.year !== pb.year ? pa.year - pb.year : pa.seq - pb.seq
+    }
     else if (invSortCol === 'company') cmp = (a.company?.name || '').localeCompare(b.company?.name || '')
     else if (invSortCol === 'date')    cmp = new Date(a.date).getTime() - new Date(b.date).getTime()
     else if (invSortCol === 'dueDate') cmp = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
