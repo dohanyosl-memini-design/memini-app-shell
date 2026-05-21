@@ -173,6 +173,12 @@ export async function GET(request: NextRequest) {
   const yearlyExpenses = expThisYear + txExpThisYear
   const yearlyBalance = yearlyIncome - yearlyExpenses
 
+  const COGS_CATEGORIES = ['Termékköltség', 'Alapanyag', 'Gyártás']
+  const yearlyCogs = allExpenses
+    .filter(e => new Date(e.date) >= startOfYear && new Date(e.date) <= endOfYear && COGS_CATEGORIES.includes(e.category ?? ''))
+    .reduce((s, e) => s + expAmt(e), 0)
+  const yearlyOtherExpenses = yearlyExpenses - yearlyCogs
+
   // ─── CASHFLOW ENTRIES for chart (invoices + expenses + tx expenses) ──────────
   type CfEntry = { type: 'income' | 'expense'; amount: number; date: string; category: string | null }
   const allCashflowEntries: CfEntry[] = [
@@ -284,6 +290,8 @@ export async function GET(request: NextRequest) {
     yearlyIncome,
     yearlyNetIncome: billedNetThisYear,
     yearlyExpenses,
+    yearlyCogs,
+    yearlyOtherExpenses,
     yearlyBalance,
     yearlyNetBalance: billedNetThisYear - (expThisYear + txExpThisYear),
     receivedThisYear,

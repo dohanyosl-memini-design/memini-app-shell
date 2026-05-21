@@ -41,6 +41,8 @@ interface StatsData {
   yearlyNetIncome: number
   yearlyNetBalance: number
   yearlyExpenses: number
+  yearlyCogs: number
+  yearlyOtherExpenses: number
   yearlyBalance: number
   receivedThisYear: number
   invoiceCountThisYear: number
@@ -154,76 +156,145 @@ export default function ReportsPage() {
       {/* ── Éves összesítő KPI kártyák ── */}
       <div>
         <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">{year}. Éves összesítő</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
 
-          <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-100 rounded-2xl p-5 relative overflow-hidden">
-            <div className="absolute top-3 right-3 w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-              <TrendingUp size={15} className="text-green-600" />
+        {/* 5 kártya: Bruttó · Nettó · Termékköltség · Egyéb kiadás · Haszon */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+
+          {/* Bruttó bevétel */}
+          <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-100 rounded-2xl p-4 relative overflow-hidden">
+            <div className="absolute top-3 right-3 w-7 h-7 rounded-full bg-green-100 flex items-center justify-center">
+              <TrendingUp size={13} className="text-green-600" />
             </div>
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Éves bevétel</p>
-            <p className="text-2xl font-black text-green-600 mt-1">
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide leading-tight">Bruttó bevétel</p>
+            <p className="text-xl font-black text-green-600 mt-1 tabular-nums">
               {loading ? <span className="text-gray-300 animate-pulse">––</span> : fmtEur(stats?.yearlyIncome ?? 0)}
             </p>
-            <p className="text-xs text-gray-400 mt-1.5">
+            <p className="text-xs text-gray-400 mt-1">
               {year === currentYear && incomePct
-                ? <>Havi: {fmtEur(stats?.combinedMonthlyIncome ?? 0)}{' '}
-                    <span className={incomePct.up ? 'text-green-500' : 'text-red-400'}>({incomePct.up ? '+' : '-'}{incomePct.value}%)</span></>
-                : `${year} bruttó összesen`}
+                ? <><span className={incomePct.up ? 'text-green-500' : 'text-red-400'}>{incomePct.up ? '↑' : '↓'}{incomePct.value}%</span> vs. előző hó</>
+                : `ÁFÁ-val · ${year}`}
             </p>
           </div>
 
-          <div className="bg-gradient-to-br from-red-50 to-rose-50 border border-red-100 rounded-2xl p-5 relative overflow-hidden">
-            <div className="absolute top-3 right-3 w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
-              <TrendingDown size={15} className="text-red-500" />
+          {/* Nettó bevétel */}
+          <div className="bg-gradient-to-br from-teal-50 to-cyan-50 border border-teal-100 rounded-2xl p-4 relative overflow-hidden">
+            <div className="absolute top-3 right-3 w-7 h-7 rounded-full bg-teal-100 flex items-center justify-center">
+              <Euro size={13} className="text-teal-600" />
             </div>
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Éves kiadás</p>
-            <p className="text-2xl font-black text-red-500 mt-1">
-              {loading ? <span className="text-gray-300 animate-pulse">––</span> : fmtEur(stats?.yearlyExpenses ?? 0)}
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide leading-tight">Nettó bevétel</p>
+            <p className="text-xl font-black text-teal-700 mt-1 tabular-nums">
+              {loading ? <span className="text-gray-300 animate-pulse">––</span> : fmtEur(stats?.yearlyNetIncome ?? stats?.yearlyIncome ?? 0)}
             </p>
-            <p className="text-xs text-gray-400 mt-1.5">
-              {year === currentYear && expPct
-                ? <>Havi: {fmtEur(stats?.combinedMonthlyExpenses ?? 0)}{' '}
-                    <span className={!expPct.up ? 'text-green-500' : 'text-red-400'}>({expPct.up ? '+' : '-'}{expPct.value}%)</span></>
-                : `${year} összesen`}
+            <p className="text-xs text-gray-400 mt-1">ÁFA nélkül · {year}</p>
+          </div>
+
+          {/* Termékköltség (COGS) */}
+          <div className="bg-gradient-to-br from-red-50 to-rose-50 border border-red-100 rounded-2xl p-4 relative overflow-hidden">
+            <div className="absolute top-3 right-3 w-7 h-7 rounded-full bg-red-100 flex items-center justify-center">
+              <Package size={13} className="text-red-500" />
+            </div>
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide leading-tight">Termékköltség</p>
+            <p className="text-xl font-black text-red-600 mt-1 tabular-nums">
+              {loading ? <span className="text-gray-300 animate-pulse">––</span> : fmtEur(stats?.yearlyCogs ?? 0)}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              {!loading && (stats?.yearlyNetIncome ?? 0) > 0
+                ? `${Math.round(((stats?.yearlyCogs ?? 0) / stats!.yearlyNetIncome) * 100)}% nettó bev.`
+                : 'Alapanyag · Gyártás'}
             </p>
           </div>
 
-          <div className={`rounded-2xl p-5 relative overflow-hidden border ${
+          {/* Egyéb kiadás */}
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100 rounded-2xl p-4 relative overflow-hidden">
+            <div className="absolute top-3 right-3 w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center">
+              <TrendingDown size={13} className="text-amber-600" />
+            </div>
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide leading-tight">Egyéb kiadás</p>
+            <p className="text-xl font-black text-amber-700 mt-1 tabular-nums">
+              {loading ? <span className="text-gray-300 animate-pulse">––</span> : fmtEur(stats?.yearlyOtherExpenses ?? stats?.yearlyExpenses ?? 0)}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              {!loading && (stats?.yearlyNetIncome ?? 0) > 0
+                ? `${Math.round(((stats?.yearlyOtherExpenses ?? 0) / stats!.yearlyNetIncome) * 100)}% nettó bev.`
+                : `Működési ktg. · ${year}`}
+            </p>
+          </div>
+
+          {/* Haszon */}
+          <div className={`rounded-2xl p-4 relative overflow-hidden border ${
             !loading && (stats?.yearlyNetBalance ?? 0) < 0
               ? 'bg-gradient-to-br from-orange-50 to-red-50 border-orange-100'
               : 'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100'}`}>
-            <div className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center ${
+            <div className={`absolute top-3 right-3 w-7 h-7 rounded-full flex items-center justify-center ${
               !loading && (stats?.yearlyNetBalance ?? 0) < 0 ? 'bg-orange-100' : 'bg-blue-100'}`}>
-              <Euro size={15} className={!loading && (stats?.yearlyNetBalance ?? 0) < 0 ? 'text-orange-600' : 'text-blue-600'} />
+              <Star size={13} className={!loading && (stats?.yearlyNetBalance ?? 0) < 0 ? 'text-orange-600' : 'text-blue-600'} />
             </div>
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Éves haszon</p>
-            <p className={`text-2xl font-black mt-1 ${!loading && (stats?.yearlyNetBalance ?? 0) < 0 ? 'text-orange-600' : 'text-blue-600'}`}>
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide leading-tight">Éves haszon</p>
+            <p className={`text-xl font-black mt-1 tabular-nums ${!loading && (stats?.yearlyNetBalance ?? 0) < 0 ? 'text-orange-600' : 'text-blue-600'}`}>
               {loading ? <span className="text-gray-300 animate-pulse">––</span>
                 : <>{(stats?.yearlyNetBalance ?? 0) >= 0 ? '+' : ''}{fmtEur(stats?.yearlyNetBalance ?? stats?.yearlyBalance ?? 0)}</>}
             </p>
-            <p className="text-xs text-gray-400 mt-1.5">
-              {loading ? '' : `Margin: ${profitMargin}% · nettó profit`}
-            </p>
-          </div>
-
-          <div className={`rounded-2xl p-5 relative overflow-hidden border ${
-            !loading && (stats?.overdueInvoices ?? 0) > 0
-              ? 'bg-gradient-to-br from-red-50 to-rose-50 border-red-200'
-              : 'bg-white border-gray-100'}`}>
-            <div className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center ${
-              !loading && (stats?.overdueInvoices ?? 0) > 0 ? 'bg-red-100' : 'bg-gray-100'}`}>
-              <FileText size={15} className={!loading && (stats?.overdueInvoices ?? 0) > 0 ? 'text-red-600' : 'text-gray-500'} />
-            </div>
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Nyitott számlák</p>
-            <p className={`text-2xl font-black mt-1 ${!loading && (stats?.overdueInvoices ?? 0) > 0 ? 'text-red-600' : 'text-gray-800'}`}>
-              {loading ? <span className="text-gray-300 animate-pulse">––</span> : fmtEur(stats?.openInvoicesTotal ?? 0)}
-            </p>
-            <p className="text-xs text-gray-400 mt-1.5">
-              {loading ? '' : <>{stats?.openInvoicesCount} db{(stats?.overdueInvoices ?? 0) > 0 &&
-                <span className="text-red-500 font-medium ml-1">· {stats?.overdueInvoices} lejárt!</span>}</>}
+            <p className="text-xs text-gray-400 mt-1">
+              {loading ? '' : `Margin: ${profitMargin}%`}
             </p>
           </div>
         </div>
+
+        {/* ── Bevétel-összetétel skála ── */}
+        {!loading && stats && (stats.yearlyNetIncome ?? 0) > 0 && (() => {
+          const net = stats.yearlyNetIncome ?? stats.yearlyIncome
+          const cogs = stats.yearlyCogs ?? 0
+          const other = stats.yearlyOtherExpenses ?? (stats.yearlyExpenses - cogs)
+          const profit = Math.max(0, net - cogs - other)
+          const overflow = Math.max(0, cogs + other - net)
+          const cogsW  = Math.min(100, Math.round((cogs  / net) * 100))
+          const otherW = Math.min(100 - cogsW, Math.round((other / net) * 100))
+          const profitW = Math.max(0, 100 - cogsW - otherW)
+          return (
+            <div className="mt-3 bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Nettó bevétel összetétele</p>
+                <p className="text-xs text-gray-400">{fmtEur(net)} = 100%</p>
+              </div>
+              <div className="flex rounded-xl overflow-hidden h-7 gap-px">
+                {cogsW > 0 && (
+                  <div className="bg-red-400 flex items-center justify-center" style={{ width: `${cogsW}%` }}>
+                    {cogsW >= 8 && <span className="text-white text-xs font-bold">{cogsW}%</span>}
+                  </div>
+                )}
+                {otherW > 0 && (
+                  <div className="bg-amber-400 flex items-center justify-center" style={{ width: `${otherW}%` }}>
+                    {otherW >= 8 && <span className="text-white text-xs font-bold">{otherW}%</span>}
+                  </div>
+                )}
+                {profitW > 0 && (
+                  <div className="bg-blue-400 flex items-center justify-center" style={{ width: `${profitW}%` }}>
+                    {profitW >= 8 && <span className="text-white text-xs font-bold">{profitW}%</span>}
+                  </div>
+                )}
+                {overflow > 0 && (
+                  <div className="bg-gray-200 flex-1 flex items-center justify-center">
+                    <span className="text-gray-500 text-xs font-bold">−{Math.round((overflow/net)*100)}%</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-3 mt-2.5">
+                <span className="flex items-center gap-1.5 text-xs text-gray-600">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-red-400 shrink-0" />
+                  Termékköltség {fmtEur(cogs)}
+                </span>
+                <span className="flex items-center gap-1.5 text-xs text-gray-600">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-amber-400 shrink-0" />
+                  Egyéb kiadás {fmtEur(other)}
+                </span>
+                <span className="flex items-center gap-1.5 text-xs text-gray-600">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-blue-400 shrink-0" />
+                  Haszon {fmtEur(profit)}
+                </span>
+              </div>
+            </div>
+          )
+        })()}
       </div>
 
       {/* ── Cashflow area chart ── */}
