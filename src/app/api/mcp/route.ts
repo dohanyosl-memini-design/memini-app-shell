@@ -772,6 +772,119 @@ function buildServer() {
     }
   )
 
+  // ─── AKTIVITÁSOK ─────────────────────────────────────────────────────────────
+
+  server.tool(
+    'list_activities',
+    'Aktivitások (telefon, email, találkozó stb.) listázása. Szűrhető cég, kapcsolat vagy deal alapján. Tartalmazza az utolsó aktivitás dátumát és az inaktív napok számát.',
+    {
+      companyId:  z.string().optional().describe('Cég ID'),
+      contactId:  z.string().optional().describe('Kapcsolat ID'),
+      dealId:     z.string().optional().describe('Deal ID'),
+      type:       z.enum(['call', 'email', 'meeting', 'whatsapp', 'note']).optional(),
+    },
+    async ({ companyId, contactId, dealId, type }) => {
+      const where: Record<string, unknown> = {}
+      if (companyId) where.companyId = companyId
+      if (contactId) where.contactId = contactId
+      if (dealId)    where.dealId    = dealId
+      if (type)      where.type      = type
+      const data = await prisma.activity.findMany({
+        where,
+        include: {
+          contact: { select: { id: true, firstName: true, lastName: true } },
+          company: { select: { id: true, name: true } },
+          deal:    { select: { id: true, title: true } },
+        },
+        orderBy: { activityDate: 'desc' },
+      })
+      const lastDate = data[0]?.activityDate
+      const daysSince = lastDate
+        ? Math.floor((Date.now() - new Date(lastDate).getTime()) / 86400000)
+        : null
+      const dormancyNote = daysSince === null
+        ? 'Nincs aktivitás rögzítve.'
+        : daysSince >= 28
+          ? `⚠️ FIGYELEM: ${daysSince} napja nincs aktivitás (4+ hét) — feladat szükséges!`
+          : daysSince >= 21
+            ? `🟡 Figyelem: ${daysSince} napja nincs aktivitás (3+ hét)`
+            : `✅ Utolsó aktivitás: ${daysSince} napja`
+      return { content: [{ type: 'text', text: `${dormancyNote}\n\n${JSON.stringify(data, null, 2)}` }] }
+    }
+  )
+
+  server.tool(
+    'create_activity',
+    'Új aktivitás rögzítése egy céghez, kapcsolathoz vagy dealhez. Típusok: call (telefon), email, meeting (találkozó), whatsapp, note (feljegyzés).',
+    {
+      type:         z.enum(['call', 'email', 'meeting', 'whatsapp', 'note']).describe('Aktivitás típusa'),
+      description:  z.string().describe('Mit, miről, mi történt?'),
+      subject:      z.string().optional().describe('Tárgy (rövid összefoglaló)'),
+      activityDate: z.string().optional().describe('Dátum és idő (ISO 8601 vagy YYYY-MM-DD), alapértelmezett: most'),
+      duration:     z.number().optional().describe('Időtartam percben (telefon/találkozó esetén)'),
+      outcome:      z.string().optional().describe('Eredmény (pl. "Ajánlatot kér", "Visszahív")'),
+      companyId:    z.string().optional().describe('Cég ID'),
+      contactId:    z.string().optional().describe('Kapcsolat ID'),
+      dealId:       z.string().optional().describe('Deal ID'),
+    },
+    async ({ type, description, subject, activityDate, duration, outcome, companyId, contactId, dealId }) => {
+      const data = await prisma.activity.create({
+        data: {
+          type,
+          description,
+          subject:      subject      || null,
+          activityDate: activityDate ? new Date(activityDate) : new Date(),
+          duration:     duration     ?? null,
+          outcome:      outcome      || null,
+          companyId:    companyId    || null,
+          contactId:    contactId    || null,
+          dealId:       dealId       || null,
+        },
+        include: {
+          company: { select: { id: true, name: true } },
+          contact: { select: { id: true, firstName: true, lastName: true } },
+        },
+      })
+      const who = data.company?.name ?? `${data.contact?.firstName ?? ''} ${data.contact?.lastName ?? ''}`.trim() ?? 'ismeretlen'
+      return { content: [{ type: 'text', text: `Aktivitás rögzítve: ${type} — ${who} — ${data.activityDate.toISOString().slice(0, 10)}` }] }
+    }
+  )
+
+  server.tool(
+    'update_activity',
+    'Meglévő aktivitás szerkesztése (leírás, tárgy, dátum, eredmény, típus).',
+    {
+      id:           z.string().describe('Aktivitás ID'),
+      type:         z.enum(['call', 'email', 'meeting', 'whatsapp', 'note']).optional(),
+      description:  z.string().optional(),
+      subject:      z.string().optional(),
+      activityDate: z.string().optional().describe('ISO 8601 dátum'),
+      duration:     z.number().optional(),
+      outcome:      z.string().optional(),
+    },
+    async ({ id, type, description, subject, activityDate, duration, outcome }) => {
+      const upd: Record<string, unknown> = {}
+      if (type         !== undefined) upd.type         = type
+      if (description  !== undefined) upd.description  = description
+      if (subject      !== undefined) upd.subject      = subject      || null
+      if (activityDate !== undefined) upd.activityDate = new Date(activityDate)
+      if (duration     !== undefined) upd.duration     = duration     ?? null
+      if (outcome      !== undefined) upd.outcome      = outcome      || null
+      const data = await prisma.activity.update({ where: { id }, data: upd })
+      return { content: [{ type: 'text', text: `Aktivitás frissítve: ${data.type} — ${data.activityDate.toISOString().slice(0, 10)}` }] }
+    }
+  )
+
+  server.tool(
+    'delete_activity',
+    'Aktivitás törlése.',
+    { id: z.string().describe('Aktivitás ID') },
+    async ({ id }) => {
+      await prisma.activity.delete({ where: { id } })
+      return { content: [{ type: 'text', text: `Aktivitás törölve (ID: ${id})` }] }
+    }
+  )
+
   return server
 }
 

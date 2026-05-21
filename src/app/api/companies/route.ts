@@ -27,7 +27,10 @@ export async function GET(request: NextRequest) {
       ...(classification ? { classification } : {}),
       ...(language ? { language } : {}),
     },
-    include: { _count: { select: { contacts: true, deals: true, orders: true } } },
+    include: {
+      _count: { select: { contacts: true, deals: true, orders: true } },
+      activities: { orderBy: { activityDate: 'desc' }, take: 1, select: { activityDate: true } },
+    },
     orderBy: [{ classification: 'asc' }, { name: 'asc' }],
   })
 

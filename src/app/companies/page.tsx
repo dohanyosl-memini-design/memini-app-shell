@@ -23,6 +23,16 @@ interface Company {
   channel: string | null
   notes: string | null
   _count: { contacts: number; deals: number; orders: number }
+  activities: { activityDate: string }[]
+}
+
+function getDormancyDays(activities: { activityDate: string }[], createdAt?: string): number | null {
+  const lastDate = activities[0]?.activityDate
+  if (!lastDate) {
+    if (!createdAt) return null
+    return Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000)
+  }
+  return Math.floor((Date.now() - new Date(lastDate).getTime()) / 86400000)
 }
 
 const CLASSIFICATION_CONFIG: Record<string, { label: string; color: string }> = {
@@ -414,9 +424,18 @@ export default function CompaniesPage() {
                     </div>
                     <div className="text-xs text-gray-400">{company._count.orders} rendelés</div>
                   </div>
-                  {company.language && (
-                    <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-mono">{company.language}</span>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {(() => {
+                      const days = getDormancyDays(company.activities)
+                      if (days === null) return null
+                      if (days >= 28) return <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-medium">{days}n</span>
+                      if (days >= 21) return <span className="text-xs bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full font-medium">{days}n</span>
+                      return null
+                    })()}
+                    {company.language && (
+                      <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-mono">{company.language}</span>
+                    )}
+                  </div>
                 </div>
               </div>
             )

@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   ArrowLeft, Phone, Globe, MapPin, Edit2, Plus, Trash2,
   PhoneCall, Mail as MailIcon, Users, FileText, MessageSquare,
-  Clock, Building2, ChevronRight, CheckCircle2, Circle, AlertCircle,
+  Clock, Building2, ChevronRight, CheckCircle2, Circle, AlertCircle, Bell,
 } from 'lucide-react'
 import { format, formatDistanceToNow, isPast } from 'date-fns'
 import { hu } from 'date-fns/locale'
@@ -138,32 +138,46 @@ function fmtEur(v: number) {
 
 interface ActivityFormProps {
   companyId: string
+  editActivity?: Activity | null
   onSave: () => void
   onCancel: () => void
 }
 
-function ActivityForm({ companyId, onSave, onCancel }: ActivityFormProps) {
+function ActivityForm({ companyId, editActivity, onSave, onCancel }: ActivityFormProps) {
   const [loading, setLoading] = useState(false)
   const now = new Date()
   const localNow = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
 
+  const toLocal = (iso: string) => {
+    const d = new Date(iso)
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+  }
+
   const [form, setForm] = useState({
-    type: 'call',
-    subject: '',
-    description: '',
-    activityDate: localNow,
-    duration: '',
-    outcome: '',
+    type: editActivity?.type ?? 'call',
+    subject: editActivity?.subject ?? '',
+    description: editActivity?.description ?? '',
+    activityDate: editActivity ? toLocal(editActivity.activityDate) : localNow,
+    duration: editActivity?.duration ? String(editActivity.duration) : '',
+    outcome: editActivity?.outcome ?? '',
   })
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    await fetch('/api/activities', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, companyId }),
-    })
+    if (editActivity) {
+      await fetch(`/api/activities/${editActivity.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+    } else {
+      await fetch('/api/activities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, companyId }),
+      })
+    }
     setLoading(false)
     onSave()
   }
@@ -250,7 +264,7 @@ function ActivityForm({ companyId, onSave, onCancel }: ActivityFormProps) {
           Mégse
         </button>
         <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
-          {loading ? 'Mentés...' : 'Mentés'}
+          {loading ? 'Mentés...' : editActivity ? 'Módosítás' : 'Mentés'}
         </button>
       </div>
     </form>
@@ -265,11 +279,13 @@ export default function CompanyDetailPage() {
   const [loading, setLoading] = useState(true)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showActivityModal, setShowActivityModal] = useState(false)
+  const [editActivity, setEditActivity] = useState<Activity | null>(null)
   const [showNewContactModal, setShowNewContactModal] = useState(false)
   const [showNewTaskModal, setShowNewTaskModal] = useState(false)
   const [activeTab, setActiveTab] = useState<'timeline' | 'contacts' | 'deals' | 'quotes' | 'orders' | 'invoices' | 'tasks'>('timeline')
   const [previewInvoiceFull, setPreviewInvoiceFull] = useState<null | Record<string, unknown>>(null)
   const [previewOrderData, setPreviewOrderData] = useState<null | Record<string, unknown>>(null)
+  const [autoTaskCreated, setAutoTaskCreated] = useState(false)
 
   const fetchCompany = useCallback(async () => {
     const res = await fetch(`/api/companies/${id}`)
@@ -283,6 +299,34 @@ export default function CompanyDetailPage() {
   useEffect(() => {
     fetchCompany()
   }, [fetchCompany])
+
+  // Auto-create follow-up task if 4+ weeks without activity
+  useEffect(() => {
+    if (!company || autoTaskCreated) return
+    const lastAct = company.activities[0]?.activityDate
+    const refDate = lastAct ? new Date(lastAct) : new Date(company.createdAt)
+    const daysSince = Math.floor((Date.now() - refDate.getTime()) / 86400000)
+    if (daysSince < 28) return
+    const hasOpenFollowUp = company.tasks.some(
+      t => t.status !== 'completed' && t.title.includes('[Auto] Kapcsolatfelvétel')
+    )
+    if (hasOpenFollowUp) return
+    setAutoTaskCreated(true)
+    const due = new Date()
+    due.setDate(due.getDate() + 3)
+    fetch('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: `[Auto] Kapcsolatfelvétel – ${company.name}`,
+        description: `${daysSince} napja nincs aktivitás rögzítve ennél a partnernél.`,
+        dueDate: due.toISOString().slice(0, 10),
+        priority: 'high',
+        status: 'pending',
+        companyId: company.id,
+      }),
+    }).then(() => fetchCompany())
+  }, [company, autoTaskCreated, fetchCompany])
 
   async function handleDeleteActivity(activityId: string) {
     if (!confirm('Törli ezt a bejegyzést?')) return
@@ -393,6 +437,32 @@ export default function CompanyDetailPage() {
             </div>
           </div>
 
+          {/* Dormancy warning */}
+          {(() => {
+            const lastAct = company.activities[0]?.activityDate
+            const refDate = lastAct ? new Date(lastAct) : new Date(company.createdAt)
+            const days = Math.floor((Date.now() - refDate.getTime()) / 86400000)
+            if (days >= 28) return (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2.5">
+                <Bell size={15} className="text-red-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-red-700">{days} napja nincs aktivitás</p>
+                  <p className="text-xs text-red-500 mt-0.5">Automatikus feladat létrehozva. Ideje felvenni a kapcsolatot!</p>
+                </div>
+              </div>
+            )
+            if (days >= 21) return (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2.5">
+                <Bell size={15} className="text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-700">{days} napja nincs aktivitás</p>
+                  <p className="text-xs text-amber-500 mt-0.5">Érdemes hamarosan felvenni a kapcsolatot.</p>
+                </div>
+              </div>
+            )
+            return null
+          })()}
+
           {/* Stats */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">Összesítés</h3>
@@ -488,6 +558,12 @@ export default function CompanyDetailPage() {
                                 <Clock size={10} />
                                 {format(new Date(activity.activityDate), 'MMM d. HH:mm', { locale: hu })}
                               </span>
+                              <button
+                                onClick={() => { setEditActivity(activity); setShowActivityModal(true) }}
+                                className="text-gray-300 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100"
+                              >
+                                <Edit2 size={13} />
+                              </button>
                               <button
                                 onClick={() => handleDeleteActivity(activity.id)}
                                 className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
@@ -788,11 +864,15 @@ export default function CompanyDetailPage() {
       )}
 
       {showActivityModal && (
-        <Modal title="Kommunikáció rögzítése" onClose={() => setShowActivityModal(false)}>
+        <Modal
+          title={editActivity ? 'Aktivitás szerkesztése' : 'Kommunikáció rögzítése'}
+          onClose={() => { setShowActivityModal(false); setEditActivity(null) }}
+        >
           <ActivityForm
             companyId={id}
-            onSave={() => { setShowActivityModal(false); fetchCompany() }}
-            onCancel={() => setShowActivityModal(false)}
+            editActivity={editActivity}
+            onSave={() => { setShowActivityModal(false); setEditActivity(null); fetchCompany() }}
+            onCancel={() => { setShowActivityModal(false); setEditActivity(null) }}
           />
         </Modal>
       )}
