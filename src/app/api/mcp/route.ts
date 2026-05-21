@@ -716,24 +716,37 @@ function buildServer() {
 
   server.tool(
     'update_expense',
-    'Kiadás módosítása — elsősorban kategória átsoroláshoz. Csak az átadott mezők frissülnek.',
+    'Kiadás módosítása — kategória, státusz, leírás és pénzügyi adatok frissítéséhez. Csak az átadott mezők frissülnek (partial update).',
     {
       id:          z.string().describe('Kiadás ID'),
-      category:    z.string().optional().describe('Új kategória neve'),
+      category:    z.string().optional().describe('Kategória neve'),
       status:      z.enum(['pending', 'verified']).optional(),
       notes:       z.string().optional(),
       vendor:      z.string().optional(),
       description: z.string().optional(),
+      amount:      z.number().optional().describe('Nettó összeg'),
+      vatAmount:   z.number().optional().describe('ÁFA összeg'),
+      totalAmount: z.number().optional().describe('Bruttó összeg'),
+      currency:    z.string().regex(/^[A-Z]{3}$/, 'ISO 4217 kód kell (pl. EUR, HUF)').optional().describe('Pénznem (ISO 4217)'),
+      eurAmount:   z.number().optional().describe('EUR-ban kifejezett bruttó összeg (ha az eredeti HUF)'),
+      eurRate:     z.number().optional().describe('MNB középárfolyam az átváltáshoz (pl. 395.42)'),
     },
-    async ({ id, category, status, notes, vendor, description }) => {
+    async ({ id, category, status, notes, vendor, description, amount, vatAmount, totalAmount, currency, eurAmount, eurRate }) => {
       const updateData: Record<string, unknown> = {}
-      if (category    !== undefined) updateData.category    = category || null
+      if (category    !== undefined) updateData.category    = category    || null
       if (status      !== undefined) updateData.status      = status
-      if (notes       !== undefined) updateData.notes       = notes || null
+      if (notes       !== undefined) updateData.notes       = notes       || null
       if (vendor      !== undefined) updateData.vendor      = vendor
       if (description !== undefined) updateData.description = description
+      if (amount      !== undefined) updateData.amount      = amount
+      if (vatAmount   !== undefined) updateData.vatAmount   = vatAmount
+      if (totalAmount !== undefined) updateData.totalAmount = totalAmount
+      if (currency    !== undefined) updateData.currency    = currency
+      if (eurAmount   !== undefined) updateData.eurAmount   = eurAmount
+      if (eurRate     !== undefined) updateData.eurRate     = eurRate
       const data = await prisma.expense.update({ where: { id }, data: updateData })
-      return { content: [{ type: 'text', text: `Kiadás frissítve: ${data.vendor} — kategória: ${data.category ?? 'nincs'}` }] }
+      const eurInfo = data.eurAmount ? ` | ≈ €${data.eurAmount} (${data.eurRate} HUF/EUR)` : ''
+      return { content: [{ type: 'text', text: `Kiadás frissítve: ${data.vendor} — kategória: ${data.category ?? 'nincs'}${eurInfo}` }] }
     }
   )
 
