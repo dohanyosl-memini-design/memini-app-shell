@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { Plus, Search, Edit2, Trash2, Globe, Phone, Users, ChevronRight, Filter, Mail } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, Globe, Phone, Users, ChevronRight, Filter, Mail, Merge, X, CheckSquare } from 'lucide-react'
 import Modal from '@/components/Modal'
 import CompanyForm from '@/components/CompanyForm'
 
@@ -68,6 +68,11 @@ export default function CompaniesPage() {
   const [showModal, setShowModal] = useState(false)
   const [editCompany, setEditCompany] = useState<Company | null>(null)
   const [showFilters, setShowFilters] = useState(false)
+  const [mergeMode, setMergeMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [showMergeModal, setShowMergeModal] = useState(false)
+  const [masterId, setMasterId] = useState<string | null>(null)
+  const [merging, setMerging] = useState(false)
 
   const [filters, setFilters] = useState({
     partnerType: '',
@@ -118,7 +123,38 @@ export default function CompaniesPage() {
     setEditCompany(null)
   }
 
+  function toggleMergeMode() {
+    setMergeMode(m => !m)
+    setSelectedIds([])
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  function openMergeModal() {
+    setMasterId(selectedIds[0])
+    setShowMergeModal(true)
+  }
+
+  async function handleMerge() {
+    if (!masterId) return
+    setMerging(true)
+    const duplicateIds = selectedIds.filter(id => id !== masterId)
+    await fetch('/api/companies/merge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ masterId, duplicateIds }),
+    })
+    setMerging(false)
+    setShowMergeModal(false)
+    setMergeMode(false)
+    setSelectedIds([])
+    fetchCompanies()
+  }
+
   const activeFilterCount = Object.values(filters).filter(Boolean).length
+  const selectedCompanies = companies.filter(c => selectedIds.includes(c.id))
 
   // Group by classification
   const byClass = ['A', 'B', 'C', 'D'].map((cls) => ({
@@ -145,13 +181,37 @@ export default function CompaniesPage() {
             )}
           </p>
         </div>
-        <button
-          onClick={handleAdd}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={18} />
-          Új partner
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleMergeMode}
+            className={`flex items-center gap-2 px-3 py-2 border rounded-lg text-sm transition-colors ${
+              mergeMode
+                ? 'border-orange-400 bg-orange-50 text-orange-700'
+                : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            {mergeMode ? <X size={15} /> : <Merge size={15} />}
+            {mergeMode ? 'Mégse' : 'Egyesítés'}
+          </button>
+          {!mergeMode && (
+            <button
+              onClick={handleAdd}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus size={18} />
+              Új partner
+            </button>
+          )}
+          {mergeMode && selectedIds.length >= 2 && (
+            <button
+              onClick={openMergeModal}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+            >
+              <Merge size={15} />
+              {selectedIds.length} cég egyesítése
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Search + filter bar */}
@@ -270,59 +330,76 @@ export default function CompaniesPage() {
         ) : (
           companies.map((company) => {
             const cls = CLASSIFICATION_CONFIG[company.classification || 'D']
+            const isSelected = selectedIds.includes(company.id)
             return (
-              <div key={company.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+              <div
+                key={company.id}
+                className={`bg-white rounded-xl shadow-sm border p-5 hover:shadow-md transition-shadow ${
+                  mergeMode
+                    ? isSelected
+                      ? 'border-orange-400 ring-2 ring-orange-200 cursor-pointer'
+                      : 'border-gray-200 cursor-pointer hover:border-orange-300'
+                    : 'border-gray-100'
+                }`}
+                onClick={mergeMode ? () => toggleSelect(company.id) : undefined}
+              >
                 <div className="flex items-start justify-between mb-3">
-                  <Link href={`/companies/${company.id}`} className="flex-1 min-w-0 group">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${cls.color}`}>
-                        {company.classification || 'D'}
-                      </span>
-                      <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors truncate flex items-center gap-1">
-                        {company.name}
-                        <ChevronRight size={14} className="text-gray-300 group-hover:text-blue-400 shrink-0" />
-                      </h3>
+                  {mergeMode ? (
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${isSelected ? 'bg-orange-500 border-orange-500' : 'border-gray-300'}`}>
+                          {isSelected && <span className="text-white text-[10px] font-bold">✓</span>}
+                        </div>
+                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${cls.color}`}>{company.classification || 'D'}</span>
+                        <h3 className="font-semibold text-gray-900 truncate">{company.name}</h3>
+                      </div>
+                      {company.partnerType && <p className="text-xs text-blue-600 font-medium">{company.partnerType}</p>}
+                      {(company.city || company.region) && (
+                        <p className="text-xs text-gray-400">{[company.city, company.region, company.country].filter(Boolean).join(', ')}</p>
+                      )}
                     </div>
-                    {company.partnerType && (
-                      <p className="text-xs text-blue-600 mt-1 font-medium">{company.partnerType}</p>
-                    )}
-                    {(company.city || company.region) && (
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {[company.city, company.region, company.country].filter(Boolean).join(', ')}
-                      </p>
-                    )}
-                  </Link>
-                  <div className="flex items-center gap-1 shrink-0 ml-2">
-                    <button
-                      onClick={() => handleEdit(company)}
-                      className="text-gray-400 hover:text-blue-600 transition-colors p-1"
-                    >
-                      <Edit2 size={14} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(company.id)}
-                      className="text-gray-400 hover:text-red-600 transition-colors p-1"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+                  ) : (
+                    <Link href={`/companies/${company.id}`} className="flex-1 min-w-0 group">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${cls.color}`}>{company.classification || 'D'}</span>
+                        <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors truncate flex items-center gap-1">
+                          {company.name}
+                          <ChevronRight size={14} className="text-gray-300 group-hover:text-blue-400 shrink-0" />
+                        </h3>
+                      </div>
+                      {company.partnerType && <p className="text-xs text-blue-600 mt-1 font-medium">{company.partnerType}</p>}
+                      {(company.city || company.region) && (
+                        <p className="text-xs text-gray-400 mt-0.5">{[company.city, company.region, company.country].filter(Boolean).join(', ')}</p>
+                      )}
+                    </Link>
+                  )}
+                  {!mergeMode && (
+                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                      <button onClick={() => handleEdit(company)} className="text-gray-400 hover:text-blue-600 transition-colors p-1">
+                        <Edit2 size={14} />
+                      </button>
+                      <button onClick={() => handleDelete(company.id)} className="text-gray-400 hover:text-red-600 transition-colors p-1">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1.5 mb-3">
                   {company.phone && (
-                    <a href={`tel:${company.phone}`} className="flex items-center gap-2 text-sm text-gray-600 hover:text-green-600 transition-colors">
+                    <a href={`tel:${company.phone}`} className="flex items-center gap-2 text-sm text-gray-600 hover:text-green-600 transition-colors" onClick={e => mergeMode && e.preventDefault()}>
                       <Phone size={12} className="text-gray-400" />
                       {company.phone}
                     </a>
                   )}
                   {company.email && (
-                    <a href={`mailto:${company.email}`} className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition-colors">
+                    <a href={`mailto:${company.email}`} className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition-colors" onClick={e => mergeMode && e.preventDefault()}>
                       <Mail size={12} className="text-gray-400" />
                       <span className="truncate">{company.email}</span>
                     </a>
                   )}
                   {company.website && (
-                    <a href={company.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition-colors">
+                    <a href={company.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition-colors" onClick={e => mergeMode && e.preventDefault()}>
                       <Globe size={12} className="text-gray-400" />
                       <span className="truncate">{company.website.replace(/^https?:\/\//, '')}</span>
                     </a>
@@ -335,14 +412,10 @@ export default function CompaniesPage() {
                       <Users size={11} />
                       {company._count.contacts}
                     </div>
-                    <div className="text-xs text-gray-400">
-                      {company._count.orders} rendelés
-                    </div>
+                    <div className="text-xs text-gray-400">{company._count.orders} rendelés</div>
                   </div>
                   {company.language && (
-                    <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-mono">
-                      {company.language}
-                    </span>
+                    <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-mono">{company.language}</span>
                   )}
                 </div>
               </div>
@@ -354,6 +427,66 @@ export default function CompaniesPage() {
       {showModal && (
         <Modal title={editCompany ? 'Partner szerkesztése' : 'Új partner'} onClose={handleModalClose}>
           <CompanyForm company={editCompany} onSave={() => { handleModalClose(); fetchCompanies() }} onCancel={handleModalClose} />
+        </Modal>
+      )}
+
+      {showMergeModal && (
+        <Modal title="Cégek egyesítése" onClose={() => setShowMergeModal(false)}>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Válaszd ki, melyik cég legyen a <strong>fő rekord</strong>. A többi cég összes adata (számlák, kapcsolatok, ügyletek) oda kerül, majd törlődnek.
+            </p>
+            <div className="space-y-2">
+              {selectedCompanies.map(c => (
+                <label
+                  key={c.id}
+                  className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                    masterId === c.id ? 'border-orange-400 bg-orange-50' : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="master"
+                    value={c.id}
+                    checked={masterId === c.id}
+                    onChange={() => setMasterId(c.id)}
+                    className="accent-orange-500"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-gray-900 text-sm">{c.name}</div>
+                    {(c.city || c.country) && (
+                      <div className="text-xs text-gray-500">{[c.city, c.country].filter(Boolean).join(', ')}</div>
+                    )}
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      {c._count.contacts} kapcsolat · {c._count.orders} rendelés · {c._count.deals} ügylet
+                    </div>
+                  </div>
+                  {masterId === c.id && (
+                    <span className="text-xs font-semibold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full shrink-0">Fő rekord</span>
+                  )}
+                </label>
+              ))}
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
+              A többi {selectedIds.length - 1} cég véglegesen törlődik az egyesítés után.
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowMergeModal(false)}
+                className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50"
+              >
+                Mégse
+              </button>
+              <button
+                onClick={handleMerge}
+                disabled={!masterId || merging}
+                className="px-4 py-2 text-sm bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <Merge size={14} />
+                {merging ? 'Egyesítés...' : 'Egyesítés megerősítése'}
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
     </div>
