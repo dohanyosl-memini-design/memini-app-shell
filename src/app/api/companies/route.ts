@@ -12,29 +12,44 @@ export async function GET(request: NextRequest) {
   const classification = searchParams.get('classification') || ''
   const language = searchParams.get('language') || ''
 
-  const companies = await prisma.company.findMany({
-    where: {
-      ...(search ? {
-        OR: [
-          { name: { contains: search } },
-          { city: { contains: search } },
-          { email: { contains: search } },
-        ],
-      } : {}),
-      ...(partnerType ? { partnerType } : {}),
-      ...(region ? { region } : {}),
-      ...(country ? { country } : {}),
-      ...(classification ? { classification } : {}),
-      ...(language ? { language } : {}),
-    },
-    include: {
-      _count: { select: { contacts: true, deals: true, orders: true } },
-      activities: { orderBy: { activityDate: 'desc' }, take: 1, select: { activityDate: true } },
-    },
-    orderBy: [{ classification: 'asc' }, { name: 'asc' }],
-  })
+  const [companies, lastActivityRows] = await Promise.all([
+    prisma.company.findMany({
+      where: {
+        ...(search ? {
+          OR: [
+            { name: { contains: search } },
+            { city: { contains: search } },
+            { email: { contains: search } },
+          ],
+        } : {}),
+        ...(partnerType ? { partnerType } : {}),
+        ...(region ? { region } : {}),
+        ...(country ? { country } : {}),
+        ...(classification ? { classification } : {}),
+        ...(language ? { language } : {}),
+      },
+      include: { _count: { select: { contacts: true, deals: true, orders: true } } },
+      orderBy: [{ classification: 'asc' }, { name: 'asc' }],
+    }),
+    // Single query for last activity date per company — avoids N+1
+    prisma.$queryRaw<{ companyId: string; lastActivityAt: Date }[]>`
+      SELECT "companyId", MAX("activityDate") AS "lastActivityAt"
+      FROM "Activity"
+      WHERE "companyId" IS NOT NULL
+      GROUP BY "companyId"
+    `,
+  ])
 
-  return NextResponse.json(companies)
+  const activityMap = new Map(lastActivityRows.map(r => [r.companyId, r.lastActivityAt]))
+
+  const result = companies.map(c => ({
+    ...c,
+    activities: activityMap.has(c.id)
+      ? [{ activityDate: activityMap.get(c.id)!.toISOString() }]
+      : [],
+  }))
+
+  return NextResponse.json(result)
 }
 
 export async function POST(request: NextRequest) {
@@ -63,5 +78,8 @@ export async function POST(request: NextRequest) {
     include: { _count: { select: { contacts: true, deals: true, orders: true } } },
   })
 
-  return NextResponse.json(company, { status: 201 })
+  return NextResponse.json({
+    ...company,
+    activities: [],
+  }, { status: 201 })
 }
