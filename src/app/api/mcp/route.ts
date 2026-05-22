@@ -782,7 +782,7 @@ function buildServer() {
       const data = await prisma.supplier.findMany({
         where: { active: true },
         orderBy: { name: 'asc' },
-        include: { _count: { select: { products: true, purchaseOrders: true } } },
+        include: { _count: { select: { carriers: true, purchaseOrders: true } } },
       })
       return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
     }
@@ -790,16 +790,15 @@ function buildServer() {
 
   server.tool(
     'get_supplier',
-    'Egy gyártópartner részletes adatai: termékek (városok szerint), legutóbbi megrendelések, rendelendő (minimum alatti) termékek.',
+    'Egy gyártópartner részletes adatai: hordozók és termékeik (városok szerint), legutóbbi megrendelések, rendelendő (minimum alatti) termékek.',
     { id: z.string().describe('Gyártópartner ID') },
     async ({ id }) => {
       const data = await prisma.supplier.findUnique({
         where: { id },
         include: {
-          products: {
-            where: { active: true },
-            orderBy: [{ city: 'asc' }, { name: 'asc' }],
-            select: { id: true, name: true, nameDE: true, sku: true, city: true, stock: true, minStock: true, unit: true, costPrice: true },
+          carriers: {
+            orderBy: { sortOrder: 'asc' },
+            select: { id: true, code: true, name: true, nameDE: true, group: true },
           },
           purchaseOrders: {
             orderBy: { createdAt: 'desc' }, take: 5,
@@ -808,11 +807,23 @@ function buildServer() {
         },
       })
       if (!data) return { content: [{ type: 'text', text: 'Gyártópartner nem található.' }] }
-      const lowStock = data.products.filter(p => p.stock <= p.minStock)
+      const carrierIds = data.carriers.map((c: { id: string }) => c.id)
+      const products = carrierIds.length > 0
+        ? await prisma.product.findMany({
+            where: { material: { in: carrierIds }, active: true },
+            orderBy: [{ city: 'asc' }, { name: 'asc' }],
+            select: { id: true, name: true, nameDE: true, sku: true, city: true, stock: true, minStock: true, unit: true, costPrice: true, material: true },
+          })
+        : []
+      const lowStock = products.filter((p: { stock: number; minStock: number }) => p.stock <= p.minStock)
       const summary = lowStock.length > 0
-        ? `⚠️ ${lowStock.length} termék minimum alatti készleten: ${lowStock.map(p => `${p.name} (${p.stock}/${p.minStock} ${p.unit})`).join(', ')}`
+        ? `⚠️ ${lowStock.length} termék minimum alatti készleten: ${lowStock.map((p: { name: string; stock: number; minStock: number; unit: string }) => `${p.name} (${p.stock}/${p.minStock} ${p.unit})`).join(', ')}`
         : '✅ Minden termék rendben'
-      return { content: [{ type: 'text', text: `${summary}\n\n${JSON.stringify(data, null, 2)}` }] }
+      const carriersWithProducts = data.carriers.map((c: { id: string }) => ({
+        ...c,
+        products: products.filter((p: { material: string | null }) => p.material === c.id),
+      }))
+      return { content: [{ type: 'text', text: `${summary}\n\n${JSON.stringify({ ...data, carriers: carriersWithProducts }, null, 2)}` }] }
     }
   )
 
@@ -878,19 +889,19 @@ function buildServer() {
   )
 
   server.tool(
-    'assign_supplier_to_product',
-    'Gyártópartner hozzárendelése egy termékhez.',
+    'assign_supplier_to_carrier',
+    'Gyártópartner hozzárendelése egy hordozóhoz (Carrier). A hordozón keresztül a kapcsolódó termékek is a gyártópartnerhez tartoznak.',
     {
-      productId:  z.string().describe('Termék ID'),
+      carrierId:  z.string().describe('Hordozó ID'),
       supplierId: z.string().nullable().describe('Gyártópartner ID, vagy null a törléshez'),
     },
-    async ({ productId, supplierId }) => {
-      const product = await prisma.product.update({
-        where: { id: productId },
+    async ({ carrierId, supplierId }) => {
+      const carrier = await prisma.carrier.update({
+        where: { id: carrierId },
         data: { supplierId: supplierId || null },
         select: { id: true, name: true, supplierId: true },
       })
-      return { content: [{ type: 'text', text: supplierId ? `Gyártópartner hozzárendelve: ${product.name}` : `Gyártópartner eltávolítva: ${product.name}` }] }
+      return { content: [{ type: 'text', text: supplierId ? `Gyártópartner hozzárendelve a hordozóhoz: ${carrier.name}` : `Gyártópartner eltávolítva a hordozóról: ${carrier.name}` }] }
     }
   )
 

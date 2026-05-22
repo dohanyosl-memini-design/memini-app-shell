@@ -12,7 +12,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       name: body.name,
       nameDE: body.nameDE || null,
       group: body.group || null,
-      sortOrder: body.sortOrder ?? undefined,
+      sortOrder:  body.sortOrder  ?? undefined,
+      supplierId: body.supplierId !== undefined ? (body.supplierId || null) : undefined,
     },
   })
   return NextResponse.json(carrier)

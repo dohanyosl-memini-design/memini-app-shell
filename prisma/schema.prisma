@@ -161,8 +161,6 @@ model Product {
   active       Boolean         @default(true)
   imageUrl     String?
   priceListEntryId String?
-  supplierId   String?
-  supplier     Supplier?       @relation(fields: [supplierId], references: [id])
   purchaseOrderItems PurchaseOrderItem[]
   movements         StockMovement[]
   invoiceItems      InvoiceItem[]
@@ -396,14 +394,16 @@ model DeliveryNoteItem {
 }
 
 model Carrier {
-  id        String   @id @default(cuid())
-  code      String
-  name      String
-  nameDE    String?
-  group     String?
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String    @id @default(cuid())
+  code       String
+  name       String
+  nameDE     String?
+  group      String?
+  sortOrder  Int       @default(0)
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id])
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 }
 
 model PriceListEntry {
@@ -443,7 +443,7 @@ model Supplier {
   vatId          String?
   notes          String?
   active         Boolean         @default(true)
-  products       Product[]
+  carriers       Carrier[]
   purchaseOrders PurchaseOrder[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt

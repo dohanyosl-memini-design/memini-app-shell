@@ -5,8 +5,8 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, Edit2, Package, AlertTriangle, Plus, Minus,
-  ShoppingCart, CheckCircle2, Clock, Trash2, Phone, Mail, Globe,
-  MapPin, Factory, FileText,
+  ShoppingCart, CheckCircle2, FileText, Phone, Mail, Globe,
+  MapPin, Factory, Tag,
 } from 'lucide-react'
 import Modal from '@/components/Modal'
 import SupplierForm from '@/components/SupplierForm'
@@ -24,13 +24,21 @@ interface Product {
   unit: string
   costPrice: number
   imageUrl: string | null
+  material: string | null
+}
+
+interface Carrier {
+  id: string
+  code: string
+  name: string
+  nameDE: string | null
+  group: string | null
+  products: Product[]
 }
 
 interface PurchaseOrderItem {
   product: { id: string; name: string; sku: string; unit: string }
   quantity: number
-  unitPrice: number
-  note: string | null
 }
 
 interface PurchaseOrder {
@@ -38,7 +46,6 @@ interface PurchaseOrder {
   number: string
   status: string
   createdAt: string
-  orderedAt: string | null
   items: PurchaseOrderItem[]
 }
 
@@ -55,16 +62,16 @@ interface Supplier {
   website: string | null
   vatId: string | null
   notes: string | null
-  products: Product[]
+  carriers: Carrier[]
   purchaseOrders: PurchaseOrder[]
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  draft: { label: 'Vázlat', color: 'bg-gray-100 text-gray-600' },
-  sent: { label: 'Elküldve', color: 'bg-blue-100 text-blue-700' },
+  draft:     { label: 'Vázlat',        color: 'bg-gray-100 text-gray-600' },
+  sent:      { label: 'Elküldve',      color: 'bg-blue-100 text-blue-700' },
   confirmed: { label: 'Visszaigazolt', color: 'bg-purple-100 text-purple-700' },
-  received: { label: 'Megérkezett', color: 'bg-green-100 text-green-700' },
-  cancelled: { label: 'Törölt', color: 'bg-red-100 text-red-600' },
+  received:  { label: 'Megérkezett',   color: 'bg-green-100 text-green-700' },
+  cancelled: { label: 'Törölt',        color: 'bg-red-100 text-red-600' },
 }
 
 export default function ManufacturingDetailPage() {
@@ -73,9 +80,7 @@ export default function ManufacturingDetailPage() {
   const [supplier, setSupplier] = useState<Supplier | null>(null)
   const [loading, setLoading] = useState(true)
   const [showEditModal, setShowEditModal] = useState(false)
-  const [activeTab, setActiveTab] = useState<'products' | 'orders'>('products')
-
-  // Order basket: productId → quantity
+  const [activeTab, setActiveTab] = useState<'carriers' | 'orders'>('carriers')
   const [basket, setBasket] = useState<Record<string, number>>({})
   const [orderNotes, setOrderNotes] = useState('')
   const [savingOrder, setSavingOrder] = useState(false)
@@ -89,29 +94,20 @@ export default function ManufacturingDetailPage() {
 
   useEffect(() => { fetchSupplier() }, [fetchSupplier])
 
-  const productsByCity = useMemo(() => {
-    if (!supplier) return {}
-    const groups: Record<string, Product[]> = {}
-    for (const p of supplier.products) {
-      const city = p.city || '—'
-      if (!groups[city]) groups[city] = []
-      groups[city].push(p)
-    }
-    return groups
-  }, [supplier])
+  const allProducts = useMemo(() =>
+    supplier?.carriers.flatMap(c => c.products) ?? [], [supplier])
 
   const lowStockProducts = useMemo(() =>
-    supplier?.products.filter(p => p.stock <= p.minStock) ?? [], [supplier])
+    allProducts.filter(p => p.stock <= p.minStock), [allProducts])
 
   const basketItems = useMemo(() =>
     Object.entries(basket)
       .filter(([, qty]) => qty > 0)
       .map(([productId, quantity]) => ({
-        productId,
-        quantity,
-        product: supplier?.products.find(p => p.id === productId),
+        productId, quantity,
+        product: allProducts.find(p => p.id === productId),
       }))
-  , [basket, supplier])
+  , [basket, allProducts])
 
   function setQty(productId: string, qty: number) {
     setBasket(b => ({ ...b, [productId]: Math.max(0, qty) }))
@@ -124,8 +120,7 @@ export default function ManufacturingDetailPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        supplierId: id,
-        notes: orderNotes,
+        supplierId: id, notes: orderNotes,
         items: basketItems.map(item => ({
           productId: item.productId,
           quantity: item.quantity,
@@ -135,11 +130,8 @@ export default function ManufacturingDetailPage() {
     })
     setSavingOrder(false)
     if (res.ok) {
-      setBasket({})
-      setOrderNotes('')
-      setShowOrderConfirm(false)
-      setActiveTab('orders')
-      fetchSupplier()
+      setBasket({}); setOrderNotes(''); setShowOrderConfirm(false)
+      setActiveTab('orders'); fetchSupplier()
     }
   }
 
@@ -147,7 +139,15 @@ export default function ManufacturingDetailPage() {
   if (!supplier) return <div className="p-6"><p className="text-gray-500">Partner nem található.</p><Link href="/manufacturing" className="text-blue-600 hover:underline">← Vissza</Link></div>
 
   const basketCount = basketItems.length
-  const sortedCities = Object.keys(productsByCity).sort((a, b) => a === '—' ? 1 : b === '—' ? -1 : a.localeCompare(b))
+  const totalProducts = allProducts.length
+
+  // Group carriers by group (Kő, Bélyeg, Fa, etc.)
+  const groupedCarriers: Record<string, Carrier[]> = {}
+  for (const c of supplier.carriers) {
+    const g = c.group || 'Egyéb'
+    if (!groupedCarriers[g]) groupedCarriers[g] = []
+    groupedCarriers[g].push(c)
+  }
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto">
@@ -172,9 +172,9 @@ export default function ManufacturingDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Left: info + basket */}
+        {/* Left sidebar */}
         <div className="space-y-4">
-          {/* Contact card */}
+          {/* Contact */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-2">
             {supplier.phone && (
               <a href={`tel:${supplier.phone}`} className="flex items-center gap-2 text-sm text-gray-600 hover:text-green-600">
@@ -201,7 +201,19 @@ export default function ManufacturingDetailPage() {
             {supplier.notes && <p className="text-xs text-gray-500 border-t pt-2 mt-2">{supplier.notes}</p>}
           </div>
 
-          {/* Low stock alert */}
+          {/* Stats */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+            <div className="flex justify-between text-sm mb-1">
+              <span className="text-gray-500">Hordozók</span>
+              <span className="font-semibold">{supplier.carriers.length}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Termékek</span>
+              <span className="font-semibold">{totalProducts}</span>
+            </div>
+          </div>
+
+          {/* Low stock */}
           {lowStockProducts.length > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
               <div className="flex items-center gap-2 mb-2">
@@ -219,12 +231,12 @@ export default function ManufacturingDetailPage() {
             </div>
           )}
 
-          {/* Order basket */}
+          {/* Basket */}
           {basketCount > 0 && (
             <div className="bg-white rounded-xl border border-blue-200 shadow-sm p-4">
               <div className="flex items-center gap-2 mb-3">
                 <ShoppingCart size={15} className="text-blue-600" />
-                <p className="font-semibold text-gray-900 text-sm">Megrendelőlap ({basketCount} tétel)</p>
+                <p className="font-semibold text-gray-900 text-sm">Kosár ({basketCount} tétel)</p>
               </div>
               <div className="space-y-1.5 mb-3">
                 {basketItems.map(item => (
@@ -234,23 +246,12 @@ export default function ManufacturingDetailPage() {
                   </div>
                 ))}
               </div>
-              <textarea
-                rows={2}
-                placeholder="Megjegyzés a rendeléshez..."
-                value={orderNotes}
+              <textarea rows={2} placeholder="Megjegyzés..." value={orderNotes}
                 onChange={e => setOrderNotes(e.target.value)}
-                className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-blue-500 mb-2"
-              />
+                className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-blue-500 mb-2" />
               <div className="flex gap-2">
-                <button onClick={() => setBasket({})} className="flex-1 text-xs py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600">
-                  Törlés
-                </button>
-                <button
-                  onClick={() => setShowOrderConfirm(true)}
-                  className="flex-1 text-xs py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Megrendelés
-                </button>
+                <button onClick={() => setBasket({})} className="flex-1 text-xs py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600">Törlés</button>
+                <button onClick={() => setShowOrderConfirm(true)} className="flex-1 text-xs py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Megrendelés</button>
               </div>
             </div>
           )}
@@ -260,88 +261,93 @@ export default function ManufacturingDetailPage() {
         <div className="lg:col-span-3 space-y-4">
           <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
             {[
-              { key: 'products', label: `Termékek (${supplier.products.length})` },
-              { key: 'orders', label: `Rendelések (${supplier.purchaseOrders.length})` },
+              { key: 'carriers', label: `Hordozók & Termékek (${supplier.carriers.length})` },
+              { key: 'orders',   label: `Rendelések (${supplier.purchaseOrders.length})` },
             ].map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key as 'products' | 'orders')}
-                className={`flex-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === tab.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-              >
+              <button key={tab.key} onClick={() => setActiveTab(tab.key as 'carriers' | 'orders')}
+                className={`flex-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === tab.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                 {tab.label}
               </button>
             ))}
           </div>
 
-          {/* Products tab — grouped by city */}
-          {activeTab === 'products' && (
-            <div className="space-y-4">
-              {supplier.products.length === 0 ? (
+          {/* Carriers tab */}
+          {activeTab === 'carriers' && (
+            <div className="space-y-3">
+              {supplier.carriers.length === 0 ? (
                 <div className="bg-white rounded-xl border border-gray-100 shadow-sm py-16 text-center">
-                  <Package size={36} className="text-gray-200 mx-auto mb-3" />
-                  <p className="text-gray-400 text-sm">Nincs termék ehhez a partnerhez.</p>
-                  <p className="text-gray-400 text-xs mt-1">Termékszerkesztőben rendeld hozzá a gyártópartnert.</p>
+                  <Tag size={36} className="text-gray-200 mx-auto mb-3" />
+                  <p className="text-gray-400 text-sm">Nincs hordozó ehhez a partnerhez.</p>
+                  <p className="text-gray-400 text-xs mt-1">A Hordozók kezelőben rendeld hozzá a partnert az egyes hordozókhoz.</p>
                 </div>
               ) : (
-                sortedCities.map(city => (
-                  <div key={city} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
-                      <MapPin size={13} className="text-gray-400" />
-                      <span className="text-sm font-semibold text-gray-700">{city}</span>
-                      <span className="text-xs text-gray-400">({productsByCity[city].length} termék)</span>
+                Object.entries(groupedCarriers).map(([group, carriers]) => (
+                  <div key={group} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                    {/* Group header */}
+                    <div className="px-4 py-2.5 bg-indigo-50 border-b border-indigo-100 flex items-center gap-2">
+                      <Tag size={13} className="text-indigo-400" />
+                      <span className="text-sm font-bold text-indigo-700">{group}</span>
                     </div>
-                    <div className="divide-y divide-gray-50">
-                      {productsByCity[city].map(p => {
-                        const isLow = p.stock <= p.minStock
-                        const qty = basket[p.id] ?? 0
-                        return (
-                          <div key={p.id} className={`px-4 py-3 flex items-center gap-3 ${isLow ? 'bg-amber-50/40' : ''}`}>
-                            {p.imageUrl ? (
-                              <img src={p.imageUrl} alt={p.name} className="w-10 h-10 object-cover rounded-lg border border-gray-100 shrink-0" />
-                            ) : (
-                              <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center shrink-0">
-                                <Package size={16} className="text-gray-400" />
-                              </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900 truncate">{p.name}</p>
-                              {p.nameDE && <p className="text-xs text-gray-500 truncate">{p.nameDE}</p>}
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-xs font-mono text-gray-400">{p.sku}</span>
-                                <span className={`text-xs font-medium flex items-center gap-0.5 ${isLow ? 'text-amber-600' : 'text-gray-500'}`}>
-                                  {isLow && <AlertTriangle size={10} />}
-                                  {p.stock} / {p.minStock} {p.unit}
-                                </span>
-                              </div>
-                            </div>
-                            {/* Qty stepper */}
-                            <div className="flex items-center gap-1 shrink-0">
-                              <button
-                                onClick={() => setQty(p.id, qty - 1)}
-                                disabled={qty === 0}
-                                className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-30"
-                              >
-                                <Minus size={12} />
-                              </button>
-                              <input
-                                type="number"
-                                min={0}
-                                value={qty || ''}
-                                placeholder="0"
-                                onChange={e => setQty(p.id, parseInt(e.target.value) || 0)}
-                                className="w-12 text-center text-sm border border-gray-200 rounded-lg py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              />
-                              <button
-                                onClick={() => setQty(p.id, qty + 1)}
-                                className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100"
-                              >
-                                <Plus size={12} />
-                              </button>
-                            </div>
+
+                    {carriers.map(carrier => (
+                      <div key={carrier.id}>
+                        {/* Carrier row */}
+                        <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+                          <span className="text-sm font-semibold text-gray-700">{carrier.name}</span>
+                          {carrier.nameDE && <span className="text-xs text-gray-400">· {carrier.nameDE}</span>}
+                          <span className="ml-auto text-xs text-gray-400">{carrier.products.length} termék</span>
+                        </div>
+
+                        {/* Products */}
+                        {carrier.products.length === 0 ? (
+                          <div className="px-4 py-3 text-xs text-gray-400 italic">Nincs termék ennél a hordozónál</div>
+                        ) : (
+                          <div className="divide-y divide-gray-50">
+                            {carrier.products.map(p => {
+                              const isLow = p.stock <= p.minStock
+                              const qty = basket[p.id] ?? 0
+                              return (
+                                <div key={p.id} className={`px-4 py-3 flex items-center gap-3 ${isLow ? 'bg-amber-50/40' : ''}`}>
+                                  {p.imageUrl ? (
+                                    <img src={p.imageUrl} alt={p.name} className="w-10 h-10 object-cover rounded-lg border border-gray-100 shrink-0" />
+                                  ) : (
+                                    <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center shrink-0">
+                                      <Package size={16} className="text-gray-400" />
+                                    </div>
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-gray-900 truncate">{p.name}</p>
+                                    {p.nameDE && <p className="text-xs text-gray-500 truncate">{p.nameDE}</p>}
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      <span className="text-xs font-mono text-gray-400">{p.sku}</span>
+                                      {p.city && <span className="text-xs text-gray-400 flex items-center gap-0.5"><MapPin size={9} />{p.city}</span>}
+                                      <span className={`text-xs font-medium flex items-center gap-0.5 ${isLow ? 'text-amber-600' : 'text-gray-500'}`}>
+                                        {isLow && <AlertTriangle size={10} />}
+                                        {p.stock}/{p.minStock} {p.unit}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  {/* Qty stepper */}
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <button onClick={() => setQty(p.id, qty - 1)} disabled={qty === 0}
+                                      className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-30">
+                                      <Minus size={12} />
+                                    </button>
+                                    <input type="number" min={0} value={qty || ''} placeholder="0"
+                                      onChange={e => setQty(p.id, parseInt(e.target.value) || 0)}
+                                      className="w-12 text-center text-sm border border-gray-200 rounded-lg py-1 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                    <button onClick={() => setQty(p.id, qty + 1)}
+                                      className="w-7 h-7 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100">
+                                      <Plus size={12} />
+                                    </button>
+                                  </div>
+                                </div>
+                              )
+                            })}
                           </div>
-                        )
-                      })}
-                    </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 ))
               )}
@@ -354,7 +360,7 @@ export default function ManufacturingDetailPage() {
               {supplier.purchaseOrders.length === 0 ? (
                 <div className="py-16 text-center">
                   <FileText size={36} className="text-gray-200 mx-auto mb-3" />
-                  <p className="text-gray-400 text-sm">Még nincs rendelés ennél a partnernél.</p>
+                  <p className="text-gray-400 text-sm">Még nincs rendelés.</p>
                 </div>
               ) : (
                 <div className="divide-y divide-gray-50">
@@ -381,18 +387,16 @@ export default function ManufacturingDetailPage() {
         </div>
       </div>
 
-      {/* Edit modal */}
       {showEditModal && (
         <Modal title="Gyártópartner szerkesztése" onClose={() => setShowEditModal(false)}>
           <SupplierForm supplier={supplier} onSave={() => { setShowEditModal(false); fetchSupplier() }} onCancel={() => setShowEditModal(false)} />
         </Modal>
       )}
 
-      {/* Order confirm modal */}
       {showOrderConfirm && (
         <Modal title="Megrendelés megerősítése" onClose={() => setShowOrderConfirm(false)}>
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">Az alábbi tételeket szeretnéd megrendelni <strong>{supplier.name}</strong> gyártópartnertől:</p>
+            <p className="text-sm text-gray-600">Tételek <strong>{supplier.name}</strong> partnerhez:</p>
             <div className="bg-gray-50 rounded-lg divide-y divide-gray-100">
               {basketItems.map(item => (
                 <div key={item.productId} className="flex items-center justify-between px-3 py-2 text-sm">

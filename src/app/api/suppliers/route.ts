@@ -7,7 +7,7 @@ export async function GET() {
   const suppliers = await prisma.supplier.findMany({
     orderBy: { name: 'asc' },
     include: {
-      _count: { select: { products: true, purchaseOrders: true } },
+      _count: { select: { carriers: true, purchaseOrders: true } },
     },
   })
   return NextResponse.json(suppliers)
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
       vatId: body.vatId || null,
       notes: body.notes || null,
     },
-    include: { _count: { select: { products: true, purchaseOrders: true } } },
+    include: { _count: { select: { carriers: true, purchaseOrders: true } } },
   })
   return NextResponse.json(supplier, { status: 201 })
 }

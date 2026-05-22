@@ -22,7 +22,6 @@ interface Product {
   locationCabinet: string | null; locationShelf: string | null; locationBox: string | null
   costPrice: number; salesPrice: number; stock: number; minStock: number
   unit: string; vatRate: number; imageUrl: string | null; priceListEntryId: string | null
-  supplierId: string | null
 }
 
 interface StockMovement {
