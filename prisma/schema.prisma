@@ -161,6 +161,9 @@ model Product {
   active       Boolean         @default(true)
   imageUrl     String?
   priceListEntryId String?
+  supplierId   String?
+  supplier     Supplier?       @relation(fields: [supplierId], references: [id])
+  purchaseOrderItems PurchaseOrderItem[]
   movements         StockMovement[]
   invoiceItems      InvoiceItem[]
   quoteItems        QuoteItem[]
@@ -419,9 +422,53 @@ model PriceListEntry {
 
 model ArthurReport {
   id        String   @id @default(cuid())
-  type      String   // daily | weekly | monthly
+  type      String
   title     String
   summary   String   @db.Text
   drafts    Json     @default("[]")
   createdAt DateTime @default(now())
+}
+
+model Supplier {
+  id             String          @id @default(cuid())
+  name           String
+  contactName    String?
+  email          String?
+  phone          String?
+  address        String?
+  city           String?
+  zip            String?
+  country        String?         @default("DE")
+  website        String?
+  vatId          String?
+  notes          String?
+  active         Boolean         @default(true)
+  products       Product[]
+  purchaseOrders PurchaseOrder[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model PurchaseOrder {
+  id          String              @id @default(cuid())
+  number      String              @unique
+  supplierId  String
+  supplier    Supplier            @relation(fields: [supplierId], references: [id])
+  status      String              @default("draft")
+  notes       String?
+  orderedAt   DateTime?
+  items       PurchaseOrderItem[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+}
+
+model PurchaseOrderItem {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  quantity        Int
+  unitPrice       Float         @default(0)
+  note            String?
 }

@@ -28,6 +28,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         vatRate: parseFloat(body.vatRate) || 19,
         imageUrl: body.imageUrl !== undefined ? (body.imageUrl || null) : undefined,
         priceListEntryId: body.priceListEntryId !== undefined ? (body.priceListEntryId || null) : undefined,
+        supplierId: body.supplierId !== undefined ? (body.supplierId || null) : undefined,
       },
     })
 

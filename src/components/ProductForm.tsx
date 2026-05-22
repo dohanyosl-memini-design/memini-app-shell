@@ -7,6 +7,7 @@ import Image from 'next/image'
 
 interface PriceListEntry { id: string; name: string; costPrice: number; basePrice: number }
 interface Carrier { id: string; code: string; name: string; nameDE: string | null; group: string | null }
+interface Supplier { id: string; name: string; city: string | null }
 
 interface Product {
   id: string
@@ -29,6 +30,7 @@ interface Product {
   vatRate: number
   imageUrl: string | null
   priceListEntryId: string | null
+  supplierId: string | null
 }
 
 interface ProductFormProps {
@@ -45,11 +47,13 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
   const [imageUrl, setImageUrl] = useState<string>(product?.imageUrl || '')
   const [priceListEntries, setPriceListEntries] = useState<PriceListEntry[]>([])
   const [carriers, setCarriers] = useState<Carrier[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetch('/api/pricelist').then(r => r.json()).then(setPriceListEntries).catch(() => {})
     fetch('/api/carriers').then(r => r.json()).then(setCarriers).catch(() => {})
+    fetch('/api/suppliers').then(r => r.json()).then(setSuppliers).catch(() => {})
   }, [])
 
   // Convert legacy code-based material to id-based after carriers load
@@ -80,6 +84,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
     unit: product?.unit || 'db',
     vatRate: product?.vatRate?.toString() || '19',
     priceListEntryId: product?.priceListEntryId || '',
+    supplierId: product?.supplierId || '',
   })
 
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -122,7 +127,7 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, imageUrl: imageUrl || null, priceListEntryId: form.priceListEntryId || null }),
+        body: JSON.stringify({ ...form, imageUrl: imageUrl || null, priceListEntryId: form.priceListEntryId || null, supplierId: form.supplierId || null }),
       })
 
       if (!res.ok) {
@@ -422,6 +427,22 @@ export default function ProductForm({ product, onSave, onCancel }: ProductFormPr
             ))}
           </select>
           <p className="text-xs text-gray-400 mt-1">Kiválasztáskor az Eladási ár és Önköltség automatikusan kitöltődik. Tier árazás a megrendelőlapon.</p>
+        </div>
+      )}
+
+      {suppliers.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Gyártópartner</label>
+          <select
+            value={form.supplierId}
+            onChange={e => setForm({ ...form, supplierId: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          >
+            <option value="">— Nincs hozzárendelve —</option>
+            {suppliers.map(s => (
+              <option key={s.id} value={s.id}>{s.name}{s.city ? ` (${s.city})` : ''}</option>
+            ))}
+          </select>
         </div>
       )}
 

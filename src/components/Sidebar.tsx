@@ -10,7 +10,7 @@ import {
   CheckSquare, BarChart3, Package, FileText, Wallet,
   ClipboardList, ShoppingCart, LogOut, Euro, Menu, X,
   GitMerge, BookOpen, Calculator, HelpCircle, Shield,
-  Sun, Moon, Bot,
+  Sun, Moon, Bot, Factory,
 } from 'lucide-react'
 import { useTheme } from '@/components/ThemeProvider'
 
@@ -53,6 +53,12 @@ const navGroups = [
       { href: '/finance', label: 'Cashflow', icon: Wallet },
       { href: '/bookkeeping', label: 'Könyvelés', icon: Calculator },
       { href: '/reports', label: 'Riportok', icon: BarChart3 },
+    ],
+  },
+  {
+    label: 'Gyártás',
+    items: [
+      { href: '/manufacturing', label: 'Gyártópartnerek', icon: Factory },
     ],
   },
   {
