@@ -59,6 +59,7 @@ const navGroups = [
     label: 'Egyéb',
     items: [
       { href: '/tasks', label: 'Feladatok', icon: CheckSquare },
+      { href: '/settings', label: 'Beállítások', icon: Shield },
       { href: '/faq', label: 'Súgó / FAQ', icon: HelpCircle },
       { href: '/backup', label: 'Adatmentés', icon: Shield },
     ],
