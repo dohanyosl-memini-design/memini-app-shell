@@ -772,6 +772,233 @@ function buildServer() {
     }
   )
 
+  // ─── GYÁRTÁS: GYÁRTÓPARTNEREK ─────────────────────────────────────────────────
+
+  server.tool(
+    'list_suppliers',
+    'Gyártópartnerek listázása termék- és rendelésszámmal.',
+    {},
+    async () => {
+      const data = await prisma.supplier.findMany({
+        where: { active: true },
+        orderBy: { name: 'asc' },
+        include: { _count: { select: { products: true, purchaseOrders: true } } },
+      })
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'get_supplier',
+    'Egy gyártópartner részletes adatai: termékek (városok szerint), legutóbbi megrendelések, rendelendő (minimum alatti) termékek.',
+    { id: z.string().describe('Gyártópartner ID') },
+    async ({ id }) => {
+      const data = await prisma.supplier.findUnique({
+        where: { id },
+        include: {
+          products: {
+            where: { active: true },
+            orderBy: [{ city: 'asc' }, { name: 'asc' }],
+            select: { id: true, name: true, nameDE: true, sku: true, city: true, stock: true, minStock: true, unit: true, costPrice: true },
+          },
+          purchaseOrders: {
+            orderBy: { createdAt: 'desc' }, take: 5,
+            include: { items: { include: { product: { select: { id: true, name: true, sku: true } } } } },
+          },
+        },
+      })
+      if (!data) return { content: [{ type: 'text', text: 'Gyártópartner nem található.' }] }
+      const lowStock = data.products.filter(p => p.stock <= p.minStock)
+      const summary = lowStock.length > 0
+        ? `⚠️ ${lowStock.length} termék minimum alatti készleten: ${lowStock.map(p => `${p.name} (${p.stock}/${p.minStock} ${p.unit})`).join(', ')}`
+        : '✅ Minden termék rendben'
+      return { content: [{ type: 'text', text: `${summary}\n\n${JSON.stringify(data, null, 2)}` }] }
+    }
+  )
+
+  server.tool(
+    'create_supplier',
+    'Új gyártópartner létrehozása a rendszerben.',
+    {
+      name:        z.string().describe('Cégnév'),
+      contactName: z.string().optional().describe('Kapcsolattartó neve'),
+      email:       z.string().optional(),
+      phone:       z.string().optional(),
+      address:     z.string().optional(),
+      city:        z.string().optional(),
+      zip:         z.string().optional(),
+      country:     z.string().optional().describe('Országkód (pl. DE, AT, HU)'),
+      website:     z.string().optional(),
+      vatId:       z.string().optional().describe('Adószám'),
+      notes:       z.string().optional(),
+    },
+    async (body) => {
+      const data = await prisma.supplier.create({
+        data: {
+          name: body.name,
+          contactName: body.contactName || null,
+          email:       body.email       || null,
+          phone:       body.phone       || null,
+          address:     body.address     || null,
+          city:        body.city        || null,
+          zip:         body.zip         || null,
+          country:     body.country     || 'DE',
+          website:     body.website     || null,
+          vatId:       body.vatId       || null,
+          notes:       body.notes       || null,
+        },
+      })
+      return { content: [{ type: 'text', text: `Gyártópartner létrehozva: ${data.name} (ID: ${data.id})` }] }
+    }
+  )
+
+  server.tool(
+    'update_supplier',
+    'Gyártópartner adatainak módosítása.',
+    {
+      id:          z.string().describe('Gyártópartner ID'),
+      name:        z.string().optional(),
+      contactName: z.string().optional(),
+      email:       z.string().optional(),
+      phone:       z.string().optional(),
+      address:     z.string().optional(),
+      city:        z.string().optional(),
+      zip:         z.string().optional(),
+      country:     z.string().optional(),
+      website:     z.string().optional(),
+      vatId:       z.string().optional(),
+      notes:       z.string().optional(),
+    },
+    async ({ id, ...fields }) => {
+      const upd: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(fields)) if (v !== undefined) upd[k] = v || null
+      const data = await prisma.supplier.update({ where: { id }, data: upd })
+      return { content: [{ type: 'text', text: `Gyártópartner frissítve: ${data.name}` }] }
+    }
+  )
+
+  server.tool(
+    'assign_supplier_to_product',
+    'Gyártópartner hozzárendelése egy termékhez.',
+    {
+      productId:  z.string().describe('Termék ID'),
+      supplierId: z.string().nullable().describe('Gyártópartner ID, vagy null a törléshez'),
+    },
+    async ({ productId, supplierId }) => {
+      const product = await prisma.product.update({
+        where: { id: productId },
+        data: { supplierId: supplierId || null },
+        select: { id: true, name: true, supplierId: true },
+      })
+      return { content: [{ type: 'text', text: supplierId ? `Gyártópartner hozzárendelve: ${product.name}` : `Gyártópartner eltávolítva: ${product.name}` }] }
+    }
+  )
+
+  // ─── GYÁRTÁS: MEGRENDELÉSEK ───────────────────────────────────────────────────
+
+  server.tool(
+    'list_purchase_orders',
+    'Megrendelések listázása. Szűrhető gyártópartner és státusz szerint.',
+    {
+      supplierId: z.string().optional().describe('Gyártópartner ID'),
+      status:     z.enum(['draft', 'sent', 'confirmed', 'received', 'cancelled']).optional(),
+    },
+    async ({ supplierId, status }) => {
+      const where: Record<string, unknown> = {}
+      if (supplierId) where.supplierId = supplierId
+      if (status)     where.status     = status
+      const data = await prisma.purchaseOrder.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          supplier: { select: { id: true, name: true } },
+          items: { include: { product: { select: { id: true, name: true, sku: true, unit: true } } } },
+        },
+      })
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'get_purchase_order',
+    'Egy megrendelés teljes tartalma tételekkel együtt.',
+    { id: z.string().describe('Megrendelés ID') },
+    async ({ id }) => {
+      const data = await prisma.purchaseOrder.findUnique({
+        where: { id },
+        include: {
+          supplier: true,
+          items: { include: { product: { select: { id: true, name: true, nameDE: true, sku: true, unit: true, city: true } } } },
+        },
+      })
+      if (!data) return { content: [{ type: 'text', text: 'Megrendelés nem található.' }] }
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'create_purchase_order',
+    'Új megrendelőlap létrehozása gyártópartnerhez. Termékeket ID + mennyiség alapján add meg.',
+    {
+      supplierId: z.string().describe('Gyártópartner ID'),
+      notes:      z.string().optional().describe('Megjegyzés'),
+      items:      z.array(z.object({
+        productId: z.string().describe('Termék ID'),
+        quantity:  z.number().int().positive().describe('Rendelt mennyiség'),
+        unitPrice: z.number().optional().describe('Egységár (alapértelmezett: termék önköltsége)'),
+        note:      z.string().optional(),
+      })).min(1).describe('Rendelési tételek'),
+    },
+    async ({ supplierId, notes, items }) => {
+      const year = new Date().getFullYear()
+      const count = await prisma.purchaseOrder.count({ where: { number: { startsWith: `PO-${year}-` } } })
+      const number = `PO-${year}-${String(count + 1).padStart(4, '0')}`
+
+      // Fill missing unitPrices from product costPrice
+      const productIds = items.map(i => i.productId)
+      const products = await prisma.product.findMany({ where: { id: { in: productIds } }, select: { id: true, costPrice: true, name: true } })
+      const priceMap = Object.fromEntries(products.map(p => [p.id, p.costPrice]))
+
+      const order = await prisma.purchaseOrder.create({
+        data: {
+          number,
+          supplierId,
+          status: 'draft',
+          notes: notes || null,
+          items: {
+            create: items.map(item => ({
+              productId: item.productId,
+              quantity:  item.quantity,
+              unitPrice: item.unitPrice ?? priceMap[item.productId] ?? 0,
+              note:      item.note || null,
+            })),
+          },
+        },
+        include: { supplier: { select: { name: true } }, items: { include: { product: { select: { name: true } } } } },
+      })
+
+      const lines = order.items.map(i => `  • ${i.product.name}: ${i.quantity}`).join('\n')
+      return { content: [{ type: 'text', text: `Megrendelés létrehozva: ${order.number}\nPartner: ${order.supplier.name}\nTételek:\n${lines}` }] }
+    }
+  )
+
+  server.tool(
+    'update_purchase_order_status',
+    'Megrendelés státuszának frissítése. Lehetséges átmenetek: draft→sent→confirmed→received (vagy bármikor cancelled).',
+    {
+      id:     z.string().describe('Megrendelés ID'),
+      status: z.enum(['draft', 'sent', 'confirmed', 'received', 'cancelled']).describe('Új státusz'),
+      notes:  z.string().optional().describe('Megjegyzés hozzáadása / módosítása'),
+    },
+    async ({ id, status, notes }) => {
+      const upd: Record<string, unknown> = { status }
+      if (notes !== undefined) upd.notes = notes
+      if (status === 'sent') upd.orderedAt = new Date()
+      const data = await prisma.purchaseOrder.update({ where: { id }, data: upd, select: { number: true, status: true } })
+      return { content: [{ type: 'text', text: `Megrendelés frissítve: ${data.number} → ${data.status}` }] }
+    }
+  )
+
   // ─── AKTIVITÁSOK ─────────────────────────────────────────────────────────────
 
   server.tool(
