@@ -59,7 +59,7 @@ function buildServer() {
 
   server.tool(
     'create_invoice',
-    'Új számla kiállítása tételekkel.',
+    'Új számla létrehozása DRAFT státuszban. Az MCP csak tervezetet hozhat létre — véglegesítés (open/sent) a webes felületen történik.',
     {
       companyId:      z.string().optional(),
       contactId:      z.string().optional(),
@@ -99,7 +99,7 @@ function buildServer() {
           number,
           date:           body.date ? new Date(body.date) : new Date(),
           dueDate:        new Date(body.dueDate),
-          status:         'open',
+          status:         'draft',
           notes:          body.notes || null,
           deliveryInfo:   body.deliveryInfo || null,
           billingName:    body.billingName || null,
@@ -133,16 +133,13 @@ function buildServer() {
 
   server.tool(
     'update_invoice_status',
-    'Számla státuszának módosítása (pl. open → sent → paid).',
+    'Számla státuszának módosítása. KORLÁT: a "paid" (fizetve) státuszt az MCP nem állíthatja be — ezt csak a webes felületen lehet rögzíteni pénzügyi biztonsági okokból.',
     {
       id:     z.string(),
-      status: z.enum(['open', 'sent', 'paid', 'cancelled']),
+      status: z.enum(['draft', 'open', 'sent', 'cancelled']).describe('Engedélyezett átmenetek: draft→open→sent, vagy cancelled. A "paid" státusz az MCP-n keresztül nem érhető el.'),
     },
     async ({ id, status }) => {
-      const data = await prisma.invoice.update({
-        where: { id },
-        data: { status, ...(status === 'paid' ? { paidAt: new Date() } : {}) },
-      })
+      const data = await prisma.invoice.update({ where: { id }, data: { status } })
       return { content: [{ type: 'text', text: `Státusz frissítve: ${data.number} → ${status}` }] }
     }
   )
@@ -319,6 +316,131 @@ function buildServer() {
     async (body) => {
       const data = await prisma.company.create({ data: body })
       return { content: [{ type: 'text', text: `Cég létrehozva: ${data.name} (${data.id})` }] }
+    }
+  )
+
+  server.tool(
+    'update_company',
+    'Cég adatainak módosítása. Csak a megadott mezők frissülnek.',
+    {
+      id:             z.string().describe('Cég ID'),
+      name:           z.string().optional(),
+      email:          z.string().optional(),
+      phone:          z.string().optional(),
+      address:        z.string().optional(),
+      zip:            z.string().optional(),
+      city:           z.string().optional(),
+      country:        z.string().optional(),
+      vatId:          z.string().optional(),
+      website:        z.string().optional(),
+      notes:          z.string().optional(),
+      classification: z.string().optional().describe('Ügyfélbesorolás (A/B/C/D)'),
+      channel:        z.string().optional().describe('Értékesítési csatorna'),
+    },
+    async ({ id, ...fields }) => {
+      const upd: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(fields)) if (v !== undefined) upd[k] = v || null
+      const data = await prisma.company.update({ where: { id }, data: upd })
+      return { content: [{ type: 'text', text: `Cég frissítve: ${data.name}` }] }
+    }
+  )
+
+  server.tool(
+    'update_contact',
+    'Kapcsolat / ügyfél adatainak módosítása.',
+    {
+      id:        z.string().describe('Kapcsolat ID'),
+      firstName: z.string().optional(),
+      lastName:  z.string().optional(),
+      email:     z.string().optional(),
+      phone:     z.string().optional(),
+      status:    z.string().optional().describe('CRM státusz (lead, contacted, customer stb.)'),
+      notes:     z.string().optional(),
+      companyId: z.string().optional(),
+    },
+    async ({ id, ...fields }) => {
+      const upd: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(fields)) if (v !== undefined) upd[k] = v || null
+      const data = await prisma.contact.update({ where: { id }, data: upd })
+      return { content: [{ type: 'text', text: `Kapcsolat frissítve: ${data.firstName} ${data.lastName}` }] }
+    }
+  )
+
+  // ─── DEAL PIPELINE ────────────────────────────────────────────────────────
+
+  server.tool(
+    'list_deals',
+    'Deal pipeline listázása. Szűrhető cég, kapcsolat és szakasz szerint.',
+    {
+      companyId: z.string().optional(),
+      contactId: z.string().optional(),
+      stage:     z.enum(['prospect', 'qualified', 'proposal', 'negotiation', 'won', 'lost']).optional(),
+    },
+    async ({ companyId, contactId, stage }) => {
+      const where: Record<string, unknown> = {}
+      if (companyId) where.companyId = companyId
+      if (contactId) where.contactId = contactId
+      if (stage)     where.stage     = stage
+      const data = await prisma.deal.findMany({
+        where,
+        include: {
+          contact: { select: { id: true, firstName: true, lastName: true } },
+          company: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'create_deal',
+    'Új deal / üzleti lehetőség létrehozása a pipeline-ban.',
+    {
+      title:       z.string().describe('Deal megnevezése'),
+      value:       z.number().optional().describe('Becsült értéke EUR-ban'),
+      stage:       z.enum(['prospect', 'qualified', 'proposal', 'negotiation', 'won', 'lost']).optional(),
+      probability: z.number().int().min(0).max(100).optional().describe('Sikervalószínűség %'),
+      closeDate:   z.string().optional().describe('Várható zárás YYYY-MM-DD'),
+      notes:       z.string().optional(),
+      companyId:   z.string().optional(),
+      contactId:   z.string().optional(),
+    },
+    async (body) => {
+      const data = await prisma.deal.create({
+        data: {
+          title:       body.title,
+          value:       body.value       ?? 0,
+          stage:       body.stage       || 'prospect',
+          probability: body.probability ?? 0,
+          closeDate:   body.closeDate   ? new Date(body.closeDate) : null,
+          notes:       body.notes       || null,
+          companyId:   body.companyId   || null,
+          contactId:   body.contactId   || null,
+        },
+      })
+      return { content: [{ type: 'text', text: `Deal létrehozva: ${data.title} (${data.stage}) — ID: ${data.id}` }] }
+    }
+  )
+
+  server.tool(
+    'update_deal',
+    'Deal státuszának, értékének, szakaszának módosítása.',
+    {
+      id:          z.string().describe('Deal ID'),
+      title:       z.string().optional(),
+      value:       z.number().optional(),
+      stage:       z.enum(['prospect', 'qualified', 'proposal', 'negotiation', 'won', 'lost']).optional(),
+      probability: z.number().int().min(0).max(100).optional(),
+      closeDate:   z.string().optional().describe('YYYY-MM-DD, vagy üres a törléshez'),
+      notes:       z.string().optional(),
+    },
+    async ({ id, closeDate, ...fields }) => {
+      const upd: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(fields)) if (v !== undefined) upd[k] = v
+      if (closeDate !== undefined) upd.closeDate = closeDate ? new Date(closeDate) : null
+      const data = await prisma.deal.update({ where: { id }, data: upd })
+      return { content: [{ type: 'text', text: `Deal frissítve: ${data.title} → ${data.stage} (${data.probability}%)` }] }
     }
   )
 
@@ -772,6 +894,50 @@ function buildServer() {
     }
   )
 
+  // ─── GYÁRTÁS: KÉSZLET ÖSSZESÍTŐ ──────────────────────────────────────────────
+
+  server.tool(
+    'get_low_stock_summary',
+    'Összesítő: minden minimum alatti készletű termék, gyártópartnerenként csoportosítva. Rendelési javaslat összeállításához ideális.',
+    {},
+    async () => {
+      const products = await prisma.$queryRaw<Array<{
+        id: string; name: string; sku: string; city: string | null
+        stock: number; minStock: number; unit: string; material: string | null
+        costPrice: number; carrierId: string | null; carrierName: string | null; supplierName: string | null
+      }>>`
+        SELECT
+          p.id, p.name, p.sku, p.city, p.stock, p."minStock", p.unit, p.material, p."costPrice",
+          c.id AS "carrierId", c.name AS "carrierName",
+          s.name AS "supplierName"
+        FROM "Product" p
+        LEFT JOIN "Carrier" c ON c.id = p.material
+        LEFT JOIN "Supplier" s ON s.id = c."supplierId"
+        WHERE p.active = true AND p.stock <= p."minStock"
+        ORDER BY s.name ASC NULLS LAST, c.name ASC NULLS LAST, p.name ASC
+      `
+      if (products.length === 0) {
+        return { content: [{ type: 'text', text: '✅ Minden termék készlete rendben van, nincs rendelési teendő.' }] }
+      }
+      const bySupplier: Record<string, typeof products> = {}
+      for (const p of products) {
+        const key = p.supplierName ?? '⚠️ Nincs gyártópartner'
+        if (!bySupplier[key]) bySupplier[key] = []
+        bySupplier[key].push(p)
+      }
+      const lines: string[] = [`🔴 ${products.length} termék minimum alatti készleten:\n`]
+      for (const [supplier, items] of Object.entries(bySupplier)) {
+        lines.push(`📦 ${supplier}`)
+        for (const p of items) {
+          const deficit = p.minStock - p.stock
+          lines.push(`  • ${p.name} (${p.sku}) — készlet: ${p.stock}/${p.minStock} ${p.unit} → rendelendő: ${deficit} db`)
+        }
+        lines.push('')
+      }
+      return { content: [{ type: 'text', text: lines.join('\n') }] }
+    }
+  )
+
   // ─── GYÁRTÁS: GYÁRTÓPARTNEREK ─────────────────────────────────────────────────
 
   server.tool(
@@ -995,10 +1161,10 @@ function buildServer() {
 
   server.tool(
     'update_purchase_order_status',
-    'Megrendelés státuszának frissítése. Lehetséges átmenetek: draft→sent→confirmed→received (vagy bármikor cancelled).',
+    'Megrendelés státuszának frissítése. Lehetséges átmenetek: draft→sent→confirmed (vagy cancelled). KORLÁT: a "received" (megérkezett) státuszt az MCP nem állíthatja be — raktári átvételt csak a webes felületen lehet rögzíteni.',
     {
       id:     z.string().describe('Megrendelés ID'),
-      status: z.enum(['draft', 'sent', 'confirmed', 'received', 'cancelled']).describe('Új státusz'),
+      status: z.enum(['draft', 'sent', 'confirmed', 'cancelled']).describe('Engedélyezett státuszok. A "received" az MCP-n keresztül nem érhető el.'),
       notes:  z.string().optional().describe('Megjegyzés hozzáadása / módosítása'),
     },
     async ({ id, status, notes }) => {
@@ -1110,16 +1276,6 @@ function buildServer() {
       if (outcome      !== undefined) upd.outcome      = outcome      || null
       const data = await prisma.activity.update({ where: { id }, data: upd })
       return { content: [{ type: 'text', text: `Aktivitás frissítve: ${data.type} — ${data.activityDate.toISOString().slice(0, 10)}` }] }
-    }
-  )
-
-  server.tool(
-    'delete_activity',
-    'Aktivitás törlése.',
-    { id: z.string().describe('Aktivitás ID') },
-    async ({ id }) => {
-      await prisma.activity.delete({ where: { id } })
-      return { content: [{ type: 'text', text: `Aktivitás törölve (ID: ${id})` }] }
     }
   )
 
