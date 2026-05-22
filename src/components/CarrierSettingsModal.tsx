@@ -10,28 +10,38 @@ interface Carrier {
   nameDE: string | null
   group: string | null
   sortOrder: number
+  supplierId: string | null
+  supplier?: { id: string; name: string } | null
 }
+
+interface Supplier { id: string; name: string; city: string | null }
 
 interface EditRow {
   code: string
   name: string
   nameDE: string
   group: string
+  supplierId: string
 }
 
 export default function CarrierSettingsModal({ onClose }: { onClose: () => void }) {
   const [carriers, setCarriers] = useState<Carrier[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
   const [editId, setEditId] = useState<string | null>(null)
-  const [editRow, setEditRow] = useState<EditRow>({ code: '', name: '', nameDE: '', group: '' })
+  const [editRow, setEditRow] = useState<EditRow>({ code: '', name: '', nameDE: '', group: '', supplierId: '' })
   const [addingNew, setAddingNew] = useState(false)
-  const [newRow, setNewRow] = useState<EditRow>({ code: '', name: '', nameDE: '', group: '' })
+  const [newRow, setNewRow] = useState<EditRow>({ code: '', name: '', nameDE: '', group: '', supplierId: '' })
   const [saving, setSaving] = useState(false)
 
   async function load() {
     setLoading(true)
-    const res = await fetch('/api/carriers')
-    setCarriers(await res.json())
+    const [carriersRes, suppliersRes] = await Promise.all([
+      fetch('/api/carriers'),
+      fetch('/api/suppliers'),
+    ])
+    setCarriers(await carriersRes.json())
+    setSuppliers(await suppliersRes.json())
     setLoading(false)
   }
 
@@ -39,7 +49,7 @@ export default function CarrierSettingsModal({ onClose }: { onClose: () => void 
 
   function startEdit(c: Carrier) {
     setEditId(c.id)
-    setEditRow({ code: c.code, name: c.name, nameDE: c.nameDE || '', group: c.group || '' })
+    setEditRow({ code: c.code, name: c.name, nameDE: c.nameDE || '', group: c.group || '', supplierId: c.supplierId || '' })
     setAddingNew(false)
   }
 
@@ -52,7 +62,7 @@ export default function CarrierSettingsModal({ onClose }: { onClose: () => void 
     await fetch(`/api/carriers/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(editRow),
+      body: JSON.stringify({ ...editRow, supplierId: editRow.supplierId || null }),
     })
     setSaving(false)
     setEditId(null)
@@ -65,11 +75,11 @@ export default function CarrierSettingsModal({ onClose }: { onClose: () => void 
     await fetch('/api/carriers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newRow),
+      body: JSON.stringify({ ...newRow, supplierId: newRow.supplierId || null }),
     })
     setSaving(false)
     setAddingNew(false)
-    setNewRow({ code: '', name: '', nameDE: '', group: '' })
+    setNewRow({ code: '', name: '', nameDE: '', group: '', supplierId: '' })
     load()
   }
 
@@ -80,6 +90,20 @@ export default function CarrierSettingsModal({ onClose }: { onClose: () => void 
   }
 
   const groups = Array.from(new Set(carriers.map(c => c.group).filter(Boolean) as string[]))
+  const supplierMap = new Map(suppliers.map(s => [s.id, s]))
+
+  const SupplierSelect = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className="w-full px-2 py-1 border border-blue-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+    >
+      <option value="">— Nincs —</option>
+      {suppliers.map(s => (
+        <option key={s.id} value={s.id}>{s.name}{s.city ? ` (${s.city})` : ''}</option>
+      ))}
+    </select>
+  )
 
   return (
     <div className="space-y-4">
@@ -106,7 +130,8 @@ export default function CarrierSettingsModal({ onClose }: { onClose: () => void 
                 <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase w-24">ID / Kód</th>
                 <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase">Magyar név</th>
                 <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase">Német név</th>
-                <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase w-32">Csoport</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase w-28">Csoport</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase">Gyártópartner</th>
                 <th className="w-20" />
               </tr>
             </thead>
@@ -150,6 +175,9 @@ export default function CarrierSettingsModal({ onClose }: { onClose: () => void 
                         </datalist>
                       </td>
                       <td className="px-3 py-2">
+                        <SupplierSelect value={editRow.supplierId} onChange={v => setEditRow({ ...editRow, supplierId: v })} />
+                      </td>
+                      <td className="px-3 py-2">
                         <div className="flex items-center gap-1">
                           <button onClick={() => saveEdit(c.id)} disabled={saving}
                             className="p-1.5 text-green-600 hover:bg-green-100 rounded transition-colors">
@@ -176,6 +204,13 @@ export default function CarrierSettingsModal({ onClose }: { onClose: () => void 
                           <span className="text-gray-300 italic text-xs">—</span>
                         )}
                       </td>
+                      <td className="px-4 py-2.5 text-gray-700 text-sm">
+                        {c.supplierId && supplierMap.has(c.supplierId) ? (
+                          <span className="text-indigo-700 font-medium">{supplierMap.get(c.supplierId)!.name}</span>
+                        ) : (
+                          <span className="text-gray-300 italic text-xs">—</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5">
                         <div className="flex items-center gap-1">
                           <button onClick={() => startEdit(c)}
@@ -193,7 +228,6 @@ export default function CarrierSettingsModal({ onClose }: { onClose: () => void 
                 </tr>
               ))}
 
-              {/* Új sor hozzáadása */}
               {addingNew && (
                 <tr className="bg-green-50 border-t-2 border-green-200">
                   <td className="px-3 py-2">
@@ -232,6 +266,18 @@ export default function CarrierSettingsModal({ onClose }: { onClose: () => void 
                     <datalist id="group-list-new">
                       {groups.map(g => <option key={g} value={g} />)}
                     </datalist>
+                  </td>
+                  <td className="px-3 py-2">
+                    <select
+                      value={newRow.supplierId}
+                      onChange={e => setNewRow({ ...newRow, supplierId: e.target.value })}
+                      className="w-full px-2 py-1 border border-green-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                    >
+                      <option value="">— Nincs —</option>
+                      {suppliers.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}{s.city ? ` (${s.city})` : ''}</option>
+                      ))}
+                    </select>
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-1">

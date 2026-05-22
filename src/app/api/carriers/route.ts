@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
       nameDE: body.nameDE || null,
       group: body.group || null,
       sortOrder: (last?.sortOrder ?? 0) + 1,
+      supplierId: body.supplierId || null,
     },
   })
   return NextResponse.json(carrier, { status: 201 })
