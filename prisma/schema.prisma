@@ -472,3 +472,19 @@ model PurchaseOrderItem {
   unitPrice       Float         @default(0)
   note            String?
 }
+
+model KpiTarget {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Float
+  updatedAt DateTime @updatedAt
+}
+
+model KpiSnapshot {
+  id        String   @id @default(cuid())
+  month     String
+  data      Json
+  createdAt DateTime @default(now())
+
+  @@unique([month])
+}

@@ -5,6 +5,7 @@ import {
   Building2, TrendingUp, FileText, AlertTriangle, TrendingDown,
   Clock, Euro, CheckSquare, CheckCircle2, Circle, ChevronLeft, ChevronRight,
 } from 'lucide-react'
+import KpiGaugeWidget from '@/components/KpiGaugeWidget'
 import { format, isToday, isTomorrow, isPast } from 'date-fns'
 import { hu } from 'date-fns/locale'
 import {
@@ -363,6 +364,9 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+
+          {/* KPI Monitor widget */}
+          <KpiGaugeWidget />
 
           {/* Egyéb KPI-ok */}
           <div className="grid grid-cols-2 gap-3">

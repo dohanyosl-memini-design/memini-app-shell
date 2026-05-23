@@ -53,6 +53,7 @@ const navGroups = [
       { href: '/finance', label: 'Cashflow', icon: Wallet },
       { href: '/bookkeeping', label: 'Könyvelés', icon: Calculator },
       { href: '/reports', label: 'Riportok', icon: BarChart3 },
+      { href: '/kpi', label: 'KPI Monitor', icon: TrendingUp },
     ],
   },
   {
