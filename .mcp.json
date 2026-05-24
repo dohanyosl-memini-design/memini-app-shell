@@ -2,7 +2,10 @@
   "mcpServers": {
     "memini-crm": {
       "type": "http",
-      "url": "https://memini-app-shell.vercel.app/api/mcp"
+      "url": "https://memini-app-shell.vercel.app/api/mcp",
+      "headers": {
+        "x-vercel-protection-bypass": "nWYEpaSVGclp7zNY61hjnA0Exx6KX5AA"
+      }
     }
   }
 }
