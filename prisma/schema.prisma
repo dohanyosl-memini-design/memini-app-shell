@@ -61,6 +61,7 @@ model Company {
   language       String?    @default("DE")
   channel        String?
   notes          String?
+  businessHours  Json?
   lastOrderDate  DateTime?
   contacts       Contact[]
   deals          Deal[]

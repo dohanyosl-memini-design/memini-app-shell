@@ -2,6 +2,62 @@
 
 import { useState } from 'react'
 
+const DAYS = ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek', 'Szombat', 'Vasárnap']
+
+interface DaySchedule { open: string; close: string; closed: boolean }
+interface Period { label: string; from: string; until: string; days: (DaySchedule & { day: number })[] }
+interface BHours { regular: (DaySchedule & { day: number })[]; periods: Period[] }
+
+function defaultRegular(): BHours['regular'] {
+  return DAYS.map((_, day) => ({
+    day,
+    open: '09:00',
+    close: '17:00',
+    closed: day >= 5,
+  }))
+}
+
+function defaultPeriodDays(): Period['days'] {
+  return DAYS.map((_, day) => ({ day, open: '09:00', close: '17:00', closed: day >= 5 }))
+}
+
+function DayRow({
+  d, onChange,
+}: { d: DaySchedule & { day: number }; onChange: (v: DaySchedule) => void }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-20 text-sm text-gray-600 shrink-0">{DAYS[d.day]}</span>
+      <label className="flex items-center gap-1 text-xs text-gray-500 shrink-0">
+        <input
+          type="checkbox"
+          checked={d.closed}
+          onChange={e => onChange({ ...d, closed: e.target.checked })}
+          className="accent-blue-600"
+        />
+        Zárva
+      </label>
+      {!d.closed && (
+        <>
+          <input
+            type="time"
+            value={d.open}
+            onChange={e => onChange({ ...d, open: e.target.value })}
+            className="px-2 py-1 border border-gray-300 rounded text-sm w-28"
+          />
+          <span className="text-gray-400 text-sm">–</span>
+          <input
+            type="time"
+            value={d.close}
+            onChange={e => onChange({ ...d, close: e.target.value })}
+            className="px-2 py-1 border border-gray-300 rounded text-sm w-28"
+          />
+        </>
+      )}
+      {d.closed && <span className="text-xs text-gray-400 italic">Zárva</span>}
+    </div>
+  )
+}
+
 const PARTNER_TYPES = [
   'Kastély', 'Vár', 'Kolostor', 'Templom / Dóm', 'Múzeum',
   'Tourist Info', 'Stadtmarketing', 'Hotel / Lobbyshop',
@@ -87,6 +143,7 @@ interface Company {
   language?: string | null
   channel?: string | null
   notes?: string | null
+  businessHours?: BHours | null
 }
 
 interface CompanyFormProps {
@@ -97,6 +154,11 @@ interface CompanyFormProps {
 
 export default function CompanyForm({ company, onSave, onCancel }: CompanyFormProps) {
   const [loading, setLoading] = useState(false)
+  const existingBH = company?.businessHours as BHours | null | undefined
+  const [bh, setBh] = useState<BHours>({
+    regular: existingBH?.regular ?? defaultRegular(),
+    periods: existingBH?.periods ?? [],
+  })
   const [form, setForm] = useState({
     name: company?.name || '',
     partnerType: company?.partnerType || '',
@@ -133,7 +195,7 @@ export default function CompanyForm({ company, onSave, onCancel }: CompanyFormPr
     await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, businessHours: bh }),
     })
 
     setLoading(false)
@@ -339,6 +401,102 @@ export default function CompanyForm({ company, onSave, onCancel }: CompanyFormPr
             />
           </div>
         </div>
+      </div>
+
+      {/* Nyitvatartás */}
+      <div>
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Nyitvatartás</p>
+
+        {/* Reguláris heti nyitvatartás */}
+        <div className="space-y-2 mb-4">
+          {bh.regular.map(d => (
+            <DayRow
+              key={d.day}
+              d={d}
+              onChange={v => setBh(prev => ({
+                ...prev,
+                regular: prev.regular.map(r => r.day === d.day ? { ...v, day: d.day } : r),
+              }))}
+            />
+          ))}
+        </div>
+
+        {/* Időszakos nyitvatartások */}
+        {bh.periods.length > 0 && (
+          <div className="space-y-4 mb-3">
+            {bh.periods.map((p, pi) => (
+              <div key={pi} className="border border-blue-200 rounded-lg p-3 bg-blue-50/40">
+                <div className="flex items-center gap-2 mb-3">
+                  <input
+                    type="text"
+                    placeholder="Időszak neve (pl. Nyári nyitvatartás)"
+                    value={p.label}
+                    onChange={e => setBh(prev => ({
+                      ...prev,
+                      periods: prev.periods.map((pp, i) => i === pi ? { ...pp, label: e.target.value } : pp),
+                    }))}
+                    className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setBh(prev => ({ ...prev, periods: prev.periods.filter((_, i) => i !== pi) }))}
+                    className="text-red-400 hover:text-red-600 text-sm px-2"
+                  >
+                    Törlés
+                  </button>
+                </div>
+                <div className="flex gap-2 items-center mb-3">
+                  <span className="text-xs text-gray-500 shrink-0">Érvényes:</span>
+                  <input
+                    type="date"
+                    value={p.from}
+                    onChange={e => setBh(prev => ({
+                      ...prev,
+                      periods: prev.periods.map((pp, i) => i === pi ? { ...pp, from: e.target.value } : pp),
+                    }))}
+                    className="px-2 py-1 border border-gray-300 rounded text-sm"
+                  />
+                  <span className="text-gray-400 text-sm">–</span>
+                  <input
+                    type="date"
+                    value={p.until}
+                    onChange={e => setBh(prev => ({
+                      ...prev,
+                      periods: prev.periods.map((pp, i) => i === pi ? { ...pp, until: e.target.value } : pp),
+                    }))}
+                    className="px-2 py-1 border border-gray-300 rounded text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  {p.days.map(d => (
+                    <DayRow
+                      key={d.day}
+                      d={d}
+                      onChange={v => setBh(prev => ({
+                        ...prev,
+                        periods: prev.periods.map((pp, i) => i === pi
+                          ? { ...pp, days: pp.days.map(dd => dd.day === d.day ? { ...v, day: d.day } : dd) }
+                          : pp
+                        ),
+                      }))}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setBh(prev => ({
+            ...prev,
+            periods: [...prev.periods, { label: '', from: '', until: '', days: defaultPeriodDays() }],
+          }))}
+          className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+        >
+          + Időszakos nyitvatartás hozzáadása
+        </button>
       </div>
 
       <div className="flex justify-end gap-3 pt-2 sticky bottom-0 bg-white py-3 border-t border-gray-100">

@@ -43,6 +43,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       language: body.language || 'DE',
       channel: body.channel || null,
       notes: body.notes || null,
+      businessHours: body.businessHours ?? undefined,
     },
     include: { _count: { select: { contacts: true, deals: true } } },
   })

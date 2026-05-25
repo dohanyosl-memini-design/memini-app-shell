@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
       language: body.language || 'DE',
       channel: body.channel || null,
       notes: body.notes || null,
+      businessHours: body.businessHours ?? undefined,
     },
     include: { _count: { select: { contacts: true, deals: true, orders: true } } },
   })
