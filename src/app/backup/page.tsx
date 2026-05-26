@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Download, Shield, Clock, CheckCircle, Database, HardDrive, AlertTriangle } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Download, Shield, Clock, CheckCircle, Database, HardDrive, AlertTriangle, Upload, RotateCcw, XCircle } from 'lucide-react'
 import { format } from 'date-fns'
 import { hu } from 'date-fns/locale'
 
@@ -18,12 +18,34 @@ const INCLUDED_DATA = [
   'Feladatok + alfeladatok',
   'Tevékenységnapló',
   'Árlista bejegyzések',
+  'Memória bejegyzések',
+  'Kommunikációs sablonok',
 ]
+
+type RestoreMode = 'safe' | 'full'
+
+type RestoreResult = {
+  ok: boolean
+  mode: RestoreMode
+  results: Record<string, number>
+  total: number
+  error?: string
+}
 
 export default function BackupPage() {
   const [loading, setLoading] = useState(false)
   const [lastBackup, setLastBackup] = useState<string | null>(null)
   const [counts, setCounts] = useState<Record<string, number> | null>(null)
+
+  // Restore state
+  const [restoreFile, setRestoreFile] = useState<File | null>(null)
+  const [restoreMode, setRestoreMode] = useState<RestoreMode>('safe')
+  const [restoreConfirmed, setRestoreConfirmed] = useState(false)
+  const [restoring, setRestoring] = useState(false)
+  const [restoreResult, setRestoreResult] = useState<RestoreResult | null>(null)
+  const [restoreError, setRestoreError] = useState<string | null>(null)
+  const [parsedBackupMeta, setParsedBackupMeta] = useState<{ exportedAt?: string; version?: string } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('lastBackup')
@@ -59,13 +81,80 @@ export default function BackupPage() {
     }
   }
 
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null
+    setRestoreFile(file)
+    setRestoreResult(null)
+    setRestoreError(null)
+    setRestoreConfirmed(false)
+    setParsedBackupMeta(null)
+
+    if (file) {
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        try {
+          const parsed = JSON.parse(ev.target?.result as string)
+          if (!parsed?.data || !parsed?.meta) {
+            setRestoreError('Érvénytelen backup fájl — hiányzik a data vagy meta mező.')
+            setRestoreFile(null)
+            return
+          }
+          setParsedBackupMeta(parsed.meta as { exportedAt?: string; version?: string })
+        } catch {
+          setRestoreError('A fájl nem olvasható JSON formátumú.')
+          setRestoreFile(null)
+        }
+      }
+      reader.readAsText(file)
+    }
+  }
+
+  async function handleRestore() {
+    if (!restoreFile || !restoreConfirmed) return
+    setRestoring(true)
+    setRestoreResult(null)
+    setRestoreError(null)
+
+    try {
+      const text = await restoreFile.text()
+      const backup = JSON.parse(text)
+
+      const res = await fetch('/api/admin/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ backup, mode: restoreMode }),
+        signal: AbortSignal.timeout(120000),
+      })
+
+      const data = await res.json()
+      if (!res.ok || !data.ok) {
+        setRestoreError(data.error ?? 'Ismeretlen hiba történt.')
+      } else {
+        setRestoreResult(data as RestoreResult)
+      }
+    } catch (err) {
+      setRestoreError(err instanceof Error ? err.message : 'Hálózati hiba.')
+    } finally {
+      setRestoring(false)
+    }
+  }
+
+  function resetRestore() {
+    setRestoreFile(null)
+    setRestoreResult(null)
+    setRestoreError(null)
+    setRestoreConfirmed(false)
+    setParsedBackupMeta(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
   return (
     <div className="p-4 md:p-6 max-w-2xl">
       <div className="flex items-center gap-3 mb-6">
         <Shield size={24} className="text-blue-600" />
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Biztonsági mentés</h1>
-          <p className="text-gray-500 mt-0.5">Az összes adat exportálása és mentése</p>
+          <p className="text-gray-500 mt-0.5">Az összes adat exportálása, mentése és visszaállítása</p>
         </div>
       </div>
 
@@ -115,6 +204,204 @@ export default function BackupPage() {
         </button>
       </div>
 
+      {/* Visszaállítás szekció */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mb-4">
+        <div className="flex items-start gap-4 mb-5">
+          <div className="p-3 bg-orange-50 rounded-xl shrink-0">
+            <RotateCcw size={24} className="text-orange-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Visszaállítás backup fájlból</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Tölts fel egy korábban letöltött mentésfájlt az adatok helyreállításához.
+            </p>
+          </div>
+        </div>
+
+        {/* Sikeres visszaállítás eredménye */}
+        {restoreResult && (
+          <div className="mb-5 p-4 bg-green-50 border border-green-200 rounded-xl">
+            <div className="flex items-center gap-2 mb-3">
+              <CheckCircle size={18} className="text-green-600" />
+              <p className="font-semibold text-green-800">
+                Visszaállítás sikeres — {restoreResult.total} rekord feldolgozva
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {Object.entries(restoreResult.results).filter(([, v]) => v > 0).map(([key, count]) => (
+                <div key={key} className="bg-white rounded-lg p-2 text-center border border-green-100">
+                  <p className="text-base font-bold text-green-700">{count}</p>
+                  <p className="text-xs text-gray-500">{key}</p>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={resetRestore}
+              className="mt-3 text-xs text-green-700 underline hover:no-underline"
+            >
+              Új visszaállítás indítása
+            </button>
+          </div>
+        )}
+
+        {/* Hiba */}
+        {restoreError && (
+          <div className="mb-5 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
+            <XCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-red-800 text-sm">Hiba történt</p>
+              <p className="text-sm text-red-700 mt-1">{restoreError}</p>
+              <button onClick={resetRestore} className="mt-2 text-xs text-red-700 underline hover:no-underline">
+                Újrapróbálás
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!restoreResult && (
+          <>
+            {/* Fájl feltöltés */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Backup fájl kiválasztása (.json)
+              </label>
+              <div
+                className="border-2 border-dashed border-gray-200 rounded-xl p-5 text-center hover:border-blue-300 transition-colors cursor-pointer"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {restoreFile ? (
+                  <div className="flex items-center justify-center gap-3">
+                    <CheckCircle size={18} className="text-green-500" />
+                    <div className="text-left">
+                      <p className="text-sm font-medium text-gray-800">{restoreFile.name}</p>
+                      {parsedBackupMeta?.exportedAt && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Mentés dátuma: {format(new Date(parsedBackupMeta.exportedAt), 'yyyy. MMMM d. HH:mm', { locale: hu })}
+                          {parsedBackupMeta.version ? ` · v${parsedBackupMeta.version}` : ''}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); resetRestore() }}
+                      className="ml-auto text-gray-400 hover:text-red-500"
+                    >
+                      <XCircle size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <Upload size={24} className="text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">Kattints a fájl kiválasztásához</p>
+                    <p className="text-xs text-gray-400 mt-1">csak .json formátum</p>
+                  </div>
+                )}
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            </div>
+
+            {/* Visszaállítás módja */}
+            {restoreFile && parsedBackupMeta && (
+              <>
+                <div className="mb-4">
+                  <p className="text-sm font-medium text-gray-700 mb-3">Visszaállítás módja</p>
+                  <div className="space-y-2">
+                    <label className="flex items-start gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 transition-colors has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
+                      <input
+                        type="radio"
+                        name="restoreMode"
+                        value="safe"
+                        checked={restoreMode === 'safe'}
+                        onChange={() => { setRestoreMode('safe'); setRestoreConfirmed(false) }}
+                        className="mt-0.5 accent-blue-600"
+                      />
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800">Biztonságos — csak hiányzók</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Csak azokat az adatokat illeszti be, amelyek még nem léteznek az adatbázisban. A meglévő rekordokat nem érinti.
+                        </p>
+                      </div>
+                    </label>
+                    <label className="flex items-start gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 transition-colors has-[:checked]:border-red-500 has-[:checked]:bg-red-50">
+                      <input
+                        type="radio"
+                        name="restoreMode"
+                        value="full"
+                        checked={restoreMode === 'full'}
+                        onChange={() => { setRestoreMode('full'); setRestoreConfirmed(false) }}
+                        className="mt-0.5 accent-red-600"
+                      />
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800">Teljes visszaállítás — töröl és újratölt</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Először törli az összes jelenlegi adatot, majd betölti a backup tartalmát. Tökéletes állapot-visszaállításhoz.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Figyelmeztetés teljes visszaállításhoz */}
+                {restoreMode === 'full' && (
+                  <div className="mb-4 p-4 bg-red-50 border border-red-300 rounded-xl">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle size={18} className="text-red-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-bold text-red-800">Figyelem: visszafordíthatatlan művelet!</p>
+                        <p className="text-sm text-red-700 mt-1">
+                          A teljes visszaállítás <strong>törli az összes jelenlegi adatot</strong> — partnereket, cégeket, számlákat, termékeket, feladatokat, mindent —, majd a backup fájlból újratölti őket.
+                        </p>
+                        <p className="text-sm text-red-700 mt-1">
+                          Ha valami hiba csúszik be, az azóta rögzített adatok elveszhetnek. Javasolt: előtte töltsd le az aktuális mentést.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Megerősítés */}
+                <label className="flex items-start gap-3 mb-5 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={restoreConfirmed}
+                    onChange={(e) => setRestoreConfirmed(e.target.checked)}
+                    className="mt-0.5 accent-blue-600 w-4 h-4"
+                  />
+                  <span className="text-sm text-gray-700 group-hover:text-gray-900">
+                    {restoreMode === 'full'
+                      ? 'Megértettem, hogy ez törli az összes jelenlegi adatot, és visszaállítja a backup tartalmát.'
+                      : 'Visszaállítom a hiányzó adatokat a backup fájlból.'}
+                  </span>
+                </label>
+
+                {/* Visszaállítás gomb */}
+                <button
+                  onClick={handleRestore}
+                  disabled={!restoreConfirmed || restoring}
+                  className={`w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                    restoreMode === 'full'
+                      ? 'bg-red-600 text-white hover:bg-red-700'
+                      : 'bg-orange-500 text-white hover:bg-orange-600'
+                  }`}
+                >
+                  <RotateCcw size={18} className={restoring ? 'animate-spin' : ''} />
+                  {restoring
+                    ? 'Visszaállítás folyamatban...'
+                    : restoreMode === 'full'
+                    ? 'Teljes visszaállítás indítása'
+                    : 'Hiányzó adatok visszaállítása'}
+                </button>
+              </>
+            )}
+          </>
+        )}
+      </div>
+
       {/* Mi kerül bele */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 mb-4">
         <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
@@ -155,7 +442,7 @@ export default function BackupPage() {
         <p className="text-xs text-gray-500 leading-relaxed">
           <strong className="text-gray-600">A mentés fájlformátuma:</strong> JSON — géppel és emberrel olvasható szöveges formátum.
           Megnyitható Notepad-del, Excel-lel (importálva), vagy bármilyen szövegszerkesztővel.
-          Szükség esetén az adatok visszaállíthatók ebből a fájlból.
+          A fájl feltöltésével és visszaállítással az összes rekord helyreállítható.
         </p>
       </div>
     </div>
