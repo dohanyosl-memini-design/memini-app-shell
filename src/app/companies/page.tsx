@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { Plus, Search, Edit2, Trash2, Globe, Phone, Users, ChevronRight, Filter, Mail, Merge, X, CheckSquare } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, Globe, Phone, Users, ChevronRight, Filter, Mail, Merge, X, LayoutGrid, List, MapPin } from 'lucide-react'
 import Modal from '@/components/Modal'
 import CompanyForm from '@/components/CompanyForm'
 
@@ -25,6 +25,8 @@ interface Company {
   _count: { contacts: number; deals: number; orders: number }
   activities: { activityDate: string }[]
 }
+
+type ViewMode = 'grid' | 'list' | 'city'
 
 function getDormancyDays(activities: { activityDate: string }[], createdAt?: string): number | null {
   const lastDate = activities[0]?.activityDate
@@ -71,6 +73,14 @@ const COUNTRIES: Record<string, { label: string; regions: string[] }> = {
   HU: { label: 'Magyarország', regions: ['Budapest', 'Baranya', 'Bács-Kiskun', 'Pest', 'Győr-Moson-Sopron'] },
 }
 
+function DormancyBadge({ activities }: { activities: { activityDate: string }[] }) {
+  const days = getDormancyDays(activities)
+  if (days === null) return null
+  if (days >= 28) return <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-medium">{days}n</span>
+  if (days >= 21) return <span className="text-xs bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full font-medium">{days}n</span>
+  return null
+}
+
 export default function CompaniesPage() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [loading, setLoading] = useState(true)
@@ -83,6 +93,8 @@ export default function CompaniesPage() {
   const [showMergeModal, setShowMergeModal] = useState(false)
   const [masterId, setMasterId] = useState<string | null>(null)
   const [merging, setMerging] = useState(false)
+  const [viewMode, setViewMode] = useState<ViewMode>('grid')
+  const [openCities, setOpenCities] = useState<Set<string>>(new Set())
 
   const [filters, setFilters] = useState({
     partnerType: '',
@@ -91,6 +103,27 @@ export default function CompaniesPage() {
     classification: '',
     language: '',
   })
+
+  // Load view preference from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('companies-view') as ViewMode | null
+      if (saved && ['grid', 'list', 'city'].includes(saved)) {
+        setViewMode(saved)
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  function setView(mode: ViewMode) {
+    setViewMode(mode)
+    try {
+      localStorage.setItem('companies-view', mode)
+    } catch {
+      // ignore
+    }
+  }
 
   const availableRegions = filters.country ? (COUNTRIES[filters.country]?.regions || []) : []
 
@@ -163,14 +196,67 @@ export default function CompaniesPage() {
     fetchCompanies()
   }
 
+  function toggleCity(city: string) {
+    setOpenCities(prev => {
+      const next = new Set(prev)
+      if (next.has(city)) next.delete(city)
+      else next.add(city)
+      return next
+    })
+  }
+
   const activeFilterCount = Object.values(filters).filter(Boolean).length
   const selectedCompanies = companies.filter(c => selectedIds.includes(c.id))
 
-  // Group by classification
+  // Unique country codes from loaded data
+  const uniqueCountries = Array.from(new Set(companies.map(c => c.country).filter(Boolean))) as string[]
+  uniqueCountries.sort()
+
+  // Group by classification for subtitle
   const byClass = ['A', 'B', 'C', 'D'].map((cls) => ({
     cls,
     count: companies.filter((c) => c.classification === cls).length,
   })).filter((x) => x.count > 0)
+
+  // City view: group companies by city
+  const cityGroups = (() => {
+    const map = new Map<string, Company[]>()
+    for (const c of companies) {
+      const key = c.city || 'Ismeretlen város'
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(c)
+    }
+    const entries = Array.from(map.entries())
+    entries.sort(([a], [b]) => {
+      if (a === 'Ismeretlen város') return 1
+      if (b === 'Ismeretlen város') return -1
+      return a.localeCompare(b)
+    })
+    return entries
+  })()
+
+  const viewToggle = (
+    <div className="flex border border-gray-200 rounded-lg overflow-hidden shrink-0">
+      {([
+        { mode: 'grid' as ViewMode, Icon: LayoutGrid, title: 'Kártya nézet' },
+        { mode: 'list' as ViewMode, Icon: List, title: 'Lista nézet' },
+        { mode: 'city' as ViewMode, Icon: MapPin, title: 'Város nézet' },
+      ]).map(({ mode, Icon, title }) => (
+        <button
+          key={mode}
+          title={title}
+          onClick={() => setView(mode)}
+          className={`px-2.5 py-2 transition-colors ${
+            viewMode === mode
+              ? 'bg-blue-600 text-white'
+              : 'bg-white text-gray-500 hover:bg-gray-50'
+          }`}
+        >
+          <Icon size={15} />
+        </button>
+      ))}
+    </div>
+  )
 
   return (
     <div className="p-4 md:p-6">
@@ -192,6 +278,7 @@ export default function CompaniesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {viewToggle}
           <button
             onClick={toggleMergeMode}
             className={`flex items-center gap-2 px-3 py-2 border rounded-lg text-sm transition-colors ${
@@ -251,6 +338,35 @@ export default function CompaniesPage() {
           )}
         </button>
       </div>
+
+      {/* Country filter pill bar */}
+      {uniqueCountries.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 mb-3 scrollbar-hide">
+          <button
+            onClick={() => setFilters(f => ({ ...f, country: '', region: '' }))}
+            className={`px-3 py-1 rounded-full text-xs font-medium border whitespace-nowrap transition-colors shrink-0 ${
+              !filters.country
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            Összes
+          </button>
+          {uniqueCountries.map(code => (
+            <button
+              key={code}
+              onClick={() => setFilters(f => ({ ...f, country: f.country === code ? '' : code, region: '' }))}
+              className={`px-3 py-1 rounded-full text-xs font-medium border whitespace-nowrap transition-colors shrink-0 ${
+                filters.country === code
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              {code}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Filter panel */}
       {showFilters && (
@@ -332,116 +448,256 @@ export default function CompaniesPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {loading ? (
-          <div className="col-span-3 py-12 text-center text-gray-400">Betöltés...</div>
-        ) : companies.length === 0 ? (
-          <div className="col-span-3 py-12 text-center text-gray-400">Nem található partner</div>
-        ) : (
-          companies.map((company) => {
-            const cls = CLASSIFICATION_CONFIG[company.classification || 'D']
-            const isSelected = selectedIds.includes(company.id)
-            return (
-              <div
-                key={company.id}
-                className={`bg-white rounded-xl shadow-sm border p-5 hover:shadow-md transition-shadow ${
-                  mergeMode
-                    ? isSelected
-                      ? 'border-orange-400 ring-2 ring-orange-200 cursor-pointer'
-                      : 'border-gray-200 cursor-pointer hover:border-orange-300'
-                    : 'border-gray-100'
-                }`}
-                onClick={mergeMode ? () => toggleSelect(company.id) : undefined}
-              >
-                <div className="flex items-start justify-between mb-3">
-                  {mergeMode ? (
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${isSelected ? 'bg-orange-500 border-orange-500' : 'border-gray-300'}`}>
-                          {isSelected && <span className="text-white text-[10px] font-bold">✓</span>}
+      {/* GRID VIEW */}
+      {viewMode === 'grid' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {loading ? (
+            <div className="col-span-3 py-12 text-center text-gray-400">Betöltés...</div>
+          ) : companies.length === 0 ? (
+            <div className="col-span-3 py-12 text-center text-gray-400">Nem található partner</div>
+          ) : (
+            companies.map((company) => {
+              const cls = CLASSIFICATION_CONFIG[company.classification || 'D']
+              const isSelected = selectedIds.includes(company.id)
+              return (
+                <div
+                  key={company.id}
+                  className={`bg-white rounded-xl shadow-sm border p-5 hover:shadow-md transition-shadow ${
+                    mergeMode
+                      ? isSelected
+                        ? 'border-orange-400 ring-2 ring-orange-200 cursor-pointer'
+                        : 'border-gray-200 cursor-pointer hover:border-orange-300'
+                      : 'border-gray-100'
+                  }`}
+                  onClick={mergeMode ? () => toggleSelect(company.id) : undefined}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    {mergeMode ? (
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${isSelected ? 'bg-orange-500 border-orange-500' : 'border-gray-300'}`}>
+                            {isSelected && <span className="text-white text-[10px] font-bold">✓</span>}
+                          </div>
+                          <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${cls.color}`}>{company.classification || 'D'}</span>
+                          <h3 className="font-semibold text-gray-900 truncate">{company.name}</h3>
                         </div>
-                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${cls.color}`}>{company.classification || 'D'}</span>
-                        <h3 className="font-semibold text-gray-900 truncate">{company.name}</h3>
+                        {company.partnerType && <p className="text-xs text-blue-600 font-medium">{company.partnerType}</p>}
+                        {(company.city || company.region) && (
+                          <p className="text-xs text-gray-400">{[company.city, company.region, company.country].filter(Boolean).join(', ')}</p>
+                        )}
                       </div>
-                      {company.partnerType && <p className="text-xs text-blue-600 font-medium">{company.partnerType}</p>}
-                      {(company.city || company.region) && (
-                        <p className="text-xs text-gray-400">{[company.city, company.region, company.country].filter(Boolean).join(', ')}</p>
-                      )}
-                    </div>
-                  ) : (
-                    <Link href={`/companies/${company.id}`} className="flex-1 min-w-0 group">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${cls.color}`}>{company.classification || 'D'}</span>
-                        <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors truncate flex items-center gap-1">
-                          {company.name}
-                          <ChevronRight size={14} className="text-gray-300 group-hover:text-blue-400 shrink-0" />
-                        </h3>
+                    ) : (
+                      <Link href={`/companies/${company.id}`} className="flex-1 min-w-0 group">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${cls.color}`}>{company.classification || 'D'}</span>
+                          <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors truncate flex items-center gap-1">
+                            {company.name}
+                            <ChevronRight size={14} className="text-gray-300 group-hover:text-blue-400 shrink-0" />
+                          </h3>
+                        </div>
+                        {company.partnerType && <p className="text-xs text-blue-600 mt-1 font-medium">{company.partnerType}</p>}
+                        {(company.city || company.region) && (
+                          <p className="text-xs text-gray-400 mt-0.5">{[company.city, company.region, company.country].filter(Boolean).join(', ')}</p>
+                        )}
+                      </Link>
+                    )}
+                    {!mergeMode && (
+                      <div className="flex items-center gap-1 shrink-0 ml-2">
+                        <button onClick={() => handleEdit(company)} className="text-gray-400 hover:text-blue-600 transition-colors p-1">
+                          <Edit2 size={14} />
+                        </button>
+                        <button onClick={() => handleDelete(company.id)} className="text-gray-400 hover:text-red-600 transition-colors p-1">
+                          <Trash2 size={14} />
+                        </button>
                       </div>
-                      {company.partnerType && <p className="text-xs text-blue-600 mt-1 font-medium">{company.partnerType}</p>}
-                      {(company.city || company.region) && (
-                        <p className="text-xs text-gray-400 mt-0.5">{[company.city, company.region, company.country].filter(Boolean).join(', ')}</p>
-                      )}
-                    </Link>
-                  )}
-                  {!mergeMode && (
-                    <div className="flex items-center gap-1 shrink-0 ml-2">
-                      <button onClick={() => handleEdit(company)} className="text-gray-400 hover:text-blue-600 transition-colors p-1">
-                        <Edit2 size={14} />
-                      </button>
-                      <button onClick={() => handleDelete(company.id)} className="text-gray-400 hover:text-red-600 transition-colors p-1">
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-1.5 mb-3">
-                  {company.phone && (
-                    <a href={`tel:${company.phone}`} className="flex items-center gap-2 text-sm text-gray-600 hover:text-green-600 transition-colors" onClick={e => mergeMode && e.preventDefault()}>
-                      <Phone size={12} className="text-gray-400" />
-                      {company.phone}
-                    </a>
-                  )}
-                  {company.email && (
-                    <a href={`mailto:${company.email}`} className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition-colors" onClick={e => mergeMode && e.preventDefault()}>
-                      <Mail size={12} className="text-gray-400" />
-                      <span className="truncate">{company.email}</span>
-                    </a>
-                  )}
-                  {company.website && (
-                    <a href={company.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition-colors" onClick={e => mergeMode && e.preventDefault()}>
-                      <Globe size={12} className="text-gray-400" />
-                      <span className="truncate">{company.website.replace(/^https?:\/\//, '')}</span>
-                    </a>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between pt-3 border-t border-gray-50">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1 text-xs text-gray-500">
-                      <Users size={11} />
-                      {company._count.contacts}
-                    </div>
-                    <div className="text-xs text-gray-400">{company._count.orders} rendelés</div>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    {(() => {
-                      const days = getDormancyDays(company.activities)
-                      if (days === null) return null
-                      if (days >= 28) return <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-medium">{days}n</span>
-                      if (days >= 21) return <span className="text-xs bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full font-medium">{days}n</span>
-                      return null
-                    })()}
-                    {company.language && (
-                      <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-mono">{company.language}</span>
                     )}
                   </div>
+
+                  <div className="space-y-1.5 mb-3">
+                    {company.phone && (
+                      <a href={`tel:${company.phone}`} className="flex items-center gap-2 text-sm text-gray-600 hover:text-green-600 transition-colors" onClick={e => mergeMode && e.preventDefault()}>
+                        <Phone size={12} className="text-gray-400" />
+                        {company.phone}
+                      </a>
+                    )}
+                    {company.email && (
+                      <a href={`mailto:${company.email}`} className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition-colors" onClick={e => mergeMode && e.preventDefault()}>
+                        <Mail size={12} className="text-gray-400" />
+                        <span className="truncate">{company.email}</span>
+                      </a>
+                    )}
+                    {company.website && (
+                      <a href={company.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 transition-colors" onClick={e => mergeMode && e.preventDefault()}>
+                        <Globe size={12} className="text-gray-400" />
+                        <span className="truncate">{company.website.replace(/^https?:\/\//, '')}</span>
+                      </a>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-3 border-t border-gray-50">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1 text-xs text-gray-500">
+                        <Users size={11} />
+                        {company._count.contacts}
+                      </div>
+                      <div className="text-xs text-gray-400">{company._count.orders} rendelés</div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <DormancyBadge activities={company.activities} />
+                      {company.language && (
+                        <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-mono">{company.language}</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )
-          })
-        )}
-      </div>
+              )
+            })
+          )}
+        </div>
+      )}
+
+      {/* LIST VIEW */}
+      {viewMode === 'list' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px]">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cég</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Típus</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Helyszín</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Kapcsolatok</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Rendelések</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Aktivitás</th>
+                  <th className="px-4 py-3"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-12 text-center text-gray-400">Betöltés...</td>
+                  </tr>
+                ) : companies.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-12 text-center text-gray-400">Nem található partner</td>
+                  </tr>
+                ) : (
+                  companies.map((company) => {
+                    const cls = CLASSIFICATION_CONFIG[company.classification || 'D']
+                    const isSelected = selectedIds.includes(company.id)
+                    return (
+                      <tr
+                        key={company.id}
+                        className={`hover:bg-gray-50 transition-colors ${mergeMode ? 'cursor-pointer' : ''} ${mergeMode && isSelected ? 'bg-orange-50' : ''}`}
+                        onClick={mergeMode ? () => toggleSelect(company.id) : undefined}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            {mergeMode && (
+                              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${isSelected ? 'bg-orange-500 border-orange-500' : 'border-gray-300'}`}>
+                                {isSelected && <span className="text-white text-[10px] font-bold">✓</span>}
+                              </div>
+                            )}
+                            <span className={`text-xs font-bold px-1.5 py-0.5 rounded shrink-0 ${cls.color}`}>{company.classification || 'D'}</span>
+                            {mergeMode ? (
+                              <span className="font-medium text-gray-900 text-sm">{company.name}</span>
+                            ) : (
+                              <Link href={`/companies/${company.id}`} className="font-medium text-gray-900 text-sm hover:text-blue-600 transition-colors">
+                                {company.name}
+                              </Link>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-blue-600 font-medium">{company.partnerType || '-'}</td>
+                        <td className="px-4 py-3 text-xs text-gray-500">{[company.city, company.country].filter(Boolean).join(', ') || '-'}</td>
+                        <td className="px-4 py-3">
+                          <span className="flex items-center gap-1 text-xs text-gray-500">
+                            <Users size={11} />
+                            {company._count.contacts}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-500">{company._count.orders}</td>
+                        <td className="px-4 py-3">
+                          <DormancyBadge activities={company.activities} />
+                        </td>
+                        <td className="px-4 py-3">
+                          {!mergeMode && (
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => handleEdit(company)} className="text-gray-400 hover:text-blue-600 transition-colors p-1">
+                                <Edit2 size={13} />
+                              </button>
+                              <button onClick={() => handleDelete(company.id)} className="text-gray-400 hover:text-red-600 transition-colors p-1">
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* CITY VIEW */}
+      {viewMode === 'city' && (
+        <div className="space-y-1">
+          {loading ? (
+            <div className="py-12 text-center text-gray-400">Betöltés...</div>
+          ) : cityGroups.length === 0 ? (
+            <div className="py-12 text-center text-gray-400">Nem található partner</div>
+          ) : (
+            cityGroups.map(([city, items]) => {
+              const isOpen = openCities.has(city)
+              return (
+                <div key={city} className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
+                  <button
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+                    onClick={() => toggleCity(city)}
+                  >
+                    <ChevronRight
+                      size={16}
+                      className={`text-gray-400 transition-transform shrink-0 ${isOpen ? 'rotate-90' : ''}`}
+                    />
+                    <span className="font-medium text-gray-800 flex-1">{city}</span>
+                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium shrink-0">{items.length}</span>
+                    {items[0]?.country && (
+                      <span className="text-xs font-mono text-gray-400 shrink-0">{items[0].country}</span>
+                    )}
+                  </button>
+                  {isOpen && (
+                    <div className="border-t border-gray-50">
+                      {items.map((company, idx) => {
+                        const cls = CLASSIFICATION_CONFIG[company.classification || 'D']
+                        return (
+                          <div
+                            key={company.id}
+                            className={`flex items-center gap-3 px-4 py-2.5 ${idx < items.length - 1 ? 'border-b border-gray-50' : ''} hover:bg-gray-50 transition-colors`}
+                          >
+                            <span className={`text-xs font-bold px-1.5 py-0.5 rounded shrink-0 ${cls.color}`}>{company.classification || 'D'}</span>
+                            <Link href={`/companies/${company.id}`} className="flex-1 min-w-0 text-sm font-medium text-gray-800 hover:text-blue-600 transition-colors truncate">
+                              {company.name}
+                            </Link>
+                            {company.partnerType && (
+                              <span className="text-xs text-blue-600 shrink-0 hidden sm:inline">{company.partnerType}</span>
+                            )}
+                            <button onClick={() => handleEdit(company)} className="text-gray-400 hover:text-blue-600 transition-colors p-1 shrink-0">
+                              <Edit2 size={12} />
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          )}
+        </div>
+      )}
 
       {showModal && (
         <Modal title={editCompany ? 'Partner szerkesztése' : 'Új partner'} onClose={handleModalClose}>
