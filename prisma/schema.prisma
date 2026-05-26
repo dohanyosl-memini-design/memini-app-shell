@@ -38,6 +38,7 @@ model Contact {
   quotes        Quote[]
   orders        Order[]
   deliveryNotes DeliveryNote[]
+  memories      MemoryEntry[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
@@ -71,6 +72,7 @@ model Company {
   orders         Order[]
   tasks          Task[]
   deliveryNotes  DeliveryNote[]
+  memories       MemoryEntry[]
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 }
@@ -488,4 +490,54 @@ model KpiSnapshot {
   createdAt DateTime @default(now())
 
   @@unique([month])
+}
+
+model MemoryEntryType {
+  id        String        @id @default(cuid())
+  label     String
+  icon      String
+  color     String
+  isSystem  Boolean       @default(false)
+  order     Int           @default(0)
+  entries   MemoryEntry[]
+  createdAt DateTime      @default(now())
+}
+
+model MemoryEntry {
+  id        String           @id @default(cuid())
+  companyId String?
+  company   Company?         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contactId String?
+  contact   Contact?         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  typeId    String
+  type      MemoryEntryType  @relation(fields: [typeId], references: [id])
+  content   String
+  date      DateTime?
+  source    String           @default("user")
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+}
+
+model TemplateType {
+  id        String         @id @default(cuid())
+  label     String
+  icon      String
+  isSystem  Boolean        @default(false)
+  order     Int            @default(0)
+  templates CommTemplate[]
+  createdAt DateTime       @default(now())
+}
+
+model CommTemplate {
+  id          String       @id @default(cuid())
+  name        String
+  typeId      String
+  type        TemplateType @relation(fields: [typeId], references: [id])
+  subject     String?
+  bodyHu      String
+  description String?
+  isActive    Boolean      @default(true)
+  order       Int          @default(0)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 }
