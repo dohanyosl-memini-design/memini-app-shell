@@ -15,6 +15,8 @@ import CompanyForm from '@/components/CompanyForm'
 import ContactForm from '@/components/ContactForm'
 import TaskForm from '@/components/TaskForm'
 import InvoicePreview from '@/components/InvoicePreview'
+import MemoryTab from '@/components/MemoryTab'
+import TemplatesTab from '@/components/TemplatesTab'
 
 interface Activity {
   id: string
@@ -286,7 +288,7 @@ export default function CompanyDetailPage() {
   const [editActivity, setEditActivity] = useState<Activity | null>(null)
   const [showNewContactModal, setShowNewContactModal] = useState(false)
   const [showNewTaskModal, setShowNewTaskModal] = useState(false)
-  const [activeTab, setActiveTab] = useState<'timeline' | 'contacts' | 'deals' | 'quotes' | 'orders' | 'invoices' | 'tasks'>('timeline')
+  const [activeTab, setActiveTab] = useState<'timeline' | 'contacts' | 'tasks' | 'memory' | 'templates' | 'deals' | 'quotes' | 'orders' | 'invoices'>('timeline')
   const [previewInvoiceFull, setPreviewInvoiceFull] = useState<null | Record<string, unknown>>(null)
   const [previewOrderData, setPreviewOrderData] = useState<null | Record<string, unknown>>(null)
   const [autoTaskCreated, setAutoTaskCreated] = useState(false)
@@ -567,6 +569,8 @@ export default function CompanyDetailPage() {
               { key: 'timeline', label: 'Kommunikáció', count: company.activities.length },
               { key: 'contacts', label: 'Kapcsolatok', count: company.contacts.length },
               { key: 'tasks', label: 'Feladatok', count: company.tasks.length },
+              { key: 'memory', label: 'Memória', count: 0 },
+              { key: 'templates', label: 'Sablonok', count: 0 },
               { key: 'deals', label: 'Dealek', count: company.deals.length },
               { key: 'quotes', label: 'Ajánlatok', count: company.quotes.length },
               { key: 'orders', label: 'Rendelések', count: company.orders.length },
@@ -762,6 +766,22 @@ export default function CompanyDetailPage() {
                   })}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Memory */}
+          {activeTab === 'memory' && (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+              <h2 className="font-semibold text-gray-900 mb-4">Memória</h2>
+              <MemoryTab companyId={id} />
+            </div>
+          )}
+
+          {/* Templates */}
+          {activeTab === 'templates' && (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+              <h2 className="font-semibold text-gray-900 mb-4">Kommunikációs sablonok</h2>
+              <TemplatesTab companyId={id} />
             </div>
           )}
 
