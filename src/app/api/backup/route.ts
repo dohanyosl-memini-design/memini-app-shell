@@ -1,33 +1,27 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { format } from 'date-fns'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-export async function GET() {
+export async function POST(request: NextRequest) {
+  const { pin } = await request.json() as { pin: string }
+
+  const stored = process.env.BACKUP_PIN
+  if (!stored) {
+    return NextResponse.json({ error: 'A BACKUP_PIN nincs beállítva a szerveren.' }, { status: 503 })
+  }
+  if (pin !== stored) {
+    return NextResponse.json({ error: 'Helytelen PIN kód.' }, { status: 401 })
+  }
+
   const [
-    contacts,
-    companies,
-    deals,
-    tasks,
-    activities,
-    products,
-    invoices,
-    quotes,
-    orders,
-    deliveryNotes,
-    expenses,
-    recurringExpenses,
-    transactions,
-    priceListEntries,
-    carriers,
-    suppliers,
-    purchaseOrders,
-    memoryEntryTypes,
-    memories,
-    templateTypes,
-    templates,
+    contacts, companies, deals, tasks, activities, products,
+    invoices, quotes, orders, deliveryNotes, expenses,
+    recurringExpenses, transactions, priceListEntries,
+    carriers, suppliers, purchaseOrders,
+    memoryEntryTypes, memories, templateTypes, templates,
   ] = await Promise.all([
     prisma.contact.findMany(),
     prisma.company.findMany(),
@@ -82,27 +76,11 @@ export async function GET() {
       templates: templates.length,
     },
     data: {
-      contacts,
-      companies,
-      deals,
-      tasks,
-      activities,
-      products,
-      invoices,
-      quotes,
-      orders,
-      deliveryNotes,
-      expenses,
-      recurringExpenses,
-      transactions,
-      priceListEntries,
-      carriers,
-      suppliers,
-      purchaseOrders,
-      memoryEntryTypes,
-      memories,
-      templateTypes,
-      templates,
+      contacts, companies, deals, tasks, activities, products,
+      invoices, quotes, orders, deliveryNotes, expenses,
+      recurringExpenses, transactions, priceListEntries,
+      carriers, suppliers, purchaseOrders,
+      memoryEntryTypes, memories, templateTypes, templates,
     },
   }
 

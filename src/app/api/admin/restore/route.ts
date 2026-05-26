@@ -7,8 +7,16 @@ export const maxDuration = 60
 type RestoreMode = 'safe' | 'full'
 
 export async function POST(request: NextRequest) {
-  const body = await request.json() as { backup: Record<string, unknown>; mode: RestoreMode }
-  const { backup, mode } = body
+  const body = await request.json() as { backup: Record<string, unknown>; mode: RestoreMode; pin: string }
+  const { backup, mode, pin } = body
+
+  const stored = process.env.BACKUP_PIN
+  if (!stored) {
+    return NextResponse.json({ error: 'A BACKUP_PIN nincs beállítva a szerveren.' }, { status: 503 })
+  }
+  if (pin !== stored) {
+    return NextResponse.json({ error: 'Helytelen PIN kód.' }, { status: 401 })
+  }
 
   if (!backup?.data || !backup?.meta) {
     return NextResponse.json({ error: 'Érvénytelen backup fájl' }, { status: 400 })
@@ -160,9 +168,12 @@ export async function POST(request: NextRequest) {
     // 4. Pénzügyi alap táblák
     if (d.priceListEntries?.length) {
       const r = await prisma.priceListEntry.createMany({
-        data: (d.priceListEntries as {id:string;hordozo:string;ar1:number;ar2:number;ar3:number;ar4:number;ar5:number;ar6:number;ar7:number;createdAt:string;updatedAt:string}[]).map(x => ({
-          id: x.id, hordozo: x.hordozo, ar1: x.ar1, ar2: x.ar2, ar3: x.ar3,
-          ar4: x.ar4, ar5: x.ar5, ar6: x.ar6, ar7: x.ar7,
+        data: (d.priceListEntries as {id:string;name?:string;hordozo?:string;costPrice?:number;basePrice?:number;tiers?:unknown;notes?:string;active?:boolean;sortOrder?:number;createdAt:string;updatedAt:string}[]).map(x => ({
+          id: x.id, name: x.name ?? x.hordozo ?? x.id,
+          hordozo: x.hordozo ?? null, costPrice: x.costPrice ?? 0,
+          basePrice: x.basePrice ?? 0, tiers: x.tiers ?? [],
+          notes: x.notes ?? null, active: x.active ?? true,
+          sortOrder: x.sortOrder ?? 0,
           createdAt: new Date(x.createdAt), updatedAt: new Date(x.updatedAt),
         })),
         skipDuplicates: skip,
@@ -201,9 +212,11 @@ export async function POST(request: NextRequest) {
 
     if (d.recurringExpenses?.length) {
       const r = await prisma.recurringExpense.createMany({
-        data: (d.recurringExpenses as {id:string;name:string;amount:number;currency:string;category?:string;frequency:string;nextDue:string;active:boolean;notes?:string;createdAt:string;updatedAt:string}[]).map(x => ({
-          id: x.id, name: x.name, amount: x.amount, currency: x.currency ?? 'EUR',
+        data: (d.recurringExpenses as {id:string;name:string;vendor?:string;amount:number;currency:string;category?:string;frequency:string;startDate?:string;nextDue:string;active:boolean;notes?:string;createdAt:string;updatedAt:string}[]).map(x => ({
+          id: x.id, name: x.name, vendor: x.vendor ?? null,
+          amount: x.amount, currency: x.currency ?? 'EUR',
           category: x.category ?? null, frequency: x.frequency,
+          startDate: x.startDate ? new Date(x.startDate) : new Date(x.nextDue),
           nextDue: new Date(x.nextDue), active: x.active ?? true,
           notes: x.notes ?? null,
           createdAt: new Date(x.createdAt), updatedAt: new Date(x.updatedAt),
