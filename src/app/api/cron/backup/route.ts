@@ -1,33 +1,23 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { put } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import { format } from 'date-fns'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authHeader = request.headers.get('authorization')
+  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const [
-    contacts,
-    companies,
-    deals,
-    tasks,
-    activities,
-    products,
-    invoices,
-    quotes,
-    orders,
-    deliveryNotes,
-    expenses,
-    recurringExpenses,
-    transactions,
-    priceListEntries,
-    carriers,
-    suppliers,
-    purchaseOrders,
-    memoryEntryTypes,
-    memories,
-    templateTypes,
-    templates,
+    contacts, companies, deals, tasks, activities, products,
+    invoices, quotes, orders, deliveryNotes, expenses,
+    recurringExpenses, transactions, priceListEntries,
+    carriers, suppliers, purchaseOrders,
+    memoryEntryTypes, memories, templateTypes, templates,
   ] = await Promise.all([
     prisma.contact.findMany(),
     prisma.company.findMany(),
@@ -57,6 +47,7 @@ export async function GET() {
       exportedAt: new Date().toISOString(),
       version: '2.0',
       app: 'Memini CRM',
+      trigger: 'cron',
     },
     counts: {
       contacts: contacts.length,
@@ -72,47 +63,35 @@ export async function GET() {
       expenses: expenses.length,
       recurringExpenses: recurringExpenses.length,
       transactions: transactions.length,
-      priceListEntries: priceListEntries.length,
       carriers: carriers.length,
       suppliers: suppliers.length,
       purchaseOrders: purchaseOrders.length,
-      memoryEntryTypes: memoryEntryTypes.length,
       memories: memories.length,
-      templateTypes: templateTypes.length,
       templates: templates.length,
     },
     data: {
-      contacts,
-      companies,
-      deals,
-      tasks,
-      activities,
-      products,
-      invoices,
-      quotes,
-      orders,
-      deliveryNotes,
-      expenses,
-      recurringExpenses,
-      transactions,
-      priceListEntries,
-      carriers,
-      suppliers,
-      purchaseOrders,
-      memoryEntryTypes,
-      memories,
-      templateTypes,
-      templates,
+      contacts, companies, deals, tasks, activities, products,
+      invoices, quotes, orders, deliveryNotes, expenses,
+      recurringExpenses, transactions, priceListEntries,
+      carriers, suppliers, purchaseOrders,
+      memoryEntryTypes, memories, templateTypes, templates,
     },
   }
 
-  const json = JSON.stringify(backup, null, 2)
-  const filename = `memini-backup-${format(new Date(), 'yyyy-MM-dd-HHmm')}.json`
+  const json = JSON.stringify(backup)
+  const filename = `backups/memini-backup-${format(new Date(), 'yyyy-MM-dd')}.json`
 
-  return new NextResponse(json, {
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Content-Disposition': `attachment; filename="${filename}"`,
-    },
+  const blob = await put(filename, json, {
+    access: 'public',
+    contentType: 'application/json',
+    addRandomSuffix: false,
+  })
+
+  return NextResponse.json({
+    ok: true,
+    url: blob.url,
+    filename,
+    counts: backup.counts,
+    message: `Backup elmentve: ${filename}`,
   })
 }

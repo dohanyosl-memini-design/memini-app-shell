@@ -1,8 +1,9 @@
 {
-  "buildCommand": "prisma db push --accept-data-loss && next build",
+  "buildCommand": "prisma db push && next build",
   "crons": [
     { "path": "/api/cron/daily",   "schedule": "0 6 * * *"   },
     { "path": "/api/cron/weekly",  "schedule": "0 6 * * 1"   },
-    { "path": "/api/cron/monthly", "schedule": "0 6 1 * *"   }
+    { "path": "/api/cron/monthly", "schedule": "0 6 1 * *"   },
+    { "path": "/api/cron/backup",  "schedule": "0 2 * * *"   }
   ]
 }
