@@ -94,6 +94,10 @@ interface Company {
   orders: Order[]
   tasks: Task[]
   createdAt: string
+  businessHours?: {
+    regular: { day: number; open: string; close: string; closed: boolean }[]
+    periods: { label: string; from: string; until: string; days: { day: number; open: string; close: string; closed: boolean }[] }[]
+  } | null
 }
 
 const ACTIVITY_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string; bg: string }> = {
@@ -436,6 +440,63 @@ export default function CompanyDetailPage() {
               )}
             </div>
           </div>
+
+          {/* Business hours */}
+          {company.businessHours && (() => {
+            const DAYS_SHORT = ['H', 'K', 'Sze', 'Cs', 'P', 'Szo', 'V']
+            const now = new Date()
+            const todayIdx = (now.getDay() + 6) % 7
+            const nowMin = now.getHours() * 60 + now.getMinutes()
+            const bh = company.businessHours!
+
+            const activePeriod = bh.periods.find(p => {
+              if (!p.from || !p.until) return false
+              const from = new Date(p.from)
+              const until = new Date(p.until)
+              until.setHours(23, 59, 59)
+              return now >= from && now <= until
+            })
+            const schedule = activePeriod ? activePeriod.days : bh.regular
+            const todaySchedule = schedule.find(d => d.day === todayIdx)
+
+            const isOpenNow = todaySchedule && !todaySchedule.closed && (() => {
+              const [oh, om] = todaySchedule.open.split(':').map(Number)
+              const [ch, cm] = todaySchedule.close.split(':').map(Number)
+              return nowMin >= oh * 60 + om && nowMin < ch * 60 + cm
+            })()
+
+            return (
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-gray-700">Nyitvatartás</h3>
+                  {todaySchedule && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isOpenNow ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                      {isOpenNow ? 'Nyitva' : 'Zárva'}
+                    </span>
+                  )}
+                </div>
+                {activePeriod && (
+                  <p className="text-xs text-blue-600 font-medium mb-2">{activePeriod.label}</p>
+                )}
+                <div className="space-y-1">
+                  {schedule.map(d => (
+                    <div key={d.day} className={`flex items-center justify-between text-xs ${d.day === todayIdx ? 'font-semibold text-gray-900' : 'text-gray-500'}`}>
+                      <span className="w-8">{DAYS_SHORT[d.day]}</span>
+                      {d.closed
+                        ? <span className="text-gray-300">Zárva</span>
+                        : <span>{d.open} – {d.close}</span>
+                      }
+                    </div>
+                  ))}
+                </div>
+                {bh.periods.length > 0 && !activePeriod && (
+                  <p className="text-xs text-gray-400 mt-2">
+                    {bh.periods.length} időszak beállítva
+                  </p>
+                )}
+              </div>
+            )
+          })()}
 
           {/* Dormancy warning */}
           {(() => {

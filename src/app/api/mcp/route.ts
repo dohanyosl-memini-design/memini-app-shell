@@ -345,6 +345,76 @@ function buildServer() {
     }
   )
 
+  const dayHoursSchema = z.object({
+    day:    z.number().int().min(0).max(6).describe('0=Hétfő … 6=Vasárnap'),
+    open:   z.string().regex(/^\d{2}:\d{2}$/).describe('Nyitás HH:MM'),
+    close:  z.string().regex(/^\d{2}:\d{2}$/).describe('Zárás HH:MM'),
+    closed: z.boolean().describe('true = zárva ezen a napon'),
+  })
+
+  server.tool(
+    'set_company_hours',
+    'Cég nyitvatartásának beállítása. Megadható reguláris heti rend és tetszőleges számú időszakos override (pl. nyári, karácsonyi nyitvatartás).',
+    {
+      id: z.string().describe('Cég ID'),
+      regular: z.array(dayHoursSchema).length(7)
+        .describe('Heti alap-nyitvatartás, pontosan 7 elem (0=Hétfő … 6=Vasárnap)'),
+      periods: z.array(z.object({
+        label: z.string().describe('Időszak neve, pl. "Nyári nyitvatartás"'),
+        from:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('Kezdő dátum YYYY-MM-DD'),
+        until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('Záró dátum YYYY-MM-DD'),
+        days:  z.array(dayHoursSchema).length(7)
+          .describe('Az időszakra érvényes heti rend, pontosan 7 elem'),
+      })).optional().describe('Időszakos override-ok (opcionális)'),
+    },
+    async ({ id, regular, periods }) => {
+      const data = await prisma.company.update({
+        where: { id },
+        data: { businessHours: { regular, periods: periods ?? [] } },
+        select: { name: true },
+      })
+      const periodCount = periods?.length ?? 0
+      return { content: [{ type: 'text', text: `Nyitvatartás beállítva: ${data.name} — ${periodCount} időszakos override` }] }
+    }
+  )
+
+  server.tool(
+    'get_company_hours',
+    'Cég nyitvatartásának lekérése, beleértve az aktív időszakos override-ot (ha van).',
+    { id: z.string().describe('Cég ID') },
+    async ({ id }) => {
+      const data = await prisma.company.findUnique({
+        where: { id },
+        select: { name: true, businessHours: true },
+      })
+      if (!data) return { content: [{ type: 'text', text: 'Cég nem található.' }] }
+      if (!data.businessHours) return { content: [{ type: 'text', text: `${data.name}: nincs nyitvatartás beállítva.` }] }
+
+      const DAYS = ['Hétfő', 'Kedd', 'Szerda', 'Csütörtök', 'Péntek', 'Szombat', 'Vasárnap']
+      const bh = data.businessHours as { regular: {day:number;open:string;close:string;closed:boolean}[]; periods: {label:string;from:string;until:string;days:{day:number;open:string;close:string;closed:boolean}[]}[] }
+
+      const now = new Date()
+      const activePeriod = bh.periods?.find(p => {
+        if (!p.from || !p.until) return false
+        const until = new Date(p.until); until.setHours(23,59,59)
+        return now >= new Date(p.from) && now <= until
+      })
+
+      const fmtSchedule = (days: typeof bh.regular) =>
+        days.map(d => `  ${DAYS[d.day]}: ${d.closed ? 'Zárva' : `${d.open}–${d.close}`}`).join('\n')
+
+      let text = `${data.name} — Nyitvatartás\n\nAlap heti rend:\n${fmtSchedule(bh.regular)}`
+      if (bh.periods?.length) {
+        text += `\n\nIdőszakos override-ok (${bh.periods.length} db):`
+        for (const p of bh.periods) {
+          const active = activePeriod === p ? ' ← AKTÍV' : ''
+          text += `\n\n${p.label} (${p.from} – ${p.until})${active}:\n${fmtSchedule(p.days)}`
+        }
+      }
+      return { content: [{ type: 'text', text }] }
+    }
+  )
+
   server.tool(
     'update_contact',
     'Kapcsolat / ügyfél adatainak módosítása.',
