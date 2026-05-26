@@ -159,10 +159,22 @@ Válaszolj PONTOSAN ebben a JSON formátumban:
     },
   })
 
+  // Heti backup emlékeztető feladat
+  await prisma.task.create({
+    data: {
+      title: '💾 Heti biztonsági mentés letöltése',
+      description: 'Töltsd le a backup fájlt az /backup oldalon (PIN szükséges), és mentsd el külső helyre (Google Drive, USB, email).',
+      priority: 'medium',
+      dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+      status: 'pending',
+      taskType: 'system',
+    },
+  })
+
   return NextResponse.json({
     ok: true,
     message: 'Heti jelentés elkészítve',
-    tasksCreated: createdTasks.length,
-    tasks: createdTasks,
+    tasksCreated: createdTasks.length + 1,
+    tasks: [...createdTasks, '💾 Heti biztonsági mentés letöltése'],
   })
 }
