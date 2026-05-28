@@ -77,6 +77,30 @@ const USER_COLORS: Colors = {
   msgText: 'text-white', badge: '',
 }
 
+const RT_SYSTEM_SUFFIX = `
+
+Vita-instrukciók: Reagálj KONKRÉTAN az utolsó hozzászólásra. Ha direkten valakinek válaszolsz, szólítsd meg NÉVVEL (pl. "Stratéga, ez igaz, de..." vagy "Kritikus, nem értek egyet, mert..."). Légy élénk, dinamikus, természetes — max 2-3 mondat. Kerüld az általánosságokat!`
+
+function buildRtPrompt(
+  topic: string,
+  history: { agentName: string; content: string }[],
+  myName: string,
+): string {
+  const lines: string[] = [`Vita témája: "${topic}"`, '']
+  if (history.length > 0) {
+    lines.push('Párbeszéd eddig:')
+    for (const h of history) lines.push(`[${h.agentName}]: ${h.content}`)
+    lines.push('')
+    const last = history[history.length - 1]
+    lines.push(`━ UTOLSÓ HOZZÁSZÓLÁS ━ [${last.agentName}]: "${last.content}"`)
+    lines.push('')
+    lines.push(`Most te következel (${myName}). Reagálj erre a gondolatra konkrétan és közvetlenül.`)
+  } else {
+    lines.push(`Te (${myName}) kezded el a vitát. Mondj egy határozott, rövid nyitógondolatot.`)
+  }
+  return lines.join('\n')
+}
+
 const INITIAL_AGENTS: Agent[] = [
   {
     id: 'strategist', name: 'Stratéga', emoji: '🎯', active: true, colors: C.blue,
@@ -174,6 +198,9 @@ export default function MultiChatPage() {
   const [rtCurrentAgent, setRtCurrentAgent] = useState<string | null>(null)
   const [rtRound, setRtRound] = useState(0)
   const [rtInjection, setRtInjection] = useState('')
+  const [autoRounds, setAutoRounds] = useState(4)
+  const [autoRunning, setAutoRunning] = useState(false)
+  const stopAutoRef = useRef(false)
 
   const parallelInputRef = useRef<HTMLTextAreaElement>(null)
   const rtInputRef = useRef<HTMLTextAreaElement>(null)
@@ -196,6 +223,7 @@ export default function MultiChatPage() {
   }
 
   function clearAll() {
+    stopAutoRef.current = true
     setHistories({})
     setRtMessages([])
     setRtTopic('')
@@ -203,6 +231,7 @@ export default function MultiChatPage() {
     setRtRound(0)
     setRtCurrentAgent(null)
     setRtInjection('')
+    setAutoRunning(false)
   }
 
   // ── Parallel mode ──────────────────────────────────────────────────────────
@@ -251,31 +280,12 @@ export default function MultiChatPage() {
 
   // ── Roundtable mode ────────────────────────────────────────────────────────
 
-  async function startRoundtable() {
-    const topic = rtInput.trim()
-    if (!topic || activeAgents.length === 0 || rtCurrentAgent) return
-    setRtTopic(topic)
-    setRtInput('')
-    setRtStarted(true)
-    setRtRound(1)
-    await runRound(topic, [], undefined, 1)
-  }
-
-  async function nextRound() {
-    if (rtCurrentAgent || !rtStarted) return
-    const injection = rtInjection.trim() || undefined
-    setRtInjection('')
-    const newRound = rtRound + 1
-    setRtRound(newRound)
-    await runRound(rtTopic, rtMessages, injection, newRound)
-  }
-
   async function runRound(
     topic: string,
     currentMsgs: RtMsg[],
     injection: string | undefined,
     round: number,
-  ) {
+  ): Promise<RtMsg[]> {
     let all = [...currentMsgs]
 
     if (injection) {
@@ -287,28 +297,22 @@ export default function MultiChatPage() {
       setRtMessages(all)
     }
 
-    const historyLines = all.map(m => `[${m.agentName}]: ${m.content}`)
+    const historyLog: { agentName: string; content: string }[] = all.map(m => ({
+      agentName: m.agentName, content: m.content,
+    }))
 
     for (const agent of activeAgents) {
+      if (stopAutoRef.current) break
       setRtCurrentAgent(agent.id)
-
-      const contextParts: string[] = []
-      if (topic) contextParts.push(`A vita témája: "${topic}"\n`)
-      if (historyLines.length > 0) {
-        contextParts.push('Eddigi hozzászólások:')
-        contextParts.push(...historyLines)
-        contextParts.push('')
-      }
-      contextParts.push(`Most te következel (${agent.name}). Reagálj a kontextusra a saját szereped alapján. Légy tömör, max 3-4 mondat.`)
 
       try {
         const res = await fetch('/api/multi-chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            systemPrompt: agent.systemPrompt,
-            messages: [{ role: 'user', content: contextParts.join('\n') }],
-            maxTokens: 384,
+            systemPrompt: agent.systemPrompt + RT_SYSTEM_SUFFIX,
+            messages: [{ role: 'user', content: buildRtPrompt(topic, historyLog, agent.name) }],
+            maxTokens: 300,
           }),
         })
         const data = await res.json()
@@ -319,7 +323,7 @@ export default function MultiChatPage() {
           content, round,
         }
         all = [...all, newMsg]
-        historyLines.push(`[${agent.name}]: ${content}`)
+        historyLog.push({ agentName: agent.name, content })
         setRtMessages([...all])
       } catch {
         const errMsg: RtMsg = {
@@ -333,6 +337,40 @@ export default function MultiChatPage() {
     }
 
     setRtCurrentAgent(null)
+    return all
+  }
+
+  async function startRoundtable() {
+    const topic = rtInput.trim()
+    if (!topic || activeAgents.length === 0 || rtCurrentAgent) return
+    setRtTopic(topic)
+    setRtInput('')
+    setRtStarted(true)
+    setAutoRunning(true)
+    stopAutoRef.current = false
+
+    let msgs: RtMsg[] = []
+    for (let r = 1; r <= autoRounds; r++) {
+      if (stopAutoRef.current) break
+      setRtRound(r)
+      msgs = await runRound(topic, msgs, undefined, r)
+    }
+
+    setAutoRunning(false)
+  }
+
+  async function nextRound() {
+    if (rtCurrentAgent || !rtStarted || autoRunning) return
+    const injection = rtInjection.trim() || undefined
+    setRtInjection('')
+    const newRound = rtRound + 1
+    setRtRound(newRound)
+    await runRound(rtTopic, rtMessages, injection, newRound)
+  }
+
+  function stopAuto() {
+    stopAutoRef.current = true
+    setAutoRunning(false)
   }
 
   function handleRtKey(e: React.KeyboardEvent) {
@@ -608,7 +646,7 @@ export default function MultiChatPage() {
       ) : (
         <div className="shrink-0 px-4 py-3 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
           {!rtStarted ? (
-            /* Roundtable not started: topic input */
+            /* Topic input + auto-rounds selector */
             <>
               <div className="flex gap-2 items-end">
                 <textarea
@@ -616,12 +654,21 @@ export default function MultiChatPage() {
                   value={rtInput}
                   onChange={e => setRtInput(e.target.value)}
                   onKeyDown={handleRtKey}
-                  placeholder={'Írd be a vita témáját... pl. "Érdemes-e új piacra lépni 2025-ben?"'}
+                  placeholder={'Vita témája... pl. "Érdemes-e új piacra lépni 2025-ben?"'}
                   rows={1}
                   disabled={activeAgents.length === 0}
                   className="flex-1 resize-none rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white px-4 py-3 text-sm focus:outline-none focus:border-blue-500 dark:focus:border-blue-400 max-h-32 overflow-y-auto disabled:opacity-50"
                   style={{ fieldSizing: 'content' } as React.CSSProperties}
                 />
+                {/* Rounds selector */}
+                <div className="flex flex-col items-center gap-0.5 shrink-0">
+                  <span className="text-[9px] text-gray-400 uppercase tracking-wider">Körök</span>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setAutoRounds(r => Math.max(1, r - 1))} className="w-6 h-6 rounded-md bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-bold flex items-center justify-center transition-colors">−</button>
+                    <span className="w-5 text-center text-sm font-semibold text-gray-800 dark:text-gray-100">{autoRounds}</span>
+                    <button onClick={() => setAutoRounds(r => Math.min(8, r + 1))} className="w-6 h-6 rounded-md bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-bold flex items-center justify-center transition-colors">+</button>
+                  </div>
+                </div>
                 <button
                   onClick={startRoundtable}
                   disabled={!rtInput.trim() || activeAgents.length === 0}
@@ -634,14 +681,45 @@ export default function MultiChatPage() {
                 <p className="text-[10px] text-red-400 mt-1.5">Aktiválj legalább egy ügynököt az Ügynökök gombbal.</p>
               )}
             </>
+          ) : autoRunning ? (
+            /* Auto-running: progress + stop */
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <Loader2 size={15} className="animate-spin text-purple-500 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">
+                    {rtRound}/{autoRounds}. kör
+                    {currentAgentObj ? ` · ${currentAgentObj.emoji} ${currentAgentObj.name}...` : ''}
+                  </p>
+                  <div className="flex gap-1 mt-1">
+                    {Array.from({ length: autoRounds }, (_, i) => (
+                      <div
+                        key={i}
+                        className={`h-1 rounded-full transition-all ${
+                          i < rtRound - 1 ? 'bg-purple-500 w-4' :
+                          i === rtRound - 1 ? 'bg-purple-400 w-4 animate-pulse' :
+                          'bg-gray-200 dark:bg-gray-700 w-4'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={stopAuto}
+                className="text-xs px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shrink-0"
+              >
+                Leállít
+              </button>
+            </div>
           ) : (
-            /* Roundtable started: injection + next round */
+            /* Manual next round */
             <div className="space-y-2">
               <div className="flex gap-2 items-end">
                 <textarea
                   value={rtInjection}
                   onChange={e => setRtInjection(e.target.value)}
-                  placeholder="Hozzáfűznél valamit a következő körbe? (opcionális)"
+                  placeholder="Fűzz hozzá egy gondolatot (opcionális)..."
                   rows={1}
                   disabled={!!rtCurrentAgent}
                   className="flex-1 resize-none rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white px-4 py-3 text-sm focus:outline-none focus:border-blue-500 dark:focus:border-blue-400 max-h-24 overflow-y-auto disabled:opacity-50"
@@ -652,17 +730,11 @@ export default function MultiChatPage() {
                   disabled={!!rtCurrentAgent}
                   className="px-4 h-11 rounded-xl bg-purple-600 flex items-center gap-2 text-white text-sm font-medium hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0 whitespace-nowrap"
                 >
-                  {rtCurrentAgent
-                    ? <Loader2 size={15} className="animate-spin" />
-                    : <>▶ <span className="hidden sm:inline">{rtRound + 1}. kör</span></>
-                  }
+                  {rtCurrentAgent ? <Loader2 size={15} className="animate-spin" /> : <>▶ {rtRound + 1}. kör</>}
                 </button>
               </div>
               <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center">
-                {rtCurrentAgent
-                  ? `${currentAgentObj?.name ?? 'Ügynök'} válaszol...`
-                  : `${rtRound}. kör kész · Indítsd el a következő kört vagy fűzz hozzá egy gondolatot`
-                }
+                {rtRound}. kör kész · Indíts új kört vagy fűzz hozzá egy gondolatot
               </p>
             </div>
           )}
