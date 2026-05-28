@@ -19,6 +19,8 @@ interface Agent {
   name: string
   emoji: string
   active: boolean
+  provider: 'anthropic' | 'openai'
+  model: string
   systemPrompt: string
   colors: Colors
 }
@@ -102,27 +104,54 @@ function buildRtPrompt(
 }
 
 const INITIAL_AGENTS: Agent[] = [
+  // ── Claude ────────────────────────────────────────────────────────────────
   {
-    id: 'strategist', name: 'Stratéga', emoji: '🎯', active: true, colors: C.blue,
+    id: 'strategist', name: 'Stratéga', emoji: '🎯', active: true,
+    provider: 'anthropic', model: 'claude-sonnet-4-6', colors: C.blue,
     systemPrompt: `Te egy tapasztalt üzleti stratéga vagy a Memini Design (B2B souvenir termékek Németországban) kontextusában. Mindig magyarul válaszolj. Fókuszálj a hosszú távú üzleti hatásra, növekedési lehetőségekre és versenyelőnyre. Legyél konkrét, tömör és magabiztos.`,
   },
   {
-    id: 'critic', name: 'Kritikus', emoji: '🔥', active: true, colors: C.red,
+    id: 'critic', name: 'Kritikus', emoji: '🔥', active: true,
+    provider: 'anthropic', model: 'claude-sonnet-4-6', colors: C.red,
     systemPrompt: `Te az "ördög ügyvédje" vagy üzleti vitákban. Mindig magyarul válaszolj. Kérdőjelezd meg a feltételezéseket, mutass rá a kockázatokra és gyengeségekre. Légy konstruktívan kritikus — a cél a gondolkodás élesítése, nem a rombolás.`,
   },
   {
-    id: 'creative', name: 'Kreatív', emoji: '✨', active: true, colors: C.purple,
+    id: 'creative', name: 'Kreatív', emoji: '✨', active: true,
+    provider: 'anthropic', model: 'claude-sonnet-4-6', colors: C.purple,
     systemPrompt: `Te egy kreatív gondolkodó vagy. Mindig magyarul válaszolj. Hozz fel szokatlan ötleteket, innovatív megközelítéseket, analógiákat. Légy merész és eredeti — a mások által nem látott lehetőségeket keresd.`,
   },
   {
-    id: 'analyst', name: 'Elemző', emoji: '📊', active: false, colors: C.green,
+    id: 'analyst', name: 'Elemző', emoji: '📊', active: false,
+    provider: 'anthropic', model: 'claude-sonnet-4-6', colors: C.green,
     systemPrompt: `Te egy adatalapú elemző vagy. Mindig magyarul válaszolj. Kérj konkrét mérőszámokat, számokat. Legyen strukturált és logikus a gondolkodásod. Mindig tedd fel a kérdést: "Hogyan mérjük ezt meg?"`,
   },
   {
-    id: 'customer', name: 'Vevő', emoji: '🛍️', active: false, colors: C.amber,
+    id: 'customer', name: 'Vevő', emoji: '🛍️', active: false,
+    provider: 'anthropic', model: 'claude-sonnet-4-6', colors: C.amber,
     systemPrompt: `Te egy tipikus B2B vevőt képviselsz: kastély- vagy múzeumi shopvezető Németországban. Mindig magyarul válaszolj (de a vevő fejével gondolkodj). Mondd el, mi fontos a vevőnek, mi a félelme, mi motiválja, mi köti meg döntési helyzetben.`,
   },
+  // ── GPT ───────────────────────────────────────────────────────────────────
+  {
+    id: 'gpt4o', name: 'GPT-4o', emoji: '🤖', active: false,
+    provider: 'openai', model: 'gpt-4o', colors: C.green,
+    systemPrompt: `Te egy kiegyensúlyozott, pragmatikus üzleti tanácsadó vagy. Mindig magyarul válaszolj. Adj adatvezérelt elemzést, hivatkozz bevált üzleti keretrendszerekre és konkrét példákra. Légy tárgyilagos és strukturált.`,
+  },
+  {
+    id: 'gpt4o-mini', name: 'GPT-4o Mini', emoji: '⚡', active: false,
+    provider: 'openai', model: 'gpt-4o-mini', colors: C.amber,
+    systemPrompt: `Te egy gyors, lényegre törő üzleti elemző vagy. Mindig magyarul válaszolj, tömören és direkten. Adj praktikus, azonnal alkalmazható meglátásokat és cselekvési javaslatokat. Kerüld a hosszú magyarázatokat.`,
+  },
 ]
+
+const PROVIDER_BADGE: Record<string, string> = {
+  anthropic: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+  openai: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+}
+
+const PROVIDER_LABEL: Record<string, string> = {
+  anthropic: 'Claude',
+  openai: 'GPT',
+}
 
 // ── AgentColumn ─────────────────────────────────────────────────────────────
 
@@ -142,6 +171,9 @@ function AgentColumn({ agent, messages, loading }: {
       <div className={`shrink-0 flex items-center gap-2 px-3 py-2.5 ${agent.colors.headerBg}`}>
         <span className="text-base">{agent.emoji}</span>
         <span className={`font-semibold text-sm ${agent.colors.headerFg}`}>{agent.name}</span>
+        <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ml-0.5 ${PROVIDER_BADGE[agent.provider]}`}>
+          {PROVIDER_LABEL[agent.provider]}
+        </span>
         {loading && <Loader2 size={13} className={`ml-auto animate-spin opacity-80 ${agent.colors.headerFg}`} />}
       </div>
 
@@ -254,7 +286,7 @@ export default function MultiChatPage() {
           const res = await fetch('/api/multi-chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ systemPrompt: agent.systemPrompt, messages: snapshot[agent.id] }),
+            body: JSON.stringify({ systemPrompt: agent.systemPrompt, messages: snapshot[agent.id], provider: agent.provider, model: agent.model }),
           })
           const data = await res.json()
           const content: string = data.content ?? data.error ?? 'Hiba'
@@ -313,6 +345,8 @@ export default function MultiChatPage() {
             systemPrompt: agent.systemPrompt + RT_SYSTEM_SUFFIX,
             messages: [{ role: 'user', content: buildRtPrompt(topic, historyLog, agent.name) }],
             maxTokens: 300,
+            provider: agent.provider,
+            model: agent.model,
           }),
         })
         const data = await res.json()
@@ -448,7 +482,13 @@ export default function MultiChatPage() {
       {/* ── Agent panel ── */}
       {showAgentPanel && (
         <div className="shrink-0 px-4 py-2.5 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
-          <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Ügynökök</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Ügynökök</p>
+            <div className="flex gap-2 text-[10px] text-gray-400">
+              <span className={`px-1.5 py-0.5 rounded font-semibold ${PROVIDER_BADGE.anthropic}`}>Claude</span>
+              <span className={`px-1.5 py-0.5 rounded font-semibold ${PROVIDER_BADGE.openai}`}>GPT</span>
+            </div>
+          </div>
           <div className="flex flex-wrap gap-1.5">
             {agents.map(agent => (
               <button
@@ -462,6 +502,9 @@ export default function MultiChatPage() {
               >
                 <span>{agent.emoji}</span>
                 <span>{agent.name}</span>
+                <span className={`text-[9px] px-1 py-0.5 rounded font-semibold ${PROVIDER_BADGE[agent.provider]}`}>
+                  {PROVIDER_LABEL[agent.provider]}
+                </span>
               </button>
             ))}
           </div>
