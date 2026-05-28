@@ -10,7 +10,7 @@ import {
   CheckSquare, BarChart3, Package, FileText, Wallet,
   ClipboardList, ShoppingCart, LogOut, Euro, Menu, X,
   GitMerge, BookOpen, Calculator, HelpCircle, Shield,
-  Sun, Moon, Bot, Factory,
+  Sun, Moon, Bot, Factory, Sparkles,
 } from 'lucide-react'
 import { useTheme } from '@/components/ThemeProvider'
 
@@ -20,6 +20,7 @@ const navGroups = [
     items: [
       { href: '/', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/chat', label: 'AI Chat', icon: Bot },
+      { href: '/multi-chat', label: 'Brainstorm', icon: Sparkles },
       { href: '/arthur', label: 'Arthur', icon: Bot },
     ],
   },
