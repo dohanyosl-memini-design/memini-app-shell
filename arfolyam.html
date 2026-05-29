@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Árfolyam – ECB középárfolyam</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f1f5f9; min-height: 100vh; display: flex; justify-content: center; padding: 32px 16px; }
+  .wrap { width: 100%; max-width: 520px; }
+  h1 { font-size: 22px; font-weight: 700; color: #0f172a; }
+  .sub { font-size: 13px; color: #94a3b8; margin-top: 2px; margin-bottom: 24px; }
+  .card { background: #fff; border-radius: 16px; border: 1px solid #e2e8f0; padding: 20px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  .label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #64748b; margin-bottom: 10px; }
+  .date-row { display: flex; gap: 10px; align-items: center; }
+  input[type=date] { flex: 1; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; font-size: 14px; color: #1e293b; outline: none; transition: border-color .15s; }
+  input[type=date]:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.1); }
+  .btn-today { background: #eff6ff; color: #3b82f6; border: none; border-radius: 10px; padding: 10px 14px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .btn-today:hover { background: #dbeafe; }
+
+  .rates { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .rate-card { border-radius: 14px; padding: 16px; border: 1px solid; }
+  .rate-card.eur { background: linear-gradient(135deg,#eff6ff,#eef2ff); border-color: #bfdbfe; }
+  .rate-card.usd { background: linear-gradient(135deg,#f0fdf4,#ecfdf5); border-color: #bbf7d0; }
+  .rate-card.cross { background: linear-gradient(135deg,#faf5ff,#f5f3ff); border-color: #ddd6fe; }
+  .rate-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+  .rate-card.eur .rate-tag { color: #3b82f6; }
+  .rate-card.usd .rate-tag { color: #16a34a; }
+  .rate-card.cross .rate-tag { color: #7c3aed; }
+  .rate-val { font-size: 20px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+  .rate-card.eur .rate-val { color: #1d4ed8; }
+  .rate-card.usd .rate-val { color: #15803d; }
+  .rate-card.cross .rate-val { color: #6d28d9; }
+  .rate-desc { font-size: 11px; }
+  .rate-card.eur .rate-desc { color: #93c5fd; }
+  .rate-card.usd .rate-desc { color: #86efac; }
+  .rate-card.cross .rate-desc { color: #c4b5fd; }
+
+  .notice { font-size: 12px; color: #d97706; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 8px 12px; margin-bottom: 14px; display: none; }
+
+  .mode-btns { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; margin-bottom: 14px; }
+  .mode-btn { border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 10px; padding: 8px 4px; font-size: 12px; font-weight: 600; color: #475569; cursor: pointer; transition: all .15s; }
+  .mode-btn:hover { background: #f1f5f9; }
+  .mode-btn.active { background: #3b82f6; color: #fff; border-color: #3b82f6; box-shadow: 0 2px 6px rgba(59,130,246,.3); }
+
+  .input-wrap { position: relative; margin-bottom: 10px; }
+  .input-wrap input { width: 100%; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; font-size: 15px; color: #1e293b; outline: none; transition: border-color .15s; -moz-appearance: textfield; }
+  .input-wrap input::-webkit-outer-spin-button,
+  .input-wrap input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .input-wrap input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.1); }
+
+  .result { border-radius: 12px; padding: 14px 16px; border: 1px solid #bfdbfe; background: #eff6ff; min-height: 64px; display: flex; flex-direction: column; justify-content: center; }
+  .result.empty { background: #f8fafc; border-color: #e2e8f0; }
+  .result-label { font-size: 12px; color: #3b82f6; font-weight: 500; margin-bottom: 2px; }
+  .result-val { font-size: 24px; font-weight: 800; color: #1d4ed8; }
+  .result-empty { font-size: 13px; color: #94a3b8; }
+
+  .source { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 10px; }
+
+  .skeleton { animation: pulse 1.2s ease-in-out infinite; }
+  .skeleton-line { height: 20px; background: #e2e8f0; border-radius: 6px; margin-bottom: 6px; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+  @media (max-width: 400px) {
+    .rates { grid-template-columns: 1fr 1fr; }
+    .rate-card.cross { grid-column: span 2; }
+    .mode-btns { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Árfolyam</h1>
+  <p class="sub">EKB hivatalos napi középárfolyam</p>
+
+  <!-- Dátum -->
+  <div class="card">
+    <div class="label">Dátum</div>
+    <div class="date-row">
+      <input type="date" id="datePicker">
+      <button class="btn-today" id="btnToday">Mai nap</button>
+    </div>
+  </div>
+
+  <!-- Figyelmeztetés hétvégére -->
+  <div class="notice" id="notice"></div>
+
+  <!-- Árfolyam kártyák -->
+  <div class="rates" id="rateCards">
+    <div class="rate-card eur skeleton"><div class="skeleton-line" style="width:60%"></div><div class="skeleton-line" style="width:80%"></div></div>
+    <div class="rate-card usd skeleton"><div class="skeleton-line" style="width:60%"></div><div class="skeleton-line" style="width:80%"></div></div>
+    <div class="rate-card cross skeleton"><div class="skeleton-line" style="width:60%"></div><div class="skeleton-line" style="width:80%"></div></div>
+  </div>
+
+  <!-- Kalkulátor -->
+  <div class="card">
+    <div class="label">Átváltó</div>
+    <div class="mode-btns">
+      <button class="mode-btn active" data-mode="huf-eur">HUF → EUR</button>
+      <button class="mode-btn" data-mode="eur-huf">EUR → HUF</button>
+      <button class="mode-btn" data-mode="huf-usd">HUF → USD</button>
+      <button class="mode-btn" data-mode="usd-huf">USD → HUF</button>
+    </div>
+    <div class="input-wrap">
+      <input type="number" id="amountInput" placeholder="Összeg" min="0" step="any">
+    </div>
+    <div class="result empty" id="result">
+      <span class="result-empty">Írj be egy összeget</span>
+    </div>
+    <p class="source" id="sourceText"></p>
+  </div>
+</div>
+
+<script>
+const today = new Date().toISOString().slice(0,10)
+let rates = null
+let currentMode = 'huf-eur'
+
+const datePicker = document.getElementById('datePicker')
+const notice     = document.getElementById('notice')
+const rateCards  = document.getElementById('rateCards')
+const amountInput = document.getElementById('amountInput')
+const resultEl   = document.getElementById('result')
+const sourceText = document.getElementById('sourceText')
+
+datePicker.value = today
+datePicker.max   = today
+
+document.getElementById('btnToday').addEventListener('click', () => {
+  datePicker.value = today
+  loadRates(today)
+})
+
+datePicker.addEventListener('change', () => loadRates(datePicker.value))
+amountInput.addEventListener('input', updateResult)
+
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'))
+    btn.classList.add('active')
+    currentMode = btn.dataset.mode
+    updateResult()
+  })
+})
+
+async function loadRates(date) {
+  rateCards.innerHTML = `
+    <div class="rate-card eur skeleton"><div class="skeleton-line" style="width:60%"></div><div class="skeleton-line" style="width:80%"></div></div>
+    <div class="rate-card usd skeleton"><div class="skeleton-line" style="width:60%"></div><div class="skeleton-line" style="width:80%"></div></div>
+    <div class="rate-card cross skeleton"><div class="skeleton-line" style="width:60%"></div><div class="skeleton-line" style="width:80%"></div></div>`
+  notice.style.display = 'none'
+  rates = null
+  updateResult()
+
+  // Próbáljuk az adott dátumot, ha nincs adat visszalépünk max 7 napot
+  let found = null
+  let d = date
+  for (let i = 0; i < 7; i++) {
+    found = await fetchECB(d)
+    if (found) break
+    d = prevDay(d)
+  }
+
+  if (!found) {
+    rateCards.innerHTML = `<div style="grid-column:span 3;color:#ef4444;font-size:13px;padding:12px">Nem sikerült betölteni az árfolyamot.</div>`
+    return
+  }
+
+  rates = found
+  if (d !== date) {
+    notice.style.display = 'block'
+    notice.textContent = `A(z) ${date} napra nincs EKB adat (hétvége / munkaszüneti nap). Legutolsó banki nap: ${d}`
+  }
+
+  renderRates()
+  updateResult()
+}
+
+async function fetchECB(date) {
+  try {
+    const url = `https://data-api.ecb.europa.eu/service/data/EXR/D.HUF+USD.EUR.SP00.A?startPeriod=${date}&endPeriod=${date}&format=jsondata`
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const json = await res.json()
+    const series = json?.dataSets?.[0]?.series
+    if (!series) return null
+
+    // A sorozatok sorrendje a dimensions alapján: HUF = 0, USD = 1
+    const keys = Object.keys(series)
+    let huf = null, usd = null
+    for (const key of keys) {
+      const obs = series[key]?.observations
+      if (!obs) continue
+      const val = Object.values(obs)?.[0]?.[0]
+      if (val == null) continue
+      // A key első száma a currency index
+      const currIdx = parseInt(key.split(':')[1])
+      // dimensions[1] = currency_denom, check from structure
+      // Fallback: HUF > 100, USD ~ 1
+      if (val > 100) huf = val
+      else usd = val
+    }
+
+    if (!huf || !usd) return null
+    return { eurHuf: huf, usdHuf: usd, eurUsd: +(huf / usd).toFixed(4), date }
+  } catch { return null }
+}
+
+function renderRates() {
+  if (!rates) return
+  rateCards.innerHTML = `
+    <div class="rate-card eur">
+      <div class="rate-tag">EUR / HUF</div>
+      <div class="rate-val">${fmt(rates.eurHuf, 2)}</div>
+      <div class="rate-desc">Ft / 1 euró</div>
+    </div>
+    <div class="rate-card usd">
+      <div class="rate-tag">USD / HUF</div>
+      <div class="rate-val">${fmt(rates.usdHuf, 2)}</div>
+      <div class="rate-desc">Ft / 1 dollár</div>
+    </div>
+    <div class="rate-card cross">
+      <div class="rate-tag">EUR / USD</div>
+      <div class="rate-val">${rates.eurUsd.toFixed(4)}</div>
+      <div class="rate-desc">USD / 1 euró</div>
+    </div>`
+  sourceText.textContent = `Forrás: Európai Központi Bank · ${rates.date}`
+}
+
+function updateResult() {
+  const raw = amountInput.value.trim()
+  if (!raw || !rates) {
+    resultEl.className = 'result empty'
+    resultEl.innerHTML = '<span class="result-empty">Írj be egy összeget</span>'
+    return
+  }
+  const n = parseFloat(raw)
+  if (isNaN(n) || n < 0) {
+    resultEl.className = 'result empty'
+    resultEl.innerHTML = '<span class="result-empty">Érvénytelen szám</span>'
+    return
+  }
+
+  let val, fromLabel, toLabel
+  switch (currentMode) {
+    case 'huf-eur': val = n / rates.eurHuf; fromLabel = 'HUF'; toLabel = 'EUR'; break
+    case 'eur-huf': val = n * rates.eurHuf; fromLabel = 'EUR'; toLabel = 'HUF'; break
+    case 'huf-usd': val = n / rates.usdHuf; fromLabel = 'HUF'; toLabel = 'USD'; break
+    case 'usd-huf': val = n * rates.usdHuf; fromLabel = 'USD'; toLabel = 'HUF'; break
+  }
+
+  const decimals = toLabel === 'HUF' ? 0 : 4
+  resultEl.className = 'result'
+  resultEl.innerHTML = `
+    <div class="result-label">${fmt(n, toLabel==='HUF'?0:2)} ${fromLabel} =</div>
+    <div class="result-val">${fmt(val, decimals)} ${toLabel}</div>`
+}
+
+function fmt(n, dec = 2) {
+  return n.toLocaleString('hu-HU', { minimumFractionDigits: dec, maximumFractionDigits: dec })
+}
+
+function prevDay(dateStr) {
+  const d = new Date(dateStr)
+  d.setDate(d.getDate() - 1)
+  return d.toISOString().slice(0, 10)
+}
+
+loadRates(today)
+</script>
+</body>
+</html>
