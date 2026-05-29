@@ -54,6 +54,7 @@ const navGroups = [
       { href: '/bookkeeping', label: 'Könyvelés', icon: Calculator },
       { href: '/reports', label: 'Riportok', icon: BarChart3 },
       { href: '/kpi', label: 'KPI Monitor', icon: TrendingUp },
+      { href: '/currency', label: 'Árfolyam', icon: Euro },
     ],
   },
   {
