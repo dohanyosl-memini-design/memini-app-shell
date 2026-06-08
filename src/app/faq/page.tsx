@@ -117,7 +117,15 @@ const modules: Module[] = [
         q: 'Milyen MCP eszközök érhetők el? — teljes lista',
         a: (
           <span>
-            <p className="mb-3 text-xs text-gray-500">50 eszköz áll rendelkezésre, 10 kategóriában:</p>
+            <p className="mb-3 text-xs text-gray-500">53 eszköz áll rendelkezésre, 10 kategóriában:</p>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3 text-xs text-amber-900">
+              <strong>⚠️ Fontos megkülönböztetés — kétféle &quot;rendelés&quot; van a rendszerben:</strong>
+              <ul className="mt-1 ml-4 list-disc space-y-0.5">
+                <li><strong>Megrendelés / megrendelőlap</strong> (<Code>create_order</Code>, <Code>update_order</Code>) — a <em>vevőtől</em> beérkező rendelés, ebből számla generálható. Erre mondd: &quot;készíts egy megrendelőlapot az ügyfél email-je alapján&quot;.</li>
+                <li><strong>Beszerzési rendelés / beszerzőlap</strong> (<Code>create_purchase_order</Code>, <Code>update_purchase_order_status</Code>) — a Memini saját utánrendelése egy <em>gyártópartnertől</em>. Erre mondd: &quot;készíts egy beszerzési rendelést a gyártópartnernek&quot;.</li>
+              </ul>
+              <p className="mt-1">Ha a két szót pontosan így használod a kérésben, az ügynök nem fogja összekeverni őket.</p>
+            </div>
             {[
               {
                 cat: '🏢 Cégek', tools: [

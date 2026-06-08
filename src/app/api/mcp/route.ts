@@ -597,7 +597,7 @@ function buildServer() {
 
   server.tool(
     'create_order',
-    'Új megrendelés (megrendelőlap) létrehozása "pending" (függőben) státuszban, automatikus sorszámozással (MR-ÉV-sorszám). Pl. ha egy beérkező email alapján kell megrendelőlapot készíteni egy ügyfél rendeléséről.',
+    'Új VEVŐI megrendelés (megrendelőlap) létrehozása "pending" (függőben) státuszban, automatikus sorszámozással (MR-ÉV-sorszám) — ebből számla generálható. Ez NEM a gyártópartnernek küldött beszerzési rendelés (ahhoz lásd: create_purchase_order). Pl. ha egy beérkező ügyfél-email alapján kell megrendelőlapot készíteni egy vevői rendelésről.',
     {
       companyId:       z.string().optional().describe('Cég ID'),
       contactId:       z.string().optional().describe('Kapcsolattartó ID'),
@@ -1152,7 +1152,7 @@ function buildServer() {
 
   server.tool(
     'list_suppliers',
-    'Gyártópartnerek listázása termék- és rendelésszámmal.',
+    'Gyártópartnerek listázása termék- és beszerzésirendelés-számmal.',
     {},
     async () => {
       const data = await prisma.supplier.findMany({
@@ -1166,7 +1166,7 @@ function buildServer() {
 
   server.tool(
     'get_supplier',
-    'Egy gyártópartner részletes adatai: hordozók és termékeik (városok szerint), legutóbbi megrendelések, rendelendő (minimum alatti) termékek.',
+    'Egy gyártópartner részletes adatai: hordozók és termékeik (városok szerint), legutóbbi beszerzési rendelések (beszerzőlapok), rendelendő (minimum alatti) termékek.',
     { id: z.string().describe('Gyártópartner ID') },
     async ({ id }) => {
       const data = await prisma.supplier.findUnique({
@@ -1281,11 +1281,11 @@ function buildServer() {
     }
   )
 
-  // ─── GYÁRTÁS: MEGRENDELÉSEK ───────────────────────────────────────────────────
+  // ─── GYÁRTÁS: BESZERZÉSI RENDELÉSEK ───────────────────────────────────────────
 
   server.tool(
     'list_purchase_orders',
-    'Megrendelések listázása. Szűrhető gyártópartner és státusz szerint.',
+    'Beszerzési rendelések (beszerzőlapok) listázása — ezek a Memini → gyártópartner felé induló rendelések, NEM a vevői megrendelések (azokhoz lásd: list_orders / get_order). Szűrhető gyártópartner és státusz szerint.',
     {
       supplierId: z.string().optional().describe('Gyártópartner ID'),
       status:     z.enum(['draft', 'sent', 'confirmed', 'received', 'cancelled']).optional(),
@@ -1308,8 +1308,8 @@ function buildServer() {
 
   server.tool(
     'get_purchase_order',
-    'Egy megrendelés teljes tartalma tételekkel együtt.',
-    { id: z.string().describe('Megrendelés ID') },
+    'Egy beszerzési rendelés (beszerzőlap) teljes tartalma tételekkel együtt — ez a Memini → gyártópartner felé induló rendelés, NEM vevői megrendelés.',
+    { id: z.string().describe('Beszerzési rendelés ID') },
     async ({ id }) => {
       const data = await prisma.purchaseOrder.findUnique({
         where: { id },
@@ -1318,14 +1318,14 @@ function buildServer() {
           items: { include: { product: { select: { id: true, name: true, nameDE: true, sku: true, unit: true, city: true } } } },
         },
       })
-      if (!data) return { content: [{ type: 'text', text: 'Megrendelés nem található.' }] }
+      if (!data) return { content: [{ type: 'text', text: 'Beszerzési rendelés nem található.' }] }
       return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
     }
   )
 
   server.tool(
     'create_purchase_order',
-    'Új megrendelőlap létrehozása gyártópartnerhez. Termékeket ID + mennyiség alapján add meg.',
+    'Új beszerzési rendelés (beszerzőlap) létrehozása gyártópartnerhez — ez a Memini saját utánrendelése a gyártótól, NEM vevői megrendelőlap (ahhoz lásd: create_order). Termékeket ID + mennyiség alapján add meg.',
     {
       supplierId: z.string().describe('Gyártópartner ID'),
       notes:      z.string().optional().describe('Megjegyzés'),
@@ -1365,15 +1365,15 @@ function buildServer() {
       })
 
       const lines = order.items.map(i => `  • ${i.product.name}: ${i.quantity}`).join('\n')
-      return { content: [{ type: 'text', text: `Megrendelés létrehozva: ${order.number}\nPartner: ${order.supplier.name}\nTételek:\n${lines}` }] }
+      return { content: [{ type: 'text', text: `Beszerzési rendelés (beszerzőlap) létrehozva: ${order.number}\nGyártópartner: ${order.supplier.name}\nTételek:\n${lines}` }] }
     }
   )
 
   server.tool(
     'update_purchase_order_status',
-    'Megrendelés státuszának frissítése. Lehetséges átmenetek: draft→sent→confirmed (vagy cancelled). KORLÁT: a "received" (megérkezett) státuszt az MCP nem állíthatja be — raktári átvételt csak a webes felületen lehet rögzíteni.',
+    'Beszerzési rendelés (beszerzőlap) státuszának frissítése — a gyártópartner felé induló rendelésé, NEM a vevői megrendelésé. Lehetséges átmenetek: draft→sent→confirmed (vagy cancelled). KORLÁT: a "received" (megérkezett) státuszt az MCP nem állíthatja be — raktári átvételt csak a webes felületen lehet rögzíteni.',
     {
-      id:     z.string().describe('Megrendelés ID'),
+      id:     z.string().describe('Beszerzési rendelés ID'),
       status: z.enum(['draft', 'sent', 'confirmed', 'cancelled']).describe('Engedélyezett státuszok. A "received" az MCP-n keresztül nem érhető el.'),
       notes:  z.string().optional().describe('Megjegyzés hozzáadása / módosítása'),
     },
@@ -1382,7 +1382,7 @@ function buildServer() {
       if (notes !== undefined) upd.notes = notes
       if (status === 'sent') upd.orderedAt = new Date()
       const data = await prisma.purchaseOrder.update({ where: { id }, data: upd, select: { number: true, status: true } })
-      return { content: [{ type: 'text', text: `Megrendelés frissítve: ${data.number} → ${data.status}` }] }
+      return { content: [{ type: 'text', text: `Beszerzési rendelés frissítve: ${data.number} → ${data.status}` }] }
     }
   )
 
