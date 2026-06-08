@@ -26,14 +26,15 @@ interface Order {
 }
 
 const ORDER_STATUS: Record<string, { label: string; color: string }> = {
-  pending:       { label: 'Függőben',       color: 'bg-amber-100 text-amber-700' },
-  confirmed:     { label: 'Visszaigazolva', color: 'bg-blue-100 text-blue-700' },
-  in_production: { label: 'Gyártásban',     color: 'bg-purple-100 text-purple-700' },
-  shipped:       { label: 'Kiszállítva',    color: 'bg-indigo-100 text-indigo-700' },
-  delivered:     { label: 'Átadva',         color: 'bg-green-100 text-green-700' },
-  cancelled:     { label: 'Lemondva',       color: 'bg-red-100 text-red-700' },
+  pending:       { label: 'Függőben',              color: 'bg-amber-100 text-amber-700' },
+  confirmed:     { label: 'Visszaigazolva',        color: 'bg-blue-100 text-blue-700' },
+  in_production: { label: 'Gyártásban',            color: 'bg-purple-100 text-purple-700' },
+  packing:       { label: 'Összekészítés',         color: 'bg-orange-100 text-orange-700' },
+  shipped:       { label: 'Kiszállítva',           color: 'bg-indigo-100 text-indigo-700' },
+  delivered:     { label: 'Átadva',                color: 'bg-green-100 text-green-700' },
+  cancelled:     { label: 'Lemondva',              color: 'bg-red-100 text-red-700' },
 }
-const STATUS_FLOW = ['pending', 'confirmed', 'in_production', 'shipped', 'delivered']
+const STATUS_FLOW = ['pending', 'confirmed', 'in_production', 'packing', 'shipped', 'delivered']
 
 function fmtEur(v: number) {
   return `€${v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`

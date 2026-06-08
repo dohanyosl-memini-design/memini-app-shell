@@ -50,12 +50,13 @@ interface PrintOrder {
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  pending: 'Függőben',
-  confirmed: 'Visszaigazolva',
+  pending:       'Függőben',
+  confirmed:     'Visszaigazolva',
   in_production: 'Gyártásban',
-  shipped: 'Kiszállítva',
-  delivered: 'Átadva',
-  cancelled: 'Lemondva',
+  packing:       'Összekészítés',
+  shipped:       'Kiszállítva',
+  delivered:     'Átadva',
+  cancelled:     'Lemondva',
 }
 
 function locationStr(product: PrintProduct | null) {
@@ -147,10 +148,11 @@ export default function PrintOrderPage() {
                 <span className="text-xs text-gray-500">→ 🚚 {fmtDate(order.deliveryDate)}</span>
               )}
               <span className={`text-xs px-2 py-0.5 rounded font-medium ${
-                order.status === 'confirmed' ? 'bg-blue-100 text-blue-700' :
+                order.status === 'confirmed'     ? 'bg-blue-100 text-blue-700' :
                 order.status === 'in_production' ? 'bg-purple-100 text-purple-700' :
-                order.status === 'shipped' ? 'bg-indigo-100 text-indigo-700' :
-                order.status === 'delivered' ? 'bg-green-100 text-green-700' :
+                order.status === 'packing'       ? 'bg-orange-100 text-orange-700' :
+                order.status === 'shipped'       ? 'bg-indigo-100 text-indigo-700' :
+                order.status === 'delivered'     ? 'bg-green-100 text-green-700' :
                 'bg-gray-100 text-gray-600'
               }`}>{STATUS_LABELS[order.status] || order.status}</span>
             </div>

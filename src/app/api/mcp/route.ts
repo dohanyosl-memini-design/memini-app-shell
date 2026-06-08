@@ -726,8 +726,8 @@ function buildServer() {
     'Megrendelés státuszának módosítása.',
     {
       id:     z.string(),
-      status: z.enum(['pending', 'confirmed', 'in_production', 'shipped', 'delivered', 'cancelled'])
-                .describe('pending=függőben, confirmed=visszaigazolva, in_production=gyártásban, shipped=kiszállítva, delivered=átadva, cancelled=lemondva'),
+      status: z.enum(['pending', 'confirmed', 'in_production', 'packing', 'shipped', 'delivered', 'cancelled'])
+                .describe('pending=függőben, confirmed=visszaigazolva, in_production=gyártásban, packing=összekészítés/csomagolás, shipped=kiszállítva, delivered=átadva, cancelled=lemondva'),
     },
     async ({ id, status }) => {
       const data = await prisma.order.update({ where: { id }, data: { status } })
