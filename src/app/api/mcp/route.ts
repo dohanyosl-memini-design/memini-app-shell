@@ -8,7 +8,7 @@ import { getMnbRate } from '@/lib/mnb'
 export const dynamic = 'force-dynamic'
 
 function buildServer() {
-  const server = new McpServer({ name: 'memini-crm', version: '1.0.0' })
+  const server = new McpServer({ name: 'memini-crm', version: '1.0.1' })
 
   // ─── SZÁMLÁK ─────────────────────────────────────────────────────────────
 
