@@ -557,11 +557,11 @@ function buildServer() {
 
   server.tool(
     'list_orders',
-    'Megrendelések listázása.',
+    'Vevői megrendelések listázása. Lehetséges státuszok: pending, confirmed, in_production, packing (összekészítés), shipped, delivered, cancelled.',
     {
       companyId: z.string().optional(),
       contactId: z.string().optional(),
-      status:    z.string().optional(),
+      status:    z.string().optional().describe('Szűrés státusz szerint: pending, confirmed, in_production, packing, shipped, delivered, cancelled'),
     },
     async ({ companyId, contactId, status }) => {
       const data = await prisma.order.findMany({
@@ -723,13 +723,16 @@ function buildServer() {
 
   server.tool(
     'update_order_status',
-    'Megrendelés státuszának módosítása.',
+    'Vevői megrendelés státuszának módosítása. Érvényes státuszok (TELJES LISTA): pending (függőben) → confirmed (visszaigazolva) → in_production (gyártásban) → packing (összekészítés/csomagolás) → shipped (kiszállítva) → delivered (átadva). Bármikor: cancelled (lemondva). A "packing" státusz az összekészítési/csomagolási fázist jelöli.',
     {
-      id:     z.string(),
-      status: z.enum(['pending', 'confirmed', 'in_production', 'packing', 'shipped', 'delivered', 'cancelled'])
-                .describe('pending=függőben, confirmed=visszaigazolva, in_production=gyártásban, packing=összekészítés/csomagolás, shipped=kiszállítva, delivered=átadva, cancelled=lemondva'),
+      id:     z.string().describe('Megrendelés ID'),
+      status: z.string().describe('Érvényes értékek: pending, confirmed, in_production, packing, shipped, delivered, cancelled — ahol packing = összekészítés/csomagolás a gyártás után, szállítás előtt'),
     },
     async ({ id, status }) => {
+      const valid = ['pending', 'confirmed', 'in_production', 'packing', 'shipped', 'delivered', 'cancelled']
+      if (!valid.includes(status)) {
+        return { content: [{ type: 'text', text: `Érvénytelen státusz: "${status}". Érvényes értékek: ${valid.join(', ')}` }] }
+      }
       const data = await prisma.order.update({ where: { id }, data: { status } })
       return { content: [{ type: 'text', text: `Megrendelés státusza frissítve: ${data.number} → ${status}` }] }
     }
