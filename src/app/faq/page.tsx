@@ -149,6 +149,9 @@ const modules: Module[] = [
                 cat: '📦 Megrendelések & Szállítás', tools: [
                   ['list_orders', 'Megrendelések listázása'],
                   ['get_order', 'Egy megrendelés részletei'],
+                  ['create_order', 'Új megrendelőlap létrehozása tételekkel'],
+                  ['update_order', 'Megrendelés adatainak/tételeinek szerkesztése'],
+                  ['update_order_status', 'Megrendelés státusz frissítése'],
                   ['list_delivery_notes', 'Szállítólevelek listázása'],
                   ['get_delivery_note', 'Egy szállítólevél adatai'],
                   ['update_delivery_note_status', 'Szállítólevél státusz frissítése'],
@@ -288,6 +291,12 @@ const modules: Module[] = [
                   title: 'Email előkészítés',
                   desc: 'Claude megkeresi a partner adatait az MCP-vel, majd azonnal megírja a személyre szabott emailt.',
                   prompt: 'A Bauer AG 90 napja nem rendelt. Keress rájuk az MCP-vel, nézd meg az előző rendeléseiket, és írj egy visszaszerző email-t németül.',
+                },
+                {
+                  emoji: '📝',
+                  title: 'Megrendelőlap email alapján',
+                  desc: 'Bemásolod egy beérkező rendelési email szövegét, Claude beazonosítja az ügyfelet, és elkészíti a megrendelőlapot a rendszerben — azonnal listázható, szerkeszthető, számlázható.',
+                  prompt: 'Másold be a megrendelő email szövegét: "Tisztelt Memini, kérnék 200 db Berlin mágnest és 100 db Hamburg mágnest, szállítás a szokásos címre." — Készíts ebből megrendelőlapot a Schmidt KG részére!',
                 },
                 {
                   emoji: '🔍',

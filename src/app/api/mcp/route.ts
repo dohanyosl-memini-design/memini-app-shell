@@ -595,6 +595,146 @@ function buildServer() {
     }
   )
 
+  server.tool(
+    'create_order',
+    'Új megrendelés (megrendelőlap) létrehozása "pending" (függőben) státuszban, automatikus sorszámozással (MR-ÉV-sorszám). Pl. ha egy beérkező email alapján kell megrendelőlapot készíteni egy ügyfél rendeléséről.',
+    {
+      companyId:       z.string().optional().describe('Cég ID'),
+      contactId:       z.string().optional().describe('Kapcsolattartó ID'),
+      date:            z.string().optional().describe('Rendelés dátuma YYYY-MM-DD, alapértelmezett: ma'),
+      customerRef:     z.string().optional().describe('Ügyfél saját hivatkozási / rendelésszáma'),
+      notes:           z.string().optional().describe('Megjegyzés (megjelenik a megrendelőlapon)'),
+      internalNotes:   z.string().optional().describe('Belső megjegyzés (nem kerül a megrendelőlapra)'),
+      deliveryAddress: z.string().optional(),
+      deliveryDate:    z.string().optional().describe('Kívánt szállítási dátum YYYY-MM-DD'),
+      shippingMethod:  z.string().optional(),
+      items: z.array(z.object({
+        description: z.string(),
+        quantity:    z.number().positive(),
+        unitPrice:   z.number(),
+        vatRate:     z.number().default(19),
+        productId:   z.string().optional(),
+      })).min(1).describe('Megrendelt tételek, legalább egy szükséges'),
+    },
+    async (body) => {
+      const subtotal = body.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+      const vatAmount = body.items.reduce((s, i) => s + i.quantity * i.unitPrice * (i.vatRate / 100), 0)
+      const total = subtotal + vatAmount
+
+      const year = new Date().getFullYear()
+      const prefix = `MR-${year}-`
+      const last = await prisma.order.findFirst({
+        where: { number: { startsWith: prefix } },
+        orderBy: { number: 'desc' },
+      })
+      const next = last ? parseInt(last.number.split('-')[2]) + 1 : 1
+      const number = `${prefix}${String(next).padStart(3, '0')}`
+
+      const order = await prisma.order.create({
+        data: {
+          number,
+          date:            body.date ? new Date(body.date) : new Date(),
+          status:          'pending',
+          notes:           body.notes || null,
+          internalNotes:   body.internalNotes || null,
+          customerRef:     body.customerRef || null,
+          deliveryAddress: body.deliveryAddress || null,
+          deliveryDate:    body.deliveryDate ? new Date(body.deliveryDate) : null,
+          shippingMethod:  body.shippingMethod || null,
+          contactId:       body.contactId || null,
+          companyId:       body.companyId || null,
+          currency:        'EUR',
+          subtotal,
+          vatAmount,
+          total,
+          items: {
+            create: body.items.map(i => ({
+              description: i.description,
+              quantity:    i.quantity,
+              unitPrice:   i.unitPrice,
+              vatRate:     i.vatRate,
+              total:       i.quantity * i.unitPrice * (1 + i.vatRate / 100),
+              productId:   i.productId || null,
+            })),
+          },
+        },
+        include: { contact: true, company: true, items: true },
+      })
+      return { content: [{ type: 'text', text: `Megrendelés létrehozva: ${order.number}\n${JSON.stringify(order, null, 2)}` }] }
+    }
+  )
+
+  server.tool(
+    'update_order',
+    'Meglévő megrendelés adatainak módosítása. Csak a megadott mezők frissülnek. Ha megadod az "items" tömböt, az lecseréli az összes tételt és újraszámolja az összegeket.',
+    {
+      id:              z.string().describe('Megrendelés ID'),
+      companyId:       z.string().optional(),
+      contactId:       z.string().optional(),
+      date:            z.string().optional().describe('YYYY-MM-DD'),
+      customerRef:     z.string().optional(),
+      notes:           z.string().optional(),
+      internalNotes:   z.string().optional(),
+      deliveryAddress: z.string().optional(),
+      deliveryDate:    z.string().optional().describe('YYYY-MM-DD'),
+      shippingMethod:  z.string().optional(),
+      items: z.array(z.object({
+        description: z.string(),
+        quantity:    z.number().positive(),
+        unitPrice:   z.number(),
+        vatRate:     z.number().default(19),
+        productId:   z.string().optional(),
+      })).optional().describe('Ha megadod, lecseréli az összes meglévő tételt'),
+    },
+    async ({ id, items, ...fields }) => {
+      const updateData: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(fields)) {
+        if (v === undefined) continue
+        updateData[k] = (k === 'date' || k === 'deliveryDate') ? new Date(v as string) : v
+      }
+
+      if (items && items.length > 0) {
+        const subtotal = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+        const vatAmount = items.reduce((s, i) => s + i.quantity * i.unitPrice * (i.vatRate / 100), 0)
+        updateData.subtotal = subtotal
+        updateData.vatAmount = vatAmount
+        updateData.total = subtotal + vatAmount
+        await prisma.orderItem.deleteMany({ where: { orderId: id } })
+        updateData.items = {
+          create: items.map(i => ({
+            description: i.description,
+            quantity:    i.quantity,
+            unitPrice:   i.unitPrice,
+            vatRate:     i.vatRate,
+            total:       i.quantity * i.unitPrice * (1 + i.vatRate / 100),
+            productId:   i.productId || null,
+          })),
+        }
+      }
+
+      const data = await prisma.order.update({
+        where: { id },
+        data: updateData,
+        include: { contact: true, company: true, items: true },
+      })
+      return { content: [{ type: 'text', text: `Megrendelés frissítve: ${data.number}\n${JSON.stringify(data, null, 2)}` }] }
+    }
+  )
+
+  server.tool(
+    'update_order_status',
+    'Megrendelés státuszának módosítása.',
+    {
+      id:     z.string(),
+      status: z.enum(['pending', 'confirmed', 'in_production', 'shipped', 'delivered', 'cancelled'])
+                .describe('pending=függőben, confirmed=visszaigazolva, in_production=gyártásban, shipped=kiszállítva, delivered=átadva, cancelled=lemondva'),
+    },
+    async ({ id, status }) => {
+      const data = await prisma.order.update({ where: { id }, data: { status } })
+      return { content: [{ type: 'text', text: `Megrendelés státusza frissítve: ${data.number} → ${status}` }] }
+    }
+  )
+
   // ─── ÁRLISTA & STATISZTIKA ───────────────────────────────────────────────
 
   server.tool(
