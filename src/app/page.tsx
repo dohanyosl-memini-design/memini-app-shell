@@ -11,6 +11,7 @@ import { hu } from 'date-fns/locale'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
+import { DEAL_STAGE_LABELS, DEAL_STAGE_COLORS, CLOSED_STAGES, normalizeStage } from '@/lib/dealStages'
 
 interface Stats {
   totalContacts: number
@@ -50,14 +51,8 @@ interface Stats {
   yearlyBalance: number
 }
 
-const STAGE_LABELS: Record<string, string> = {
-  prospect: 'Érdeklődő', qualified: 'Minősített', proposal: 'Ajánlat',
-  negotiation: 'Tárgyalás', closed_won: 'Nyert', closed_lost: 'Elveszett',
-}
-const STAGE_COLORS: Record<string, string> = {
-  prospect: '#94a3b8', qualified: '#60a5fa', proposal: '#a78bfa',
-  negotiation: '#fbbf24', closed_won: '#4ade80', closed_lost: '#f87171',
-}
+const STAGE_LABELS = DEAL_STAGE_LABELS
+const STAGE_COLORS = DEAL_STAGE_COLORS
 
 function fmtEur(v: number) {
   return `€${v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -108,7 +103,7 @@ export default function Dashboard() {
   const combinedLastMonthExpenses = stats.combinedLastMonthExpenses ?? stats.lastMonthExpenses
   const monthBalance = combinedMonthlyIncome - combinedMonthlyExpenses
   const chartData = buildYearlyChart(stats.allCashflowEntries ?? stats.allTransactions, year)
-  const activeDeals = stats.dealsByStage.filter((s) => !['closed_won', 'closed_lost'].includes(s.stage))
+  const activeDeals = stats.dealsByStage.filter((s) => !CLOSED_STAGES.includes(normalizeStage(s.stage)))
   const pipelineValue = activeDeals.reduce((s, d) => s + (d._sum.value || 0), 0)
 
   const todayTasks = stats.upcomingTasks.filter((t) => t.dueDate && isToday(new Date(t.dueDate)))

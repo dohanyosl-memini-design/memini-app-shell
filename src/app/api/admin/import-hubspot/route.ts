@@ -43,15 +43,15 @@ async function fetchAll(token: string, objectType: string, properties: string[])
 
 function mapDealStage(hsStage: string): string {
   const map: Record<string, string> = {
-    appointmentscheduled: 'prospect',
-    qualifiedtobuy: 'qualified',
-    presentationscheduled: 'proposal',
-    decisionmakerboughtin: 'negotiation',
-    contractsent: 'negotiation',
+    appointmentscheduled: 'outreach_sent',
+    qualifiedtobuy: 'follow_up',
+    presentationscheduled: 'sample_requested',
+    decisionmakerboughtin: 'sample_sent',
+    contractsent: 'sample_sent',
     closedwon: 'won',
     closedlost: 'lost',
   }
-  return map[hsStage] ?? 'prospect'
+  return map[hsStage] ?? 'outreach_sent'
 }
 
 export async function GET(req: NextRequest) {

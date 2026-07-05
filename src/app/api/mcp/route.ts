@@ -4,8 +4,13 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { getMnbRate } from '@/lib/mnb'
+import { DEAL_STAGE_KEYS, LEGACY_STAGE_KEYS, normalizeStage } from '@/lib/dealStages'
 
 export const dynamic = 'force-dynamic'
+
+// Deal-szakasz enum az MCP tool-okhoz: új tölcsér-kulcsok + régi aliasok
+// (a régi kulcsokat a handler normalizeStage-dzsel konvertálja — visszafelé kompatibilis).
+const dealStageEnum = z.enum([...DEAL_STAGE_KEYS, ...LEGACY_STAGE_KEYS] as [string, ...string[]])
 
 function buildServer() {
   const server = new McpServer({ name: 'memini-crm', version: '1.0.1' })
@@ -444,13 +449,13 @@ function buildServer() {
     {
       companyId: z.string().optional(),
       contactId: z.string().optional(),
-      stage:     z.enum(['prospect', 'qualified', 'proposal', 'negotiation', 'won', 'lost']).optional(),
+      stage:     dealStageEnum.optional().describe('Szakasz-szűrő (régi kulcsok is elfogadottak, automatikusan konvertálva)'),
     },
     async ({ companyId, contactId, stage }) => {
       const where: Record<string, unknown> = {}
       if (companyId) where.companyId = companyId
       if (contactId) where.contactId = contactId
-      if (stage)     where.stage     = stage
+      if (stage)     where.stage     = normalizeStage(stage)
       const data = await prisma.deal.findMany({
         where,
         include: {
@@ -469,7 +474,7 @@ function buildServer() {
     {
       title:       z.string().describe('Deal megnevezése'),
       value:       z.number().optional().describe('Becsült értéke EUR-ban'),
-      stage:       z.enum(['prospect', 'qualified', 'proposal', 'negotiation', 'won', 'lost']).optional(),
+      stage:       dealStageEnum.optional().describe('Szakasz (régi kulcsok is elfogadottak, automatikusan konvertálva)'),
       probability: z.number().int().min(0).max(100).optional().describe('Sikervalószínűség %'),
       closeDate:   z.string().optional().describe('Várható zárás YYYY-MM-DD'),
       notes:       z.string().optional(),
@@ -481,7 +486,7 @@ function buildServer() {
         data: {
           title:       body.title,
           value:       body.value       ?? 0,
-          stage:       body.stage       || 'prospect',
+          stage:       normalizeStage(body.stage),
           probability: body.probability ?? 0,
           closeDate:   body.closeDate   ? new Date(body.closeDate) : null,
           notes:       body.notes       || null,
@@ -500,7 +505,7 @@ function buildServer() {
       id:          z.string().describe('Deal ID'),
       title:       z.string().optional(),
       value:       z.number().optional(),
-      stage:       z.enum(['prospect', 'qualified', 'proposal', 'negotiation', 'won', 'lost']).optional(),
+      stage:       dealStageEnum.optional().describe('Szakasz (régi kulcsok is elfogadottak, automatikusan konvertálva)'),
       probability: z.number().int().min(0).max(100).optional(),
       closeDate:   z.string().optional().describe('YYYY-MM-DD, vagy üres a törléshez'),
       notes:       z.string().optional(),
@@ -508,6 +513,7 @@ function buildServer() {
     async ({ id, closeDate, ...fields }) => {
       const upd: Record<string, unknown> = {}
       for (const [k, v] of Object.entries(fields)) if (v !== undefined) upd[k] = v
+      if (typeof upd.stage === 'string') upd.stage = normalizeStage(upd.stage)
       if (closeDate !== undefined) upd.closeDate = closeDate ? new Date(closeDate) : null
       const data = await prisma.deal.update({ where: { id }, data: upd })
       return { content: [{ type: 'text', text: `Deal frissítve: ${data.title} → ${data.stage} (${data.probability}%)` }] }

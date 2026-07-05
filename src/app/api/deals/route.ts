@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { normalizeStage } from '@/lib/dealStages'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
     data: {
       title: body.title,
       value: parseFloat(body.value) || 0,
-      stage: body.stage || 'prospect',
+      stage: normalizeStage(body.stage),
       probability: parseInt(body.probability) || 0,
       closeDate: body.closeDate ? new Date(body.closeDate) : null,
       notes: body.notes || null,

@@ -81,7 +81,7 @@ model Deal {
   id          String     @id @default(cuid())
   title       String
   value       Float      @default(0)
-  stage       String     @default("prospect")
+  stage       String     @default("outreach_sent")
   probability Int        @default(0)
   closeDate   DateTime?
   notes       String?

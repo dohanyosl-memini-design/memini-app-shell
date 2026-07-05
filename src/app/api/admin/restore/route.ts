@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { normalizeStage } from '@/lib/dealStages'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -230,7 +231,7 @@ export async function POST(request: NextRequest) {
     if (d.deals?.length) {
       const r = await prisma.deal.createMany({
         data: (d.deals as {id:string;title:string;value:number;stage:string;probability:number;closeDate?:string;notes?:string;contactId?:string;companyId?:string;createdAt:string;updatedAt:string}[]).map(x => ({
-          id: x.id, title: x.title, value: x.value ?? 0, stage: x.stage ?? 'prospect',
+          id: x.id, title: x.title, value: x.value ?? 0, stage: normalizeStage(x.stage),
           probability: x.probability ?? 0, closeDate: x.closeDate ? new Date(x.closeDate) : null,
           notes: x.notes ?? null, contactId: x.contactId ?? null, companyId: x.companyId ?? null,
           createdAt: new Date(x.createdAt), updatedAt: new Date(x.updatedAt),
