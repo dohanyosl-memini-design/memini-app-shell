@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { getMnbRate } from '@/lib/mnb'
 import { DEAL_STAGE_KEYS, LEGACY_STAGE_KEYS, normalizeStage } from '@/lib/dealStages'
+import { computeFunnelStats } from '@/lib/funnelStats'
 
 export const dynamic = 'force-dynamic'
 
@@ -517,6 +518,19 @@ function buildServer() {
       if (closeDate !== undefined) upd.closeDate = closeDate ? new Date(closeDate) : null
       const data = await prisma.deal.update({ where: { id }, data: upd })
       return { content: [{ type: 'text', text: `Deal frissítve: ${data.title} → ${data.stage} (${data.probability}%)` }] }
+    }
+  )
+
+  server.tool(
+    'get_funnel_stats',
+    'B2B értékesítési tölcsér KPI-jai egyetlen lekérdezésben, havi vagy heti bontásban: kiküldött outreach dealek, follow-up aktivitások, új partnerek (won), reorderek száma/értéke, rendelési volumen — plusz a jelenlegi pipeline szakaszonkénti konverziója.',
+    {
+      granularity: z.enum(['month', 'week']).optional().describe('Bontás: month (alapértelmezett) vagy week'),
+      periods:     z.number().int().min(1).max(24).optional().describe('Visszamenőleges időszakok száma (hónap: 6, hét: 8 alapból)'),
+    },
+    async ({ granularity, periods }) => {
+      const stats = await computeFunnelStats({ granularity, periods })
+      return { content: [{ type: 'text', text: JSON.stringify(stats, null, 2) }] }
     }
   )
 
