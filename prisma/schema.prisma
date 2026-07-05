@@ -95,6 +95,20 @@ model Deal {
   updatedAt   DateTime   @updatedAt
 }
 
+// Havi tölcsér-tervszámok (FÁZIS 2) — a get_funnel_stats terv/tény összevetéséhez.
+// Runtime-ban szerkeszthető; hiányzó hónapokra a kód a beépített defaultokra esik vissza.
+model FunnelTarget {
+  yearMonth      String   @id          // 'YYYY-MM'
+  outreach       Int      @default(0)  // kiküldött outreach dealek terve
+  followup       Int      @default(0)  // follow-up aktivitások terve
+  sampleRequests Int      @default(0)  // mintakérések terve
+  newPartners    Int      @default(0)  // új partnerek (won) terve
+  reorders       Int      @default(0)  // reorderek terve
+  volumeEur      Float    @default(0)  // rendelési volumen terve EUR-ban
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
 model Task {
   id          String    @id @default(cuid())
   title       String

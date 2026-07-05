@@ -523,7 +523,7 @@ function buildServer() {
 
   server.tool(
     'get_funnel_stats',
-    'B2B értékesítési tölcsér KPI-jai egyetlen lekérdezésben, havi vagy heti bontásban: kiküldött outreach dealek, follow-up aktivitások, új partnerek (won), reorderek száma/értéke, rendelési volumen — plusz a jelenlegi pipeline szakaszonkénti konverziója.',
+    'B2B értékesítési tölcsér KPI-jai egyetlen lekérdezésben, havi vagy heti bontásban: kiküldött outreach dealek, follow-up aktivitások, mintakérések, új partnerek (won), reorderek száma/értéke, rendelési volumen — plusz a jelenlegi pipeline szakaszonkénti konverziója. A planVsActual szekció havi és év elejétől kumulált terv/tény/eltérés%-ot ad minden mutatóra (tervszámok: FunnelTarget tábla, hiányában beépített defaultok).',
     {
       granularity: z.enum(['month', 'week']).optional().describe('Bontás: month (alapértelmezett) vagy week'),
       periods:     z.number().int().min(1).max(24).optional().describe('Visszamenőleges időszakok száma (hónap: 6, hét: 8 alapból)'),
