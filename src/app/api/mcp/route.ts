@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { getMnbRate } from '@/lib/mnb'
 import { DEAL_STAGE_KEYS, LEGACY_STAGE_KEYS, normalizeStage } from '@/lib/dealStages'
 import { computeFunnelStats } from '@/lib/funnelStats'
+import { computeReorderDue, reorderCallTaskTitle, FULFILLED_ORDER_STATUSES } from '@/lib/reorderDue'
 
 export const dynamic = 'force-dynamic'
 
@@ -531,6 +532,52 @@ function buildServer() {
     async ({ granularity, periods }) => {
       const stats = await computeFunnelStats({ granularity, periods })
       return { content: [{ type: 'text', text: JSON.stringify(stats, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'list_reorder_due',
+    'Esedékes reorder lista: won partnerek, akiknek az utolsó teljesített (kiszállított/átadott) rendelése régen (alapból 9+ hónapja) volt, legrégebbi elöl. Tartalmazza a reorder-arány KPI-t (established partnerek reorder %-a, cél 55%+) és a nov–jan szezon-előtti "szezon-hívás" jelöléseket.',
+    {
+      thresholdMonths: z.number().int().min(1).max(36).optional().describe('Esedékességi küszöb hónapban (alapértelmezett: 9)'),
+    },
+    async ({ thresholdMonths }) => {
+      const data = await computeReorderDue({ thresholdMonths })
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'schedule_reorder_call',
+    'Reorder-hívás ütemezése egy partnerhez: feladatot hoz létre, amelynek címében a cégnév és az utolsó teljesített rendelés dátuma szerepel.',
+    {
+      companyId: z.string().describe('A partner cég ID-ja'),
+      dueDate:   z.string().optional().describe('Határidő YYYY-MM-DD (alapértelmezett: nincs)'),
+      priority:  z.enum(['low', 'medium', 'high']).optional().describe('Prioritás (alapértelmezett: medium)'),
+    },
+    async ({ companyId, dueDate, priority }) => {
+      const company = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true, name: true } })
+      if (!company) return { content: [{ type: 'text', text: 'Cég nem található.' }] }
+
+      const lastOrder = await prisma.order.findFirst({
+        where: { companyId, status: { in: FULFILLED_ORDER_STATUSES } },
+        orderBy: { date: 'desc' },
+        select: { date: true },
+      })
+
+      const title = reorderCallTaskTitle(company.name, lastOrder?.date ?? null)
+      const task = await prisma.task.create({
+        data: {
+          title,
+          description: 'Reorder-hívás — a partner régóta nem rendelt, egyeztetés a következő rendelésről.',
+          dueDate:  dueDate ? new Date(dueDate) : null,
+          priority: priority || 'medium',
+          status:   'pending',
+          taskType: 'call',
+          companyId,
+        },
+      })
+      return { content: [{ type: 'text', text: `Feladat létrehozva: ${task.title} (ID: ${task.id})` }] }
     }
   )
 
