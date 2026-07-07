@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { DEAL_STAGES, DEFAULT_DEAL_STAGE, normalizeStage } from '@/lib/dealStages'
 
 interface Contact {
   id: string
@@ -32,14 +33,7 @@ interface DealFormProps {
   onCancel: () => void
 }
 
-const STAGES = [
-  { value: 'prospect', label: 'Érdeklődő' },
-  { value: 'qualified', label: 'Minősített' },
-  { value: 'proposal', label: 'Ajánlat' },
-  { value: 'negotiation', label: 'Tárgyalás' },
-  { value: 'closed_won', label: 'Nyert' },
-  { value: 'closed_lost', label: 'Elveszett' },
-]
+const STAGES = DEAL_STAGES.map((s) => ({ value: s.key, label: s.label }))
 
 export default function DealForm({ deal, initialStage, onSave, onCancel }: DealFormProps) {
   const [contacts, setContacts] = useState<Contact[]>([])
@@ -48,7 +42,7 @@ export default function DealForm({ deal, initialStage, onSave, onCancel }: DealF
   const [form, setForm] = useState({
     title: deal?.title || '',
     value: deal?.value?.toString() || '',
-    stage: deal?.stage || initialStage || 'prospect',
+    stage: normalizeStage(deal?.stage || initialStage || DEFAULT_DEAL_STAGE) as string,
     probability: deal?.probability?.toString() || '20',
     closeDate: deal?.closeDate ? deal.closeDate.slice(0, 10) : '',
     notes: deal?.notes || '',

@@ -6,6 +6,7 @@ import Modal from '@/components/Modal'
 import DealForm from '@/components/DealForm'
 import { format } from 'date-fns'
 import { hu } from 'date-fns/locale'
+import { DEAL_STAGES, DEFAULT_DEAL_STAGE, CLOSED_STAGES, normalizeStage } from '@/lib/dealStages'
 
 interface Deal {
   id: string
@@ -21,14 +22,7 @@ interface Deal {
   company: { name: string } | null
 }
 
-const STAGES = [
-  { key: 'prospect', label: 'Érdeklődő', color: 'border-gray-300', headerColor: 'bg-gray-100 text-gray-700' },
-  { key: 'qualified', label: 'Minősített', color: 'border-blue-300', headerColor: 'bg-blue-100 text-blue-700' },
-  { key: 'proposal', label: 'Ajánlat', color: 'border-purple-300', headerColor: 'bg-purple-100 text-purple-700' },
-  { key: 'negotiation', label: 'Tárgyalás', color: 'border-amber-300', headerColor: 'bg-amber-100 text-amber-700' },
-  { key: 'closed_won', label: 'Nyert', color: 'border-green-300', headerColor: 'bg-green-100 text-green-700' },
-  { key: 'closed_lost', label: 'Elveszett', color: 'border-red-300', headerColor: 'bg-red-100 text-red-700' },
-]
+const STAGES = DEAL_STAGES
 
 function formatCurrency(value: number) {
   if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M €`
@@ -41,7 +35,7 @@ export default function DealsPage() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editDeal, setEditDeal] = useState<Deal | null>(null)
-  const [initialStage, setInitialStage] = useState('prospect')
+  const [initialStage, setInitialStage] = useState<string>(DEFAULT_DEAL_STAGE)
   const [dragging, setDragging] = useState<string | null>(null)
 
   const fetchDeals = useCallback(async () => {
@@ -96,10 +90,10 @@ export default function DealsPage() {
   }
 
   const totalPipeline = deals
-    .filter((d) => d.stage !== 'closed_won' && d.stage !== 'closed_lost')
+    .filter((d) => !CLOSED_STAGES.includes(normalizeStage(d.stage)))
     .reduce((sum, d) => sum + d.value, 0)
 
-  const totalWon = deals.filter((d) => d.stage === 'closed_won').reduce((sum, d) => sum + d.value, 0)
+  const totalWon = deals.filter((d) => normalizeStage(d.stage) === 'won').reduce((sum, d) => sum + d.value, 0)
 
   return (
     <div className="p-4 md:p-6">
@@ -111,7 +105,7 @@ export default function DealsPage() {
           </p>
         </div>
         <button
-          onClick={() => handleAdd('prospect')}
+          onClick={() => handleAdd(DEFAULT_DEAL_STAGE)}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
           <Plus size={18} />
@@ -124,7 +118,7 @@ export default function DealsPage() {
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-4 mt-4">
           {STAGES.map(({ key, label, color, headerColor }) => {
-            const stageDeals = deals.filter((d) => d.stage === key)
+            const stageDeals = deals.filter((d) => normalizeStage(d.stage) === key)
             const stageTotal = stageDeals.reduce((sum, d) => sum + d.value, 0)
 
             return (

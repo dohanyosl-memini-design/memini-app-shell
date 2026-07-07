@@ -17,6 +17,7 @@ import TaskForm from '@/components/TaskForm'
 import InvoicePreview from '@/components/InvoicePreview'
 import MemoryTab from '@/components/MemoryTab'
 import TemplatesTab from '@/components/TemplatesTab'
+import { DEAL_STAGE_LABELS } from '@/lib/dealStages'
 
 interface Activity {
   id: string
@@ -108,11 +109,6 @@ const ACTIVITY_CONFIG: Record<string, { label: string; icon: React.ElementType; 
   meeting: { label: 'Találkozó', icon: Users, color: 'text-green-600', bg: 'bg-green-100' },
   note: { label: 'Feljegyzés', icon: FileText, color: 'text-amber-600', bg: 'bg-amber-100' },
   whatsapp: { label: 'WhatsApp', icon: MessageSquare, color: 'text-emerald-600', bg: 'bg-emerald-100' },
-}
-
-const DEAL_STAGE_LABELS: Record<string, string> = {
-  prospect: 'Érdeklődő', qualified: 'Minősített', proposal: 'Ajánlat',
-  negotiation: 'Tárgyalás', closed_won: 'Nyert', closed_lost: 'Elveszett',
 }
 
 const QUOTE_STATUS: Record<string, { label: string; color: string }> = {

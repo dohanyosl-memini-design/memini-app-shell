@@ -10,7 +10,7 @@ import {
   CheckSquare, BarChart3, Package, FileText, Wallet,
   ClipboardList, ShoppingCart, LogOut, Euro, Menu, X,
   GitMerge, BookOpen, Calculator, HelpCircle, Shield,
-  Sun, Moon, Bot, Factory,
+  Sun, Moon, Bot, Factory, RefreshCw, CalendarDays,
 } from 'lucide-react'
 import { useTheme } from '@/components/ThemeProvider'
 
@@ -19,6 +19,7 @@ const navGroups = [
     label: null,
     items: [
       { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+      { href: '/naptar', label: 'Naptár', icon: CalendarDays },
       { href: '/chat', label: 'AI Chat', icon: Bot },
       { href: '/arthur', label: 'Arthur', icon: Bot },
     ],
@@ -38,6 +39,7 @@ const navGroups = [
       { href: '/quotes', label: 'Ajánlatok', icon: ClipboardList },
       { href: '/orders', label: 'Megrendelések', icon: ShoppingCart },
       { href: '/invoices', label: 'Számlák', icon: FileText },
+      { href: '/reorders', label: 'Reorder lista', icon: RefreshCw },
     ],
   },
   {

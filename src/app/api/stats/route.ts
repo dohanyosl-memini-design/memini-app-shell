@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
     }),
     prisma.contact.count(),
     prisma.company.count(),
-    prisma.deal.count({ where: { stage: { notIn: ['closed_won', 'closed_lost'] } } }),
+    prisma.deal.count({ where: { stage: { notIn: ['won', 'lost'] } } }),
     prisma.task.count({ where: { status: { in: ['pending', 'in_progress'] } } }),
     prisma.deal.groupBy({ by: ['stage'], _count: true, _sum: { value: true } }),
     prisma.task.findMany({
@@ -90,8 +90,8 @@ export async function GET(request: NextRequest) {
     prisma.stockMovement.aggregate({ where: { type: 'out', createdAt: { gte: startOfYear, lte: endOfYear } }, _sum: { quantity: true } }),
     prisma.stockMovement.aggregate({ where: { type: 'in', createdAt: { gte: startOfYear, lte: endOfYear } }, _sum: { quantity: true } }),
     prisma.product.aggregate({ where: { active: true }, _sum: { stock: true } }),
-    prisma.deal.count({ where: { stage: 'closed_won' } }),
-    prisma.deal.count({ where: { stage: 'closed_lost' } }),
+    prisma.deal.count({ where: { stage: 'won' } }),
+    prisma.deal.count({ where: { stage: 'lost' } }),
     prisma.invoice.findMany({
       where: { status: 'paid', paidAt: { not: null } },
       select: { date: true, paidAt: true },

@@ -138,7 +138,7 @@ async function main() {
       data: {
         title: 'Ulmer Münster – Kő mágnes kollekció 200 db',
         value: 1800,
-        stage: 'proposal',
+        stage: 'sample_requested',
         probability: 70,
         contactId: contacts[0].id,
         companyId: companies[0].id,
@@ -150,7 +150,7 @@ async function main() {
       data: {
         title: 'Heidelberg Schloss – Fa mágnes 150 db + képeslapok',
         value: 2100,
-        stage: 'negotiation',
+        stage: 'sample_sent',
         probability: 80,
         contactId: contacts[1].id,
         companyId: companies[1].id,
@@ -161,7 +161,7 @@ async function main() {
       data: {
         title: 'Neuschwanstein – Nyári kollekcó 500 db',
         value: 4500,
-        stage: 'closed_won',
+        stage: 'won',
         probability: 100,
         contactId: contacts[2].id,
         companyId: companies[2].id,
@@ -173,7 +173,7 @@ async function main() {
       data: {
         title: 'Kölner Dom – Próbarendelés 50 db',
         value: 650,
-        stage: 'qualified',
+        stage: 'follow_up',
         probability: 45,
         contactId: contacts[3].id,
         companyId: companies[3].id,
@@ -185,7 +185,7 @@ async function main() {
       data: {
         title: 'Rothenburg – Fa kollekció 100 db',
         value: 1200,
-        stage: 'prospect',
+        stage: 'outreach_sent',
         probability: 25,
         contactId: contacts[4].id,
         companyId: companies[4].id,

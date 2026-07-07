@@ -14,6 +14,7 @@ import Modal from '@/components/Modal'
 import ContactForm from '@/components/ContactForm'
 import TaskForm from '@/components/TaskForm'
 import { TASK_TYPES } from '@/components/TaskForm'
+import { DEAL_STAGE_LABELS } from '@/lib/dealStages'
 
 interface Activity {
   id: string
@@ -111,11 +112,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   active: { label: 'Aktív', color: 'bg-green-100 text-green-800' },
   customer: { label: 'Ügyfél', color: 'bg-emerald-100 text-emerald-700' },
   inactive: { label: 'Inaktív', color: 'bg-gray-100 text-gray-600' },
-}
-
-const DEAL_STAGE_LABELS: Record<string, string> = {
-  prospect: 'Érdeklődő', qualified: 'Minősített', proposal: 'Ajánlat',
-  negotiation: 'Tárgyalás', closed_won: 'Nyert', closed_lost: 'Elveszett',
 }
 
 const QUOTE_STATUS: Record<string, { label: string; color: string }> = {

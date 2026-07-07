@@ -4,8 +4,15 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { getMnbRate } from '@/lib/mnb'
+import { DEAL_STAGE_KEYS, LEGACY_STAGE_KEYS, normalizeStage } from '@/lib/dealStages'
+import { computeFunnelStats } from '@/lib/funnelStats'
+import { computeReorderDue, reorderCallTaskTitle, FULFILLED_ORDER_STATUSES } from '@/lib/reorderDue'
 
 export const dynamic = 'force-dynamic'
+
+// Deal-szakasz enum az MCP tool-okhoz: új tölcsér-kulcsok + régi aliasok
+// (a régi kulcsokat a handler normalizeStage-dzsel konvertálja — visszafelé kompatibilis).
+const dealStageEnum = z.enum([...DEAL_STAGE_KEYS, ...LEGACY_STAGE_KEYS] as [string, ...string[]])
 
 function buildServer() {
   const server = new McpServer({ name: 'memini-crm', version: '1.0.1' })
@@ -444,13 +451,13 @@ function buildServer() {
     {
       companyId: z.string().optional(),
       contactId: z.string().optional(),
-      stage:     z.enum(['prospect', 'qualified', 'proposal', 'negotiation', 'won', 'lost']).optional(),
+      stage:     dealStageEnum.optional().describe('Szakasz-szűrő (régi kulcsok is elfogadottak, automatikusan konvertálva)'),
     },
     async ({ companyId, contactId, stage }) => {
       const where: Record<string, unknown> = {}
       if (companyId) where.companyId = companyId
       if (contactId) where.contactId = contactId
-      if (stage)     where.stage     = stage
+      if (stage)     where.stage     = normalizeStage(stage)
       const data = await prisma.deal.findMany({
         where,
         include: {
@@ -469,7 +476,7 @@ function buildServer() {
     {
       title:       z.string().describe('Deal megnevezése'),
       value:       z.number().optional().describe('Becsült értéke EUR-ban'),
-      stage:       z.enum(['prospect', 'qualified', 'proposal', 'negotiation', 'won', 'lost']).optional(),
+      stage:       dealStageEnum.optional().describe('Szakasz (régi kulcsok is elfogadottak, automatikusan konvertálva)'),
       probability: z.number().int().min(0).max(100).optional().describe('Sikervalószínűség %'),
       closeDate:   z.string().optional().describe('Várható zárás YYYY-MM-DD'),
       notes:       z.string().optional(),
@@ -481,7 +488,7 @@ function buildServer() {
         data: {
           title:       body.title,
           value:       body.value       ?? 0,
-          stage:       body.stage       || 'prospect',
+          stage:       normalizeStage(body.stage),
           probability: body.probability ?? 0,
           closeDate:   body.closeDate   ? new Date(body.closeDate) : null,
           notes:       body.notes       || null,
@@ -500,7 +507,7 @@ function buildServer() {
       id:          z.string().describe('Deal ID'),
       title:       z.string().optional(),
       value:       z.number().optional(),
-      stage:       z.enum(['prospect', 'qualified', 'proposal', 'negotiation', 'won', 'lost']).optional(),
+      stage:       dealStageEnum.optional().describe('Szakasz (régi kulcsok is elfogadottak, automatikusan konvertálva)'),
       probability: z.number().int().min(0).max(100).optional(),
       closeDate:   z.string().optional().describe('YYYY-MM-DD, vagy üres a törléshez'),
       notes:       z.string().optional(),
@@ -508,9 +515,69 @@ function buildServer() {
     async ({ id, closeDate, ...fields }) => {
       const upd: Record<string, unknown> = {}
       for (const [k, v] of Object.entries(fields)) if (v !== undefined) upd[k] = v
+      if (typeof upd.stage === 'string') upd.stage = normalizeStage(upd.stage)
       if (closeDate !== undefined) upd.closeDate = closeDate ? new Date(closeDate) : null
       const data = await prisma.deal.update({ where: { id }, data: upd })
       return { content: [{ type: 'text', text: `Deal frissítve: ${data.title} → ${data.stage} (${data.probability}%)` }] }
+    }
+  )
+
+  server.tool(
+    'get_funnel_stats',
+    'B2B értékesítési tölcsér KPI-jai egyetlen lekérdezésben, havi vagy heti bontásban: kiküldött outreach dealek, follow-up aktivitások, mintakérések, új partnerek (won), reorderek száma/értéke, rendelési volumen — plusz a jelenlegi pipeline szakaszonkénti konverziója. A planVsActual szekció havi és év elejétől kumulált terv/tény/eltérés%-ot ad minden mutatóra (tervszámok: FunnelTarget tábla, hiányában beépített defaultok).',
+    {
+      granularity: z.enum(['month', 'week']).optional().describe('Bontás: month (alapértelmezett) vagy week'),
+      periods:     z.number().int().min(1).max(24).optional().describe('Visszamenőleges időszakok száma (hónap: 6, hét: 8 alapból)'),
+    },
+    async ({ granularity, periods }) => {
+      const stats = await computeFunnelStats({ granularity, periods })
+      return { content: [{ type: 'text', text: JSON.stringify(stats, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'list_reorder_due',
+    'Esedékes reorder lista: won partnerek, akiknek az utolsó teljesített (kiszállított/átadott) rendelése régen (alapból 9+ hónapja) volt, legrégebbi elöl. Tartalmazza a reorder-arány KPI-t (established partnerek reorder %-a, cél 55%+) és a nov–jan szezon-előtti "szezon-hívás" jelöléseket.',
+    {
+      thresholdMonths: z.number().int().min(1).max(36).optional().describe('Esedékességi küszöb hónapban (alapértelmezett: 9)'),
+    },
+    async ({ thresholdMonths }) => {
+      const data = await computeReorderDue({ thresholdMonths })
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'schedule_reorder_call',
+    'Reorder-hívás ütemezése egy partnerhez: feladatot hoz létre, amelynek címében a cégnév és az utolsó teljesített rendelés dátuma szerepel.',
+    {
+      companyId: z.string().describe('A partner cég ID-ja'),
+      dueDate:   z.string().optional().describe('Határidő YYYY-MM-DD (alapértelmezett: nincs)'),
+      priority:  z.enum(['low', 'medium', 'high']).optional().describe('Prioritás (alapértelmezett: medium)'),
+    },
+    async ({ companyId, dueDate, priority }) => {
+      const company = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true, name: true } })
+      if (!company) return { content: [{ type: 'text', text: 'Cég nem található.' }] }
+
+      const lastOrder = await prisma.order.findFirst({
+        where: { companyId, status: { in: FULFILLED_ORDER_STATUSES } },
+        orderBy: { date: 'desc' },
+        select: { date: true },
+      })
+
+      const title = reorderCallTaskTitle(company.name, lastOrder?.date ?? null)
+      const task = await prisma.task.create({
+        data: {
+          title,
+          description: 'Reorder-hívás — a partner régóta nem rendelt, egyeztetés a következő rendelésről.',
+          dueDate:  dueDate ? new Date(dueDate) : null,
+          priority: priority || 'medium',
+          status:   'pending',
+          taskType: 'call',
+          companyId,
+        },
+      })
+      return { content: [{ type: 'text', text: `Feladat létrehozva: ${task.title} (ID: ${task.id})` }] }
     }
   )
 
