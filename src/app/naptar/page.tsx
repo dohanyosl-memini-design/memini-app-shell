@@ -7,16 +7,17 @@ import {
   eachDayOfInterval, isSameMonth, format,
 } from 'date-fns'
 import { hu } from 'date-fns/locale'
-import { CalendarDays, ChevronLeft, ChevronRight, List, Columns3, Grid3x3, AlertTriangle } from 'lucide-react'
+import { CalendarDays, CalendarClock, ChevronLeft, ChevronRight, List, Columns3, Grid3x3, AlertTriangle } from 'lucide-react'
 import type { CalendarEvent, CalendarPayload } from '@/lib/calendar/types'
 import { SOURCE_META } from '@/lib/calendar/types'
+import DayView from '@/components/calendar/DayView'
 import WeekView from '@/components/calendar/WeekView'
 import MonthView from '@/components/calendar/MonthView'
 import ListView from '@/components/calendar/ListView'
 import EventCard from '@/components/calendar/EventCard'
 import EventDrawer from '@/components/calendar/EventDrawer'
 
-type ViewMode = 'week' | 'month' | 'list'
+type ViewMode = 'day' | 'week' | 'month' | 'list'
 
 export default function NaptarPage() {
   const [view, setView] = useState<ViewMode>('week')
@@ -28,6 +29,9 @@ export default function NaptarPage() {
 
   // Az aktuális nézet dátumtartománya
   const range = useMemo(() => {
+    if (view === 'day') {
+      return { from: startOfDay(anchor), to: endOfDay(anchor) }
+    }
     if (view === 'week') {
       return { from: startOfWeek(anchor, { weekStartsOn: 1 }), to: endOfWeek(anchor, { weekStartsOn: 1 }) }
     }
@@ -58,10 +62,10 @@ export default function NaptarPage() {
     setSelectedDay(now)
   }
   function stepPrev() {
-    setAnchor((d) => (view === 'month' ? addMonths(d, -1) : addWeeks(d, -1)))
+    setAnchor((d) => (view === 'month' ? addMonths(d, -1) : view === 'day' ? addDays(d, -1) : addWeeks(d, -1)))
   }
   function stepNext() {
-    setAnchor((d) => (view === 'month' ? addMonths(d, 1) : addWeeks(d, 1)))
+    setAnchor((d) => (view === 'month' ? addMonths(d, 1) : view === 'day' ? addDays(d, 1) : addWeeks(d, 1)))
   }
 
   // Hónapváltáskor a kiválasztott nap ugorjon az adott hónapba (ha épp nincs ott)
@@ -78,11 +82,13 @@ export default function NaptarPage() {
   const rest = events.filter((e) => e.status !== 'overdue')
   const weekDays = eachDayOfInterval({ start: range.from, end: range.to }).slice(0, 7)
 
-  const rangeLabel = view === 'week'
-    ? `${format(range.from, 'MMM d.', { locale: hu })} – ${format(range.to, 'MMM d.', { locale: hu })}`
-    : view === 'month'
-      ? format(anchor, 'yyyy. MMMM', { locale: hu })
-      : 'Következő 14 nap'
+  const rangeLabel = view === 'day'
+    ? format(anchor, 'yyyy. MMMM d., EEEE', { locale: hu })
+    : view === 'week'
+      ? `${format(range.from, 'MMM d.', { locale: hu })} – ${format(range.to, 'MMM d.', { locale: hu })}`
+      : view === 'month'
+        ? format(anchor, 'yyyy. MMMM', { locale: hu })
+        : 'Következő 14 nap'
 
   return (
     <div className="p-4 md:p-6">
@@ -107,8 +113,14 @@ export default function NaptarPage() {
           {/* Nézetváltó */}
           <div className="flex rounded-lg border border-gray-200 overflow-hidden">
             <button
+              onClick={() => setView('day')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium ${view === 'day' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+            >
+              <CalendarClock size={15} /> <span className="hidden sm:inline">Nap</span>
+            </button>
+            <button
               onClick={() => setView('week')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium ${view === 'week' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border-l border-gray-200 ${view === 'week' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
             >
               <Columns3 size={15} /> <span className="hidden sm:inline">Hét</span>
             </button>
@@ -151,6 +163,8 @@ export default function NaptarPage() {
 
       {loading ? (
         <div className="py-12 text-center text-gray-400">Betöltés...</div>
+      ) : view === 'day' ? (
+        <DayView day={anchor} events={rest} rituals={rituals} onEventClick={setSelected} />
       ) : view === 'week' ? (
         <WeekView days={weekDays} events={rest} rituals={rituals} onEventClick={setSelected} />
       ) : view === 'month' ? (
