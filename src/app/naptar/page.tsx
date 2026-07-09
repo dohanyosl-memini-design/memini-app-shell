@@ -7,7 +7,7 @@ import {
   eachDayOfInterval, format,
 } from 'date-fns'
 import { hu } from 'date-fns/locale'
-import { CalendarDays, CalendarClock, ChevronLeft, ChevronRight, List, Columns3, Grid3x3, AlertTriangle } from 'lucide-react'
+import { CalendarDays, CalendarClock, ChevronLeft, ChevronRight, List, Columns3, Grid3x3, AlertTriangle, Plus } from 'lucide-react'
 import type { CalendarEvent, CalendarPayload } from '@/lib/calendar/types'
 import { SOURCE_META } from '@/lib/calendar/types'
 import DayView from '@/components/calendar/DayView'
@@ -16,6 +16,7 @@ import MonthView from '@/components/calendar/MonthView'
 import ListView from '@/components/calendar/ListView'
 import EventCard from '@/components/calendar/EventCard'
 import EventDrawer from '@/components/calendar/EventDrawer'
+import CalendarCreateModal, { type CreateInitial } from '@/components/calendar/CalendarCreateModal'
 
 type ViewMode = 'day' | 'week' | 'month' | 'list'
 
@@ -25,6 +26,7 @@ export default function NaptarPage() {
   const [payload, setPayload] = useState<CalendarPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<CalendarEvent | null>(null)
+  const [createInit, setCreateInit] = useState<CreateInitial | null>(null)
 
   // Az aktuális nézet dátumtartománya
   const range = useMemo(() => {
@@ -69,6 +71,14 @@ export default function NaptarPage() {
     setAnchor(d)
     setView('day')
   }
+  // Üres idősávra kattintva / "+ Új" → létrehozó modal (előtöltött nap + óra)
+  function openCreate(d: Date, hour: number | null) {
+    setCreateInit({
+      date: format(d, 'yyyy-MM-dd'),
+      time: hour != null ? `${String(hour).padStart(2, '0')}:00` : '',
+      kind: hour != null ? 'appointment' : 'task',
+    })
+  }
 
   const events = payload?.events ?? []
   const rituals = payload?.rituals ?? []
@@ -96,6 +106,12 @@ export default function NaptarPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => openCreate(anchor, null)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+          >
+            <Plus size={16} /> <span className="hidden sm:inline">Új</span>
+          </button>
           {view !== 'list' && (
             <div className="flex items-center gap-1">
               <button onClick={stepPrev} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"><ChevronLeft size={18} /></button>
@@ -158,9 +174,9 @@ export default function NaptarPage() {
       {loading ? (
         <div className="py-12 text-center text-gray-400">Betöltés...</div>
       ) : view === 'day' ? (
-        <DayView day={anchor} events={events} rituals={rituals} onEventClick={setSelected} />
+        <DayView day={anchor} events={events} rituals={rituals} onEventClick={setSelected} onCreateSlot={openCreate} />
       ) : view === 'week' ? (
-        <WeekView days={weekDays} events={events} rituals={rituals} onEventClick={setSelected} onOpenDay={openDay} />
+        <WeekView days={weekDays} events={events} rituals={rituals} onEventClick={setSelected} onOpenDay={openDay} onCreateSlot={openCreate} />
       ) : view === 'month' ? (
         <MonthView monthAnchor={anchor} events={events} rituals={rituals} onOpenDay={openDay} />
       ) : (
@@ -168,6 +184,14 @@ export default function NaptarPage() {
       )}
 
       <EventDrawer event={selected} onClose={() => setSelected(null)} />
+
+      {createInit && (
+        <CalendarCreateModal
+          initial={createInit}
+          onClose={() => setCreateInit(null)}
+          onSaved={() => { setCreateInit(null); fetchData() }}
+        />
+      )}
     </div>
   )
 }
