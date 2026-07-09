@@ -12,10 +12,10 @@ interface Props {
   onEventClick: (e: CalendarEvent) => void
 }
 
-// A napi idővonal órahatárai
+// A napi idővonal órahatárai (6:00 – 23:00)
 const START_HOUR = 6
-const END_HOUR = 24
-const HOURS = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i) // 6..23
+const END_HOUR = 23
+const HOURS = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i) // 6..23
 
 function sortByTime(a: CalendarEvent, b: CalendarEvent) {
   return new Date(a.date).getTime() - new Date(b.date).getTime()
@@ -41,7 +41,7 @@ export default function DayView({ day, events, rituals, onEventClick }: Props) {
   const byHour = new Map<number, CalendarEvent[]>()
   for (const e of dayEvents) {
     const h = hourOf(e)
-    if (h === null || h < START_HOUR || h >= END_HOUR) continue
+    if (h === null || h < START_HOUR || h > END_HOUR) continue
     const arr = byHour.get(h) ?? []
     arr.push(e)
     byHour.set(h, arr)
@@ -93,11 +93,6 @@ export default function DayView({ day, events, rituals, onEventClick }: Props) {
             </div>
           )
         })}
-        {/* Záró óra */}
-        <div className="flex gap-2">
-          <div className="w-14 shrink-0 pr-1 py-1 text-right text-xs tabular-nums text-gray-400">24:00</div>
-          <div className="flex-1" />
-        </div>
       </div>
     </div>
   )
