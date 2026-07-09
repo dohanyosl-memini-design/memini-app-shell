@@ -11,6 +11,7 @@ interface Props {
   rituals: RitualBand[]
   onEventClick: (e: CalendarEvent) => void
   onOpenDay: (d: Date) => void
+  onCreateSlot: (d: Date, hour: number | null) => void
 }
 
 const START_HOUR = 6
@@ -30,7 +31,7 @@ function Chip({ e, onClick }: { e: CalendarEvent; onClick: (e: CalendarEvent) =>
   const m = SOURCE_META[e.source]
   return (
     <button
-      onClick={() => onClick(e)}
+      onClick={(ev) => { ev.stopPropagation(); onClick(e) }}
       className={`w-full text-left rounded px-1 py-0.5 text-[10px] leading-tight truncate ${m.badge} ${e.status === 'overdue' ? 'ring-1 ring-red-300' : ''}`}
       title={e.title}
     >
@@ -39,7 +40,7 @@ function Chip({ e, onClick }: { e: CalendarEvent; onClick: (e: CalendarEvent) =>
   )
 }
 
-export default function WeekView({ days, events, rituals, onEventClick, onOpenDay }: Props) {
+export default function WeekView({ days, events, rituals, onEventClick, onOpenDay, onCreateSlot }: Props) {
   const nowHour = new Date().getHours()
 
   // Csoportosítás: egész napos (idő nélküli / 6:00 előtti) és (nap, óra) szerint
@@ -87,7 +88,7 @@ export default function WeekView({ days, events, rituals, onEventClick, onOpenDa
           const list = (allDayByDay.get(key) ?? []).sort(sortByTime)
           const dayRituals = rituals.filter((r) => isSameDay(new Date(r.date), d))
           return (
-            <div key={`ad-${d.toISOString()}`} className={`border-b border-l border-gray-100 p-0.5 space-y-0.5 min-h-[2rem] ${isToday(d) ? 'bg-blue-50/40' : ''}`}>
+            <div key={`ad-${d.toISOString()}`} onClick={() => onCreateSlot(d, null)} className={`border-b border-l border-gray-100 p-0.5 space-y-0.5 min-h-[2rem] cursor-pointer ${isToday(d) ? 'bg-blue-50/40' : ''}`}>
               {dayRituals.map((r, i) => (
                 <div key={i} className="rounded bg-gray-100 px-1 py-0.5 text-[9px] font-medium uppercase text-gray-400 truncate">{r.title}</div>
               ))}
@@ -108,7 +109,7 @@ export default function WeekView({ days, events, rituals, onEventClick, onOpenDa
               return (
                 <div
                   key={`c-${d.toISOString()}-${h}`}
-                  onClick={() => onOpenDay(d)}
+                  onClick={() => onCreateSlot(d, h)}
                   className={`border-b border-l border-gray-100 p-0.5 space-y-0.5 min-h-[2.75rem] cursor-pointer ${today ? 'bg-blue-50/40' : ''} ${today && h === nowHour ? 'border-t-2 border-t-red-400' : ''}`}
                 >
                   {list.map((e) => <Chip key={e.id} e={e} onClick={onEventClick} />)}

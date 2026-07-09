@@ -10,6 +10,7 @@ interface Props {
   events: CalendarEvent[]      // lejárt nélkül (a lejárt a felső sávban)
   rituals: RitualBand[]
   onEventClick: (e: CalendarEvent) => void
+  onCreateSlot: (d: Date, hour: number | null) => void
 }
 
 // A napi idővonal órahatárai (6:00 – 23:00)
@@ -28,7 +29,7 @@ function hourOf(e: CalendarEvent): number | null {
   return Number.isFinite(h) ? h : null
 }
 
-export default function DayView({ day, events, rituals, onEventClick }: Props) {
+export default function DayView({ day, events, rituals, onEventClick, onCreateSlot }: Props) {
   const dayEvents = events.filter((e) => isSameDay(new Date(e.date), day)).sort(sortByTime)
   const dayRituals = rituals.filter((r) => isSameDay(new Date(r.date), day))
 
@@ -72,13 +73,13 @@ export default function DayView({ day, events, rituals, onEventClick }: Props) {
         </div>
       )}
 
-      {/* Órabontott idővonal 6:00 – 24:00 */}
+      {/* Órabontott idővonal 6:00 – 23:00 — üres sávra kattintva új időpont */}
       <div className="rounded-xl border border-gray-200 bg-white divide-y divide-gray-100 overflow-hidden">
         {HOURS.map((h) => {
           const hourEvents = (byHour.get(h) ?? []).sort(sortByTime)
           const isNow = h === nowHour
           return (
-            <div key={h} className="flex gap-2 min-h-[3.25rem]">
+            <div key={h} onClick={() => onCreateSlot(day, h)} className="flex gap-2 min-h-[3.25rem] cursor-pointer hover:bg-gray-50/60">
               <div className={`w-14 shrink-0 pr-1 pt-1.5 text-right text-xs tabular-nums ${isNow ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
                 {h}:00
               </div>
@@ -88,7 +89,11 @@ export default function DayView({ day, events, rituals, onEventClick }: Props) {
                     <Clock size={10} /> most
                   </div>
                 )}
-                {hourEvents.map((e) => <EventCard key={e.id} event={e} onClick={onEventClick} />)}
+                {hourEvents.map((e) => (
+                  <div key={e.id} onClick={(ev) => ev.stopPropagation()}>
+                    <EventCard event={e} onClick={onEventClick} />
+                  </div>
+                ))}
               </div>
             </div>
           )
