@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   startOfWeek, endOfWeek, addWeeks, addDays, addMonths,
   startOfMonth, endOfMonth, startOfDay, endOfDay,
-  eachDayOfInterval, isSameMonth, format,
+  eachDayOfInterval, format,
 } from 'date-fns'
 import { hu } from 'date-fns/locale'
 import { CalendarDays, CalendarClock, ChevronLeft, ChevronRight, List, Columns3, Grid3x3, AlertTriangle } from 'lucide-react'
@@ -22,7 +22,6 @@ type ViewMode = 'day' | 'week' | 'month' | 'list'
 export default function NaptarPage() {
   const [view, setView] = useState<ViewMode>('week')
   const [anchor, setAnchor] = useState(() => new Date())
-  const [selectedDay, setSelectedDay] = useState(() => new Date())
   const [payload, setPayload] = useState<CalendarPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<CalendarEvent | null>(null)
@@ -57,9 +56,7 @@ export default function NaptarPage() {
   useEffect(() => { fetchData() }, [fetchData])
 
   function goToday() {
-    const now = new Date()
-    setAnchor(now)
-    setSelectedDay(now)
+    setAnchor(new Date())
   }
   function stepPrev() {
     setAnchor((d) => (view === 'month' ? addMonths(d, -1) : view === 'day' ? addDays(d, -1) : addWeeks(d, -1)))
@@ -67,14 +64,11 @@ export default function NaptarPage() {
   function stepNext() {
     setAnchor((d) => (view === 'month' ? addMonths(d, 1) : view === 'day' ? addDays(d, 1) : addWeeks(d, 1)))
   }
-
-  // Hónapváltáskor a kiválasztott nap ugorjon az adott hónapba (ha épp nincs ott)
-  useEffect(() => {
-    if (view === 'month' && !isSameMonth(selectedDay, anchor)) {
-      setSelectedDay(startOfMonth(anchor))
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anchor, view])
+  // Napra kattintva (hét/hónap nézetből) → napi nézet
+  function openDay(d: Date) {
+    setAnchor(d)
+    setView('day')
+  }
 
   const events = payload?.events ?? []
   const rituals = payload?.rituals ?? []
@@ -164,18 +158,11 @@ export default function NaptarPage() {
       {loading ? (
         <div className="py-12 text-center text-gray-400">Betöltés...</div>
       ) : view === 'day' ? (
-        <DayView day={anchor} events={rest} rituals={rituals} onEventClick={setSelected} />
+        <DayView day={anchor} events={events} rituals={rituals} onEventClick={setSelected} />
       ) : view === 'week' ? (
-        <WeekView days={weekDays} events={rest} rituals={rituals} onEventClick={setSelected} />
+        <WeekView days={weekDays} events={events} rituals={rituals} onEventClick={setSelected} onOpenDay={openDay} />
       ) : view === 'month' ? (
-        <MonthView
-          monthAnchor={anchor}
-          events={events}
-          rituals={rituals}
-          selectedDay={selectedDay}
-          onSelectDay={setSelectedDay}
-          onEventClick={setSelected}
-        />
+        <MonthView monthAnchor={anchor} events={events} rituals={rituals} onOpenDay={openDay} />
       ) : (
         <ListView from={range.from} to={range.to} events={rest} rituals={rituals} onEventClick={setSelected} />
       )}
