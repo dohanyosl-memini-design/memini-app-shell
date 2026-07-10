@@ -1565,7 +1565,11 @@ function buildServer() {
 function checkAuth(request: NextRequest): Response | null {
   const secret = process.env.MCP_SECRET
   if (!secret) return null
-  const key = request.headers.get('x-api-key')
+  // Kulcs elfogadása fejlécből (x-api-key / Authorization: Bearer) VAGY query-ből (?key=).
+  // A query-paraméter azért kell, mert egyes MCP-kliensek (pl. ChatGPT-app connector)
+  // nem küldenek egyedi fejlécet.
+  const bearer = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
+  const key = request.headers.get('x-api-key') || bearer || request.nextUrl.searchParams.get('key')
   if (key !== secret) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
