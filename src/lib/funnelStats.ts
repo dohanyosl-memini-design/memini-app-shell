@@ -23,7 +23,7 @@ const SAMPLE_INDEX = STAGE_INDEX['sample_requested']
 
 // Egy létrehozott deal "mintakérésnek" számít, ha (jelenleg) legalább a
 // mintakérés szakaszig eljutott. A lost dealek mélysége ismeretlen — kimaradnak.
-function reachedSampleRequest(stage: string): boolean {
+export function reachedSampleRequest(stage: string): boolean {
   const n = normalizeStage(stage)
   return n !== 'lost' && (STAGE_INDEX[n] ?? -1) >= SAMPLE_INDEX
 }

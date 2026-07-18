@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, Edit2, Trash2, LayoutGrid, List, User, Building2, AlertCircle, Calendar, CheckSquare, ExternalLink } from 'lucide-react'
+import { Plus, Edit2, Trash2, LayoutGrid, List, User, Building2, AlertCircle, Calendar, CheckSquare, Compass, Target, Hourglass } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
 import TaskForm, { TASK_TYPES } from '@/components/TaskForm'
+import GoalCompass from '@/components/GoalCompass'
 import { format, isPast, isToday, isTomorrow } from 'date-fns'
 import { hu } from 'date-fns/locale'
 
@@ -19,6 +20,11 @@ interface Task {
   status: string
   priority: string
   taskType: string | null
+  source: string
+  waitingFor: string | null
+  followUpAt: string | null
+  goalId: string | null
+  goal: { id: string; title: string; level: string } | null
   assigneeId: string | null
   assignee: { id: string; name: string } | null
   contactId: string | null
@@ -28,13 +34,25 @@ interface Task {
   dealId: string | null
   deal: { title: string } | null
   subtasks: SubTask[]
+  updatedAt: string
 }
 
 const COLUMNS = [
   { id: 'pending',     label: 'Várakozó',    color: 'border-gray-300',  bg: 'bg-gray-50',   dot: 'bg-gray-400' },
   { id: 'in_progress', label: 'Folyamatban', color: 'border-blue-300',  bg: 'bg-blue-50',   dot: 'bg-blue-500' },
+  { id: 'waiting',     label: 'Várakozik',   color: 'border-amber-300', bg: 'bg-amber-50',  dot: 'bg-amber-500' },
   { id: 'completed',   label: 'Kész',        color: 'border-green-300', bg: 'bg-green-50',  dot: 'bg-green-500' },
 ]
+
+// "Elakadt" — számított jelzés, nem külön státusz: lejárt határidő, lejárt
+// követési dátum, vagy 14+ napja nem mozdult folyamatban lévő feladat.
+function isStalled(task: Task): boolean {
+  if (task.status === 'completed' || task.status === 'cancelled') return false
+  if (task.dueDate && isPast(new Date(task.dueDate)) && !isToday(new Date(task.dueDate))) return true
+  if (task.status === 'waiting' && task.followUpAt && isPast(new Date(task.followUpAt)) && !isToday(new Date(task.followUpAt))) return true
+  if (task.status === 'in_progress' && Date.now() - new Date(task.updatedAt).getTime() > 14 * 86400000) return true
+  return false
+}
 
 const PRIORITY_BADGE: Record<string, string> = {
   high:   'bg-red-100 text-red-700',
@@ -74,6 +92,7 @@ function TaskCard({
   const due = dueBadge(task.dueDate)
   const doneSubtasks = task.subtasks.filter((s) => s.completed).length
   const totalSubtasks = task.subtasks.length
+  const stalled = isStalled(task)
 
   return (
     <div
@@ -81,7 +100,9 @@ function TaskCard({
       onDragStart={() => onDragStart(task)}
       onDragEnd={onDragEnd}
       onClick={() => router.push(`/tasks/${task.id}`)}
-      className={`bg-white rounded-xl border border-gray-100 p-3.5 shadow-sm cursor-pointer transition-all select-none group ${
+      className={`bg-white rounded-xl border p-3.5 shadow-sm cursor-pointer transition-all select-none group ${
+        stalled ? 'border-red-300 ring-1 ring-red-200' : 'border-gray-100'
+      } ${
         isDragging ? 'opacity-40 scale-95 cursor-grabbing' : 'hover:shadow-md hover:-translate-y-0.5'
       } ${task.status === 'completed' ? 'opacity-60' : ''}`}
     >
@@ -115,6 +136,24 @@ function TaskCard({
 
       {/* Meta row */}
       <div className="flex flex-wrap gap-1.5 text-xs">
+        {stalled && (
+          <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">
+            ⚠ Elakadt
+          </span>
+        )}
+        {task.goal && (
+          <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600">
+            <Target size={9} />
+            {task.goal.title.length > 22 ? task.goal.title.slice(0, 20) + '…' : task.goal.title}
+          </span>
+        )}
+        {task.status === 'waiting' && task.waitingFor && (
+          <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700">
+            <Hourglass size={9} />
+            {task.waitingFor.length > 20 ? task.waitingFor.slice(0, 18) + '…' : task.waitingFor}
+            {task.followUpAt ? ` → ${format(new Date(task.followUpAt), 'MM.dd.')}` : ''}
+          </span>
+        )}
         {due && (
           <span className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full ${due.cls}`}>
             <Calendar size={9} />
@@ -219,11 +258,13 @@ export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [overdueInvoices, setOverdueInvoices] = useState<OverdueInvoice[]>([])
   const [loading, setLoading] = useState(true)
+  const [mainView, setMainView] = useState<'board' | 'compass'>('board')
   const [view, setView] = useState<'kanban' | 'list'>(
     typeof window !== 'undefined' && window.innerWidth < 640 ? 'list' : 'kanban'
   )
   const [filterPriority, setFilterPriority] = useState('all')
   const [filterType, setFilterType] = useState('all')
+  const [filterGoal, setFilterGoal] = useState('all')
   const [showModal, setShowModal] = useState(false)
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [defaultStatus, setDefaultStatus] = useState('pending')
@@ -300,10 +341,17 @@ export default function TasksPage() {
   const filtered = tasks.filter((t) => {
     if (filterPriority !== 'all' && t.priority !== filterPriority) return false
     if (filterType !== 'all' && t.taskType !== filterType) return false
+    if (filterGoal === 'none' && t.goalId) return false
+    if (filterGoal !== 'all' && filterGoal !== 'none' && t.goalId !== filterGoal) return false
     return true
   })
 
   const byStatus = (status: string) => filtered.filter((t) => t.status === status)
+
+  // A szűrőhöz: a feladatokon ténylegesen előforduló célok.
+  const goalsInTasks = Array.from(
+    new Map(tasks.filter(t => t.goal).map(t => [t.goal!.id, t.goal!])).values()
+  )
 
   return (
     <div className="p-4 md:p-6">
@@ -311,9 +359,31 @@ export default function TasksPage() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Feladatok</h1>
-          <p className="text-gray-500 mt-0.5 text-sm">{filtered.length} feladat</p>
+          <p className="text-gray-500 mt-0.5 text-sm">
+            {mainView === 'compass' ? 'Célok és irányok' : `${filtered.length} feladat`}
+          </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Fő nézetváltó: Iránytű / Tábla */}
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setMainView('compass')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-colors text-sm ${mainView === 'compass' ? 'bg-white shadow-sm text-indigo-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+              title="Iránytű — célhierarchia"
+            >
+              <Compass size={15} />
+              <span className="hidden sm:inline">Iránytű</span>
+            </button>
+            <button
+              onClick={() => setMainView('board')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-colors text-sm ${mainView === 'board' ? 'bg-white shadow-sm text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+              title="Feladattábla"
+            >
+              <LayoutGrid size={15} />
+              <span className="hidden sm:inline">Tábla</span>
+            </button>
+          </div>
+          {mainView === 'board' && (
           <div className="hidden sm:flex bg-gray-100 rounded-lg p-1">
             <button
               onClick={() => setView('kanban')}
@@ -330,6 +400,8 @@ export default function TasksPage() {
               <List size={16} />
             </button>
           </div>
+          )}
+          {mainView === 'board' && (
           <button
             onClick={() => handleAdd()}
             className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
@@ -337,9 +409,14 @@ export default function TasksPage() {
             <Plus size={16} />
             <span className="hidden sm:inline">Új feladat</span>
           </button>
+          )}
         </div>
       </div>
 
+      {mainView === 'compass' ? (
+        <GoalCompass />
+      ) : (
+      <>
       {/* Filters */}
       <div className="flex gap-2 mb-4 flex-wrap">
         <select
@@ -360,6 +437,17 @@ export default function TasksPage() {
           <option value="all">Minden típus</option>
           {TASK_TYPES.map((t) => (
             <option key={t.value} value={t.value}>{t.icon} {t.label}</option>
+          ))}
+        </select>
+        <select
+          value={filterGoal}
+          onChange={(e) => setFilterGoal(e.target.value)}
+          className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white max-w-[240px]"
+        >
+          <option value="all">Minden cél</option>
+          <option value="none">Cél nélkül (operatív)</option>
+          {goalsInTasks.map((g) => (
+            <option key={g.id} value={g.id}>🎯 {g.title}</option>
           ))}
         </select>
       </div>
@@ -409,7 +497,7 @@ export default function TasksPage() {
         <div className="py-24 text-center text-gray-400">Betöltés...</div>
       ) : view === 'kanban' ? (
         /* ── KANBAN ── */
-        <div className="flex md:grid md:grid-cols-3 gap-4 overflow-x-auto pb-2 md:overflow-visible">
+        <div className="flex md:grid md:grid-cols-4 gap-4 overflow-x-auto pb-2 md:overflow-visible">
           {COLUMNS.map((col) => (
             <div key={col.id} className="min-w-[280px] md:min-w-0 flex-shrink-0 md:flex-shrink">
             <KanbanColumn
@@ -469,6 +557,8 @@ export default function TasksPage() {
             })
           )}
         </div>
+      )}
+      </>
       )}
 
       {showModal && (

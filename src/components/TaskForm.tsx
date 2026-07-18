@@ -2,11 +2,20 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Plus, X, CheckSquare, Square } from 'lucide-react'
+import { GOAL_LEVEL_LABELS, goalPeriodLabel } from '@/lib/goalConstants'
 
 interface Contact { id: string; firstName: string; lastName: string }
 interface Company { id: string; name: string }
 interface AppUser { id: string; name: string }
 interface SubTask { id: string; title: string; completed: boolean }
+interface GoalOption { id: string; title: string; level: string; year: number | null; quarter: number | null; month: number | null }
+
+export const TASK_STATUSES = [
+  { value: 'pending',     label: 'Várakozó' },
+  { value: 'in_progress', label: 'Folyamatban' },
+  { value: 'waiting',     label: 'Várakozik (külső félre)' },
+  { value: 'completed',   label: 'Kész' },
+]
 
 export const TASK_TYPES = [
   { value: 'gyartas',     label: 'Gyártás',        icon: '🏭', color: 'bg-purple-100 text-purple-700 border-purple-300' },
@@ -29,6 +38,9 @@ interface TaskData {
   status: string
   priority: string
   taskType: string | null
+  goalId?: string | null
+  waitingFor?: string | null
+  followUpAt?: string | null
   assigneeId: string | null
   contactId: string | null
   companyId: string | null
@@ -41,14 +53,16 @@ interface TaskFormProps {
   defaultStatus?: string
   defaultCompanyId?: string
   defaultContactId?: string
+  defaultGoalId?: string
   onSave: () => void
   onCancel: () => void
 }
 
-export default function TaskForm({ task, defaultStatus = 'pending', defaultCompanyId, defaultContactId, onSave, onCancel }: TaskFormProps) {
+export default function TaskForm({ task, defaultStatus = 'pending', defaultCompanyId, defaultContactId, defaultGoalId, onSave, onCancel }: TaskFormProps) {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [users, setUsers] = useState<AppUser[]>([])
+  const [goals, setGoals] = useState<GoalOption[]>([])
   const [loading, setLoading] = useState(false)
 
   // Existing subtasks (edit mode) — managed with immediate API calls
@@ -65,6 +79,9 @@ export default function TaskForm({ task, defaultStatus = 'pending', defaultCompa
     status: task?.status || defaultStatus,
     priority: task?.priority || 'medium',
     taskType: task?.taskType || '',
+    goalId: task?.goalId || defaultGoalId || '',
+    waitingFor: task?.waitingFor || '',
+    followUpAt: task?.followUpAt ? task.followUpAt.slice(0, 10) : '',
     assigneeId: task?.assigneeId || '',
     contactId: task?.contactId || defaultContactId || '',
     companyId: task?.companyId || defaultCompanyId || '',
@@ -76,7 +93,8 @@ export default function TaskForm({ task, defaultStatus = 'pending', defaultCompa
       fetch('/api/contacts').then(r => r.json()),
       fetch('/api/companies').then(r => r.json()),
       fetch('/api/users').then(r => r.json()),
-    ]).then(([c, co, u]) => { setContacts(c); setCompanies(co); setUsers(u) })
+      fetch('/api/goals?status=active').then(r => r.json()),
+    ]).then(([c, co, u, g]) => { setContacts(c); setCompanies(co); setUsers(u); setGoals(g) })
   }, [])
 
   async function handleAddSubtask() {
@@ -186,6 +204,71 @@ export default function TaskForm({ task, defaultStatus = 'pending', defaultCompa
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y text-sm leading-relaxed"
         />
       </div>
+
+      {/* Cél + Státusz */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">🎯 Cél</label>
+          <select
+            value={form.goalId}
+            onChange={(e) => setForm({ ...form, goalId: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          >
+            <option value="">— nincs célhoz kötve (operatív) —</option>
+            {(['monthly', 'quarterly', 'yearly', 'vision'] as const).map(level => {
+              const opts = goals.filter(g => g.level === level)
+              if (opts.length === 0) return null
+              return (
+                <optgroup key={level} label={GOAL_LEVEL_LABELS[level]}>
+                  {opts.map(g => (
+                    <option key={g.id} value={g.id}>
+                      {goalPeriodLabel(g) ? `[${goalPeriodLabel(g)}] ` : ''}{g.title}
+                    </option>
+                  ))}
+                </optgroup>
+              )
+            })}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Státusz</label>
+          <select
+            value={form.status}
+            onChange={(e) => setForm({ ...form, status: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          >
+            {TASK_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+            {task?.status === 'cancelled' && <option value="cancelled">Törölve</option>}
+          </select>
+        </div>
+      </div>
+
+      {/* Várakozás részletei */}
+      {form.status === 'waiting' && (
+        <div className="grid grid-cols-2 gap-3 bg-amber-50 border border-amber-200 rounded-xl p-3">
+          <div>
+            <label className="block text-sm font-medium text-amber-800 mb-1">Kire / mire várunk? *</label>
+            <input
+              required
+              type="text"
+              value={form.waitingFor}
+              onChange={(e) => setForm({ ...form, waitingFor: e.target.value })}
+              placeholder="pl. Nicole Hemmler válasza a mintacsomagra"
+              className="w-full px-3 py-2 border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-amber-800 mb-1">Mikor nézzük újra? *</label>
+            <input
+              required
+              type="date"
+              value={form.followUpAt}
+              onChange={(e) => setForm({ ...form, followUpAt: e.target.value })}
+              className="w-full px-3 py-2 border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm bg-white"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Alfeladatok */}
       <div>
