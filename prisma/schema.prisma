@@ -109,6 +109,31 @@ model FunnelTarget {
   updatedAt      DateTime @updatedAt
 }
 
+// Célhierarchia (V1): vision → yearly → quarterly → monthly önhivatkozó fában.
+// A haladás nem tárolt: metricKey esetén a funnel/CRM-adatokból, egyébként a
+// gyerek-célok / hozzákötött feladatok kész-arányából számítódik (lib/goalProgress).
+model Goal {
+  id            String    @id @default(cuid())
+  title         String
+  description   String?
+  level         String    // vision | yearly | quarterly | monthly
+  year          Int?      // yearly/quarterly/monthly szinten kötelező
+  quarter       Int?      // 1-4, quarterly szinten
+  month         Int?      // 1-12, monthly szinten
+  status        String    @default("active") // active | achieved | missed | dropped
+  strategicArea String?   // opcionális stratégiai terület címke
+  metricKey     String?   // funnel-metrika kulcs (outreach, followup, sampleRequests, newPartners, reorders, volumeEur)
+  targetValue   Float?    // számszerű célérték a metricKey-hez
+  sortOrder     Int       @default(0)
+  archivedAt    DateTime?
+  parentId      String?
+  parent        Goal?     @relation("GoalTree", fields: [parentId], references: [id])
+  children      Goal[]    @relation("GoalTree")
+  tasks         Task[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
 model Task {
   id          String    @id @default(cuid())
   title       String
@@ -117,6 +142,11 @@ model Task {
   status      String    @default("pending")
   priority    String    @default("medium")
   taskType    String?
+  source      String    @default("human") // human | agent | automation
+  waitingFor  String?   // waiting státusznál: kire/mire várunk
+  followUpAt  DateTime? // waiting státusznál: mikor kell újra ránézni
+  goalId      String?
+  goal        Goal?     @relation(fields: [goalId], references: [id])
   assigneeId  String?
   assignee    User?     @relation(fields: [assigneeId], references: [id])
   contactId   String?
@@ -126,8 +156,23 @@ model Task {
   companyId   String?
   company     Company?  @relation(fields: [companyId], references: [id])
   subtasks    SubTask[]
+  events      TaskEvent[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+// Könnyű, append-only feladat-eseménytörténet: ki (ember/agent/automatizáció)
+// mit változtatott és mi volt előtte — az agent-műveletek ellenőrizhetőségéhez.
+model TaskEvent {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor     String   // pl. felhasználónév, "agent", "automation"
+  action    String   // created | updated | status_changed | archived | subtask_promoted ...
+  field     String?  // melyik mező változott (updated esetén)
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
 }
 
 model SubTask {
