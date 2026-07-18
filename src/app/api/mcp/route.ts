@@ -7,15 +7,22 @@ import { getMnbRate } from '@/lib/mnb'
 import { DEAL_STAGE_KEYS, LEGACY_STAGE_KEYS, normalizeStage } from '@/lib/dealStages'
 import { computeFunnelStats } from '@/lib/funnelStats'
 import { computeReorderDue, reorderCallTaskTitle, FULFILLED_ORDER_STATUSES } from '@/lib/reorderDue'
+import { buildGoalTree } from '@/lib/goalProgress'
+import { GOAL_LEVELS, GOAL_METRICS } from '@/lib/goalConstants'
+import { logTaskCreated, logTaskDiff, logTaskEvent } from '@/lib/taskEvents'
 
 export const dynamic = 'force-dynamic'
+
+// Feladat-státusz az MCP-n: a régi 'done' kulcsot a webes 'completed'-re képezzük.
+const taskStatusEnum = z.enum(['pending', 'in_progress', 'waiting', 'completed', 'done', 'cancelled'])
+const normalizeTaskStatus = (s: string) => (s === 'done' ? 'completed' : s)
 
 // Deal-szakasz enum az MCP tool-okhoz: új tölcsér-kulcsok + régi aliasok
 // (a régi kulcsokat a handler normalizeStage-dzsel konvertálja — visszafelé kompatibilis).
 const dealStageEnum = z.enum([...DEAL_STAGE_KEYS, ...LEGACY_STAGE_KEYS] as [string, ...string[]])
 
 function buildServer() {
-  const server = new McpServer({ name: 'memini-crm', version: '1.0.1' })
+  const server = new McpServer({ name: 'memini-crm', version: '1.1.0' })
 
   // ─── SZÁMLÁK ─────────────────────────────────────────────────────────────
 
@@ -579,9 +586,11 @@ function buildServer() {
           priority: priority || 'medium',
           status:   'pending',
           taskType: 'call',
+          source:   'automation',
           companyId,
         },
       })
+      await logTaskCreated(task.id, 'automation')
       return { content: [{ type: 'text', text: `Feladat létrehozva: ${task.title} (ID: ${task.id})` }] }
     }
   )
@@ -981,25 +990,36 @@ function buildServer() {
 
   server.tool(
     'list_tasks',
-    'Feladatok listázása. Szűrhető státusz, prioritás, kapcsolat és cég alapján.',
+    'Feladatok listázása. Szűrhető státusz, prioritás, kapcsolat, cég, cél és határidő-tartomány alapján. A "waiting" státuszú feladatoknál a waitingFor mutatja, kire várunk, a followUpAt a következő ellenőrzés dátumát.',
     {
-      status:    z.enum(['pending', 'in_progress', 'done', 'cancelled']).optional(),
+      status:    taskStatusEnum.optional(),
       priority:  z.enum(['low', 'medium', 'high']).optional(),
       contactId: z.string().optional(),
       companyId: z.string().optional(),
+      goalId:    z.string().optional().describe('Csak az adott célhoz kötött feladatok'),
+      dueBefore: z.string().optional().describe('Határidő eddig, YYYY-MM-DD (pl. "mi esedékes a héten?")'),
+      dueAfter:  z.string().optional().describe('Határidő ettől, YYYY-MM-DD'),
     },
-    async ({ status, priority, contactId, companyId }) => {
+    async ({ status, priority, contactId, companyId, goalId, dueBefore, dueAfter }) => {
       const where: Record<string, unknown> = {}
-      if (status) where.status = status
+      if (status) where.status = normalizeTaskStatus(status)
       if (priority) where.priority = priority
       if (contactId) where.contactId = contactId
       if (companyId) where.companyId = companyId
+      if (goalId) where.goalId = goalId
+      if (dueBefore || dueAfter) {
+        where.dueDate = {
+          ...(dueAfter ? { gte: new Date(dueAfter) } : {}),
+          ...(dueBefore ? { lte: new Date(`${dueBefore}T23:59:59`) } : {}),
+        }
+      }
       const data = await prisma.task.findMany({
         where,
         include: {
           contact: { select: { id: true, firstName: true, lastName: true } },
           company: { select: { id: true, name: true } },
           assignee: { select: { id: true, name: true } },
+          goal: { select: { id: true, title: true, level: true } },
           subtasks: { orderBy: { createdAt: 'asc' } },
         },
         orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
@@ -1010,7 +1030,7 @@ function buildServer() {
 
   server.tool(
     'get_task',
-    'Egy feladat teljes részleteinek lekérése.',
+    'Egy feladat teljes részleteinek lekérése, alfeladatokkal, cél-kapcsolattal és a legutóbbi eseménytörténettel.',
     { id: z.string() },
     async ({ id }) => {
       const data = await prisma.task.findUnique({
@@ -1020,7 +1040,9 @@ function buildServer() {
           company: true,
           deal: true,
           assignee: { select: { id: true, name: true } },
+          goal: { select: { id: true, title: true, level: true, year: true, quarter: true, month: true } },
           subtasks: { orderBy: { createdAt: 'asc' } },
+          events: { orderBy: { createdAt: 'desc' }, take: 15 },
         },
       })
       if (!data) return { content: [{ type: 'text', text: 'Feladat nem található.' }] }
@@ -1030,26 +1052,45 @@ function buildServer() {
 
   server.tool(
     'create_task',
-    'Új feladat létrehozása. A dueDate YYYY-MM-DD formátumban adható meg.',
+    'Új feladat létrehozása. A dueDate YYYY-MM-DD formátumban adható meg. Célhoz kötéshez add meg a goalId-t (célok: get_goal_tree). "waiting" státusznál a waitingFor és followUpAt kötelező. A feladat "agent" forrásjelöléssel jön létre és naplózódik.',
     {
       title:       z.string(),
       description: z.string().optional(),
       dueDate:     z.string().optional().describe('Határidő, YYYY-MM-DD formátum'),
       priority:    z.enum(['low', 'medium', 'high']).optional(),
-      status:      z.enum(['pending', 'in_progress', 'done', 'cancelled']).optional(),
+      status:      taskStatusEnum.optional(),
+      taskType:    z.enum(['gyartas', 'email', 'minta', 'csomagolas', 'hivas', 'admin', 'szallitas', 'megbeszeles', 'szamlairas', 'egyeb']).optional().describe('Feladat típusa'),
+      goalId:      z.string().optional().describe('Cél ID, amihez a feladat tartozik'),
+      assigneeId:  z.string().optional().describe('Felelős user ID'),
+      waitingFor:  z.string().optional().describe('waiting státusznál: kire/mire várunk'),
+      followUpAt:  z.string().optional().describe('waiting státusznál: mikor nézzük újra, YYYY-MM-DD'),
       contactId:   z.string().optional(),
       companyId:   z.string().optional(),
       dealId:      z.string().optional(),
       subtasks:    z.array(z.string()).optional().describe('Részfeladatok listája (szövegek tömbje)'),
     },
     async (body) => {
+      const status = normalizeTaskStatus(body.status || 'pending')
+      if (status === 'waiting' && (!body.waitingFor || !body.followUpAt)) {
+        return { content: [{ type: 'text', text: 'A "waiting" státuszhoz kötelező a waitingFor (kire várunk) és a followUpAt (mikor nézzük újra, YYYY-MM-DD).' }] }
+      }
+      if (body.goalId) {
+        const goal = await prisma.goal.findUnique({ where: { id: body.goalId }, select: { id: true } })
+        if (!goal) return { content: [{ type: 'text', text: `Nincs ilyen cél: ${body.goalId} — a célok a get_goal_tree tool-lal kérdezhetők le.` }] }
+      }
       const data = await prisma.task.create({
         data: {
           title:       body.title,
           description: body.description || null,
           dueDate:     body.dueDate ? new Date(body.dueDate) : null,
           priority:    body.priority || 'medium',
-          status:      body.status || 'pending',
+          status,
+          taskType:    body.taskType || null,
+          source:      'agent',
+          goalId:      body.goalId || null,
+          assigneeId:  body.assigneeId || null,
+          waitingFor:  status === 'waiting' ? body.waitingFor : null,
+          followUpAt:  status === 'waiting' && body.followUpAt ? new Date(body.followUpAt) : null,
           contactId:   body.contactId || null,
           companyId:   body.companyId || null,
           dealId:      body.dealId || null,
@@ -1060,36 +1101,366 @@ function buildServer() {
         include: {
           contact: { select: { id: true, firstName: true, lastName: true } },
           company: { select: { id: true, name: true } },
+          goal: { select: { id: true, title: true } },
           subtasks: true,
         },
       })
-      return { content: [{ type: 'text', text: `Feladat létrehozva: ${data.title} (${data.id})` }] }
+      await logTaskCreated(data.id, 'agent')
+      return { content: [{ type: 'text', text: `Feladat létrehozva: ${data.title} (${data.id})${data.goal ? ` — cél: ${data.goal.title}` : ''}` }] }
     }
   )
 
   server.tool(
     'update_task',
-    'Feladat módosítása: státusz, prioritás, határidő, leírás.',
+    'Feladat módosítása: státusz, prioritás, határidő, leírás, típus, felelős, cél-kapcsolat, várakozás-mezők. Csak a megadott mezők frissülnek; minden változás naplózódik a feladat eseménytörténetébe. "waiting" státuszra váltásnál a waitingFor és followUpAt kötelező.',
     {
       id:          z.string(),
-      status:      z.enum(['pending', 'in_progress', 'done', 'cancelled']).optional(),
+      status:      taskStatusEnum.optional(),
       priority:    z.enum(['low', 'medium', 'high']).optional(),
       title:       z.string().optional(),
       description: z.string().optional(),
-      dueDate:     z.string().optional().describe('Új határidő YYYY-MM-DD, vagy null a törléshez'),
+      dueDate:     z.string().optional().describe('Új határidő YYYY-MM-DD, vagy üres string a törléshez'),
+      taskType:    z.enum(['gyartas', 'email', 'minta', 'csomagolas', 'hivas', 'admin', 'szallitas', 'megbeszeles', 'szamlairas', 'egyeb']).optional(),
+      goalId:      z.string().optional().describe('Új cél ID, vagy üres string a cél-kapcsolat törléséhez'),
+      assigneeId:  z.string().optional().describe('Felelős user ID, vagy üres string a törléshez'),
+      waitingFor:  z.string().optional().describe('waiting státusznál: kire/mire várunk'),
+      followUpAt:  z.string().optional().describe('waiting státusznál: mikor nézzük újra, YYYY-MM-DD'),
     },
-    async ({ id, status, priority, title, description, dueDate }) => {
+    async ({ id, status, priority, title, description, dueDate, taskType, goalId, assigneeId, waitingFor, followUpAt }) => {
+      const before = await prisma.task.findUnique({ where: { id } })
+      if (!before) return { content: [{ type: 'text', text: 'Feladat nem található.' }] }
+
+      const newStatus = status ? normalizeTaskStatus(status) : before.status
+      if (newStatus === 'waiting') {
+        const effWaitingFor = waitingFor ?? before.waitingFor
+        const effFollowUpAt = followUpAt ?? before.followUpAt
+        if (!effWaitingFor || !effFollowUpAt) {
+          return { content: [{ type: 'text', text: 'A "waiting" státuszhoz kötelező a waitingFor (kire várunk) és a followUpAt (mikor nézzük újra, YYYY-MM-DD).' }] }
+        }
+      }
+      if (goalId) {
+        const goal = await prisma.goal.findUnique({ where: { id: goalId }, select: { id: true } })
+        if (!goal) return { content: [{ type: 'text', text: `Nincs ilyen cél: ${goalId} — a célok a get_goal_tree tool-lal kérdezhetők le.` }] }
+      }
+
       const data = await prisma.task.update({
         where: { id },
         data: {
-          ...(status      ? { status }      : {}),
+          ...(status      ? { status: newStatus } : {}),
           ...(priority    ? { priority }    : {}),
           ...(title       ? { title }       : {}),
           ...(description !== undefined ? { description } : {}),
           ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
+          ...(taskType    ? { taskType }    : {}),
+          ...(goalId !== undefined ? { goalId: goalId || null } : {}),
+          ...(assigneeId !== undefined ? { assigneeId: assigneeId || null } : {}),
+          ...(newStatus === 'waiting'
+            ? {
+                ...(waitingFor !== undefined ? { waitingFor } : {}),
+                ...(followUpAt !== undefined ? { followUpAt: new Date(followUpAt) } : {}),
+              }
+            : status
+              ? { waitingFor: null, followUpAt: null }
+              : {}),
         },
       })
+      await logTaskDiff(id, 'agent', before, data)
       return { content: [{ type: 'text', text: `Feladat frissítve: ${data.title} → ${data.status}` }] }
+    }
+  )
+
+  server.tool(
+    'archive_task',
+    'Feladat archiválása (cancelled státusz). Az MCP-n keresztül nincs végleges törlés — azt csak a webes felületen lehet. Az archiválás naplózódik.',
+    {
+      id:     z.string().describe('Feladat ID'),
+      reason: z.string().optional().describe('Az archiválás indoka (a naplóba kerül)'),
+    },
+    async ({ id, reason }) => {
+      const before = await prisma.task.findUnique({ where: { id }, select: { title: true, status: true } })
+      if (!before) return { content: [{ type: 'text', text: 'Feladat nem található.' }] }
+      const data = await prisma.task.update({ where: { id }, data: { status: 'cancelled' } })
+      await logTaskEvent(id, 'agent', 'archived', 'status', before.status, reason ? `cancelled (${reason})` : 'cancelled')
+      return { content: [{ type: 'text', text: `Feladat archiválva: ${data.title}` }] }
+    }
+  )
+
+  // ─── ALFELADATOK ─────────────────────────────────────────────────────────────
+
+  server.tool(
+    'add_subtask',
+    'Alfeladat hozzáadása egy meglévő feladathoz.',
+    {
+      taskId: z.string().describe('Feladat ID'),
+      title:  z.string().describe('Alfeladat szövege'),
+    },
+    async ({ taskId, title }) => {
+      const task = await prisma.task.findUnique({ where: { id: taskId }, select: { title: true } })
+      if (!task) return { content: [{ type: 'text', text: 'Feladat nem található.' }] }
+      const sub = await prisma.subTask.create({ data: { taskId, title } })
+      return { content: [{ type: 'text', text: `Alfeladat hozzáadva a(z) „${task.title}" feladathoz: ${sub.title} (${sub.id})` }] }
+    }
+  )
+
+  server.tool(
+    'toggle_subtask',
+    'Alfeladat kész / nem kész állapotának állítása.',
+    {
+      id:        z.string().describe('Alfeladat ID'),
+      completed: z.boolean().describe('true = kész, false = nincs kész'),
+    },
+    async ({ id, completed }) => {
+      const sub = await prisma.subTask.update({ where: { id }, data: { completed } })
+      return { content: [{ type: 'text', text: `Alfeladat ${completed ? 'késznek jelölve' : 'visszanyitva'}: ${sub.title}` }] }
+    }
+  )
+
+  server.tool(
+    'delete_subtask',
+    'Alfeladat törlése.',
+    { id: z.string().describe('Alfeladat ID') },
+    async ({ id }) => {
+      const sub = await prisma.subTask.findUnique({ where: { id }, select: { title: true } })
+      if (!sub) return { content: [{ type: 'text', text: 'Alfeladat nem található.' }] }
+      await prisma.subTask.delete({ where: { id } })
+      return { content: [{ type: 'text', text: `Alfeladat törölve: ${sub.title}` }] }
+    }
+  )
+
+  // ─── CÉLOK (V2) ──────────────────────────────────────────────────────────────
+
+  server.tool(
+    'get_goal_tree',
+    'A teljes célhierarchia egy hívásban, kiszámolt haladással: hosszú távú (vision) → éves → negyedéves → havi célok, mindegyiknél a haladás %-a és forrása (metric = automatikus CRM-adatokból, children = al-célok átlaga, tasks = feladatok kész-aránya, manual = kézi státusz), plusz a hozzákötött feladatok száma. MINDIG ezzel kezdd, mielőtt célt vagy célhoz kötött feladatot kezelsz — ez adja a stratégiai kontextust.',
+    {
+      includeArchived: z.boolean().optional().describe('Archivált célok is (alapértelmezett: nem)'),
+    },
+    async ({ includeArchived }) => {
+      const tree = await buildGoalTree({ includeArchived })
+      if (tree.length === 0) {
+        return { content: [{ type: 'text', text: 'Még nincs cél felvéve. A create_goal tool-lal hozható létre — kezdd a vision szinttel.' }] }
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(tree, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'create_goal',
+    `Új cél létrehozása a hierarchiában. Szintek: vision (hosszú távú, nincs éve) → yearly (year kötelező) → quarterly (year + quarter) → monthly (year + month). A parentId-vel kösd a szülő célhoz. Számszerű célnál adj meg metricKey-t és targetValue-t — a tény automatikusan a CRM-adatokból számítódik. Elérhető metrikák: ${GOAL_METRICS.map(m => `${m.key} (${m.label})`).join(', ')}.`,
+    {
+      title:         z.string().describe('Cél megnevezése'),
+      level:         z.enum(GOAL_LEVELS as unknown as [string, ...string[]]).describe('vision | yearly | quarterly | monthly'),
+      description:   z.string().optional().describe('Mit jelent pontosan, mikor tekintjük teljesültnek?'),
+      year:          z.number().int().min(2020).max(2040).optional().describe('Év (vision kivételével kötelező)'),
+      quarter:       z.number().int().min(1).max(4).optional().describe('Negyedév, quarterly szinten kötelező'),
+      month:         z.number().int().min(1).max(12).optional().describe('Hónap, monthly szinten kötelező'),
+      parentId:      z.string().optional().describe('Szülő cél ID'),
+      strategicArea: z.string().optional().describe('Stratégiai terület címke'),
+      metricKey:     z.string().optional().describe('CRM-metrika kulcs az automatikus haladáshoz'),
+      targetValue:   z.number().optional().describe('Számszerű célérték a metricKey-hez'),
+    },
+    async (body) => {
+      if (body.level !== 'vision' && !body.year) {
+        return { content: [{ type: 'text', text: 'Az év megadása kötelező ezen a szinten.' }] }
+      }
+      if (body.level === 'quarterly' && !body.quarter) {
+        return { content: [{ type: 'text', text: 'Negyedéves célhoz a quarter (1-4) kötelező.' }] }
+      }
+      if (body.level === 'monthly' && !body.month) {
+        return { content: [{ type: 'text', text: 'Havi célhoz a month (1-12) kötelező.' }] }
+      }
+      if (body.metricKey && !GOAL_METRICS.some(m => m.key === body.metricKey)) {
+        return { content: [{ type: 'text', text: `Ismeretlen metrika: "${body.metricKey}". Elérhető: ${GOAL_METRICS.map(m => m.key).join(', ')}` }] }
+      }
+      if (body.parentId) {
+        const parent = await prisma.goal.findUnique({ where: { id: body.parentId }, select: { id: true, level: true } })
+        if (!parent) return { content: [{ type: 'text', text: `Nincs ilyen szülő cél: ${body.parentId}` }] }
+      }
+      const goal = await prisma.goal.create({
+        data: {
+          title:         body.title,
+          description:   body.description || null,
+          level:         body.level,
+          year:          body.level === 'vision' ? null : body.year,
+          quarter:       body.level === 'quarterly' ? body.quarter : null,
+          month:         body.level === 'monthly' ? body.month : null,
+          strategicArea: body.strategicArea || null,
+          metricKey:     body.metricKey || null,
+          targetValue:   body.targetValue ?? null,
+          parentId:      body.parentId || null,
+        },
+      })
+      return { content: [{ type: 'text', text: `Cél létrehozva (${goal.level}): ${goal.title} — ID: ${goal.id}` }] }
+    }
+  )
+
+  server.tool(
+    'update_goal',
+    'Cél módosítása: cím, leírás, státusz (active/achieved/missed/dropped), célérték, metrika, stratégiai terület, szülő. Csak a megadott mezők frissülnek. A szint (level) nem módosítható.',
+    {
+      id:            z.string().describe('Cél ID'),
+      title:         z.string().optional(),
+      description:   z.string().optional(),
+      status:        z.enum(['active', 'achieved', 'missed', 'dropped']).optional(),
+      strategicArea: z.string().optional(),
+      metricKey:     z.string().optional().describe('Új metrika kulcs, vagy üres string a leválasztáshoz'),
+      targetValue:   z.number().optional(),
+      parentId:      z.string().optional().describe('Új szülő cél ID, vagy üres string a leválasztáshoz'),
+      year:          z.number().int().optional(),
+      quarter:       z.number().int().min(1).max(4).optional(),
+      month:         z.number().int().min(1).max(12).optional(),
+    },
+    async ({ id, ...fields }) => {
+      const goal = await prisma.goal.findUnique({ where: { id }, select: { id: true, level: true } })
+      if (!goal) return { content: [{ type: 'text', text: 'Cél nem található.' }] }
+      if (fields.metricKey && !GOAL_METRICS.some(m => m.key === fields.metricKey)) {
+        return { content: [{ type: 'text', text: `Ismeretlen metrika: "${fields.metricKey}". Elérhető: ${GOAL_METRICS.map(m => m.key).join(', ')}` }] }
+      }
+      const upd: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(fields)) {
+        if (v === undefined) continue
+        upd[k] = (k === 'metricKey' || k === 'parentId' || k === 'strategicArea' || k === 'description') ? (v || null) : v
+      }
+      const data = await prisma.goal.update({ where: { id }, data: upd })
+      return { content: [{ type: 'text', text: `Cél frissítve: ${data.title} (${data.status})` }] }
+    }
+  )
+
+  server.tool(
+    'archive_goal',
+    'Cél archiválása — eltűnik a fából, de nem törlődik, a feladat-kapcsolatok megmaradnak. KORLÁT: vision és yearly szintű célt az MCP nem archiválhat és nem törölhet — a stratégia gerincét csak a webes felületen lehet módosítani. Végleges törlés az MCP-n keresztül egyáltalán nincs.',
+    {
+      id:     z.string().describe('Cél ID'),
+      reason: z.string().optional().describe('Az archiválás indoka'),
+    },
+    async ({ id, reason }) => {
+      const goal = await prisma.goal.findUnique({
+        where: { id },
+        select: { id: true, title: true, level: true, children: { where: { archivedAt: null }, select: { id: true } } },
+      })
+      if (!goal) return { content: [{ type: 'text', text: 'Cél nem található.' }] }
+      if (goal.level === 'vision' || goal.level === 'yearly') {
+        return { content: [{ type: 'text', text: `A(z) ${goal.level} szintű cél („${goal.title}") archiválása az MCP-n keresztül nem engedélyezett — ezt csak a webes felületen (Iránytű) lehet megtenni.` }] }
+      }
+      if (goal.children.length > 0) {
+        return { content: [{ type: 'text', text: `A célnak ${goal.children.length} aktív al-célja van — előbb azokat kell archiválni vagy áthelyezni.` }] }
+      }
+      await prisma.goal.update({ where: { id }, data: { archivedAt: new Date() } })
+      return { content: [{ type: 'text', text: `Cél archiválva: ${goal.title}${reason ? ` — indok: ${reason}` : ''}` }] }
+    }
+  )
+
+  // ─── NAPI FOCUS & RIPORT (V2) ────────────────────────────────────────────────
+
+  server.tool(
+    'get_daily_focus',
+    'Napi fókusz-adatok egy hívásban: javasolt top 3 feladat (pontszám-alapú rangsor: lejárt határidő, esedékes követés, prioritás, cél-kapcsolat), plusz a lejárt, ma esedékes, követésre érett (waiting + lejárt followUpAt) és elakadt (14+ napja álló) feladatok listái. A top 3 csak javaslat — a felhasználó felülbírálhatja.',
+    {},
+    async () => {
+      const now = new Date()
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
+
+      const open = await prisma.task.findMany({
+        where: { status: { notIn: ['completed', 'cancelled'] } },
+        include: {
+          company: { select: { id: true, name: true } },
+          goal: { select: { id: true, title: true, level: true } },
+          assignee: { select: { id: true, name: true } },
+          subtasks: { select: { completed: true } },
+        },
+        orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
+      })
+
+      const overdue = open.filter(t => t.dueDate && t.dueDate < todayStart && t.status !== 'waiting')
+      const dueToday = open.filter(t => t.dueDate && t.dueDate >= todayStart && t.dueDate <= todayEnd && t.status !== 'waiting')
+      const followUpDue = open.filter(t => t.status === 'waiting' && t.followUpAt && t.followUpAt <= todayEnd)
+      const stalled = open.filter(t =>
+        t.status === 'in_progress' && now.getTime() - t.updatedAt.getTime() > 14 * 86400000
+      )
+
+      const scored = open
+        .filter(t => t.status !== 'waiting' || (t.followUpAt && t.followUpAt <= todayEnd))
+        .map(t => {
+          let score = 0
+          const reasons: string[] = []
+          if (t.dueDate && t.dueDate < todayStart) { score += 3; reasons.push('lejárt határidő') }
+          else if (t.dueDate && t.dueDate <= todayEnd) { score += 2; reasons.push('ma esedékes') }
+          if (t.status === 'waiting' && t.followUpAt && t.followUpAt <= todayEnd) { score += 3; reasons.push('követés esedékes') }
+          if (t.priority === 'high') { score += 2; reasons.push('magas prioritás') }
+          else if (t.priority === 'medium') { score += 1 }
+          if (t.goalId) { score += 1; reasons.push('célhoz kötött') }
+          if (t.status === 'in_progress' && now.getTime() - t.updatedAt.getTime() > 14 * 86400000) { score += 1; reasons.push('régóta áll') }
+          return { task: t, score, reasons }
+        })
+        .sort((a, b) => b.score - a.score)
+
+      const brief = (t: (typeof open)[number]) => ({
+        id: t.id, title: t.title, status: t.status, priority: t.priority,
+        dueDate: t.dueDate, waitingFor: t.waitingFor, followUpAt: t.followUpAt,
+        goal: t.goal ? t.goal.title : null,
+        company: t.company ? t.company.name : null,
+      })
+
+      const result = {
+        date: now.toISOString().slice(0, 10),
+        suggestedTop3: scored.slice(0, 3).map(s => ({ ...brief(s.task), score: s.score, reasons: s.reasons })),
+        overdue: overdue.map(brief),
+        dueToday: dueToday.map(brief),
+        followUpDue: followUpDue.map(brief),
+        stalled: stalled.map(brief),
+        openTaskCount: open.length,
+        note: 'A suggestedTop3 pontszám-alapú javaslat (lejárt/esedékes + prioritás + cél-kapcsolat) — a felhasználó felülbírálhatja.',
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'get_progress_report',
+    'Heti / időszaki előrehaladási riport: az aktuális negyedév és hónap céljai haladással, a teljes célfa csúcs-szintű összefoglalója, valamint feladat-statisztika (elmúlt 7 nap: elkészült/létrejött; nyitott, lejárt, várakozó darabszámok). A terv/tény tölcsér-részletekhez lásd: get_funnel_stats.',
+    {},
+    async () => {
+      const now = new Date()
+      const y = now.getFullYear()
+      const q = Math.floor(now.getMonth() / 3) + 1
+      const m = now.getMonth() + 1
+      const weekAgo = new Date(now.getTime() - 7 * 86400000)
+
+      const [tree, completedLast7, createdLast7, openCounts, overdueCount] = await Promise.all([
+        buildGoalTree(),
+        prisma.task.count({ where: { status: 'completed', updatedAt: { gte: weekAgo } } }),
+        prisma.task.count({ where: { createdAt: { gte: weekAgo } } }),
+        prisma.task.groupBy({ by: ['status'], _count: true, where: { status: { notIn: ['completed', 'cancelled'] } } }),
+        prisma.task.count({ where: { status: { notIn: ['completed', 'cancelled'] }, dueDate: { lt: new Date(y, now.getMonth(), now.getDate()) } } }),
+      ])
+
+      type Node = (typeof tree)[number]
+      const flat: Node[] = []
+      const walk = (nodes: Node[]) => { for (const n of nodes) { flat.push(n); walk(n.children) } }
+      walk(tree)
+
+      const summarize = (n: Node) => ({
+        id: n.id, title: n.title, level: n.level, status: n.status,
+        percent: n.progress.percent, progressSource: n.progress.source,
+        actual: n.progress.actualValue, target: n.targetValue, metricKey: n.metricKey,
+        taskCount: n.taskCount, completedTaskCount: n.completedTaskCount,
+      })
+
+      const result = {
+        generatedAt: now.toISOString(),
+        currentQuarterGoals: flat.filter(n => n.level === 'quarterly' && n.year === y && n.quarter === q).map(summarize),
+        currentMonthGoals: flat.filter(n => n.level === 'monthly' && n.year === y && n.month === m).map(summarize),
+        topLevel: tree.map(summarize),
+        taskStats: {
+          completedLast7Days: completedLast7,
+          createdLast7Days: createdLast7,
+          openByStatus: Object.fromEntries(openCounts.map(c => [c.status, c._count])),
+          overdue: overdueCount,
+        },
+        note: 'A percent a kiszámolt haladás (metric = CRM-adatokból automatikus). Részletes terv/tény: get_funnel_stats.',
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
     }
   )
 
