@@ -234,7 +234,11 @@ function buildServer() {
     async ({ id }) => {
       const data = await prisma.contact.findUnique({
         where: { id },
-        include: { company: true, invoices: { take: 5, orderBy: { date: 'desc' } } },
+        include: {
+          company: true,
+          invoices: { take: 5, orderBy: { date: 'desc' } },
+          memories: { include: { type: true }, orderBy: { createdAt: 'desc' } },
+        },
       })
       if (!data) return { content: [{ type: 'text', text: 'Kapcsolat nem található.' }] }
       return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
@@ -299,6 +303,7 @@ function buildServer() {
         include: {
           contacts: true,
           invoices: { take: 5, orderBy: { date: 'desc' } },
+          memories: { include: { type: true }, orderBy: { createdAt: 'desc' } },
         },
       })
       if (!data) return { content: [{ type: 'text', text: 'Cég nem található.' }] }
@@ -1556,6 +1561,122 @@ function buildServer() {
       if (outcome      !== undefined) upd.outcome      = outcome      || null
       const data = await prisma.activity.update({ where: { id }, data: upd })
       return { content: [{ type: 'text', text: `Aktivitás frissítve: ${data.type} — ${data.activityDate.toISOString().slice(0, 10)}` }] }
+    }
+  )
+
+  // ─── MEMÓRIA ─────────────────────────────────────────────────────────────────
+
+  server.tool(
+    'list_memory_types',
+    'Memória-bejegyzés típusok listázása (címke, ikon, szín). A create_memory / update_memory typeId mezőjéhez szükséges.',
+    {},
+    async () => {
+      const data = await prisma.memoryEntryType.findMany({ orderBy: { order: 'asc' } })
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'list_memories',
+    'Memória-bejegyzések listázása egy céghez vagy kapcsolathoz. A Memoria a lényeges tudnivalók (preferenciák, megállapodások, fontos részletek) gyűjtőhelye a cég/kapcsolat adatlapján.',
+    {
+      companyId: z.string().optional().describe('Cég ID'),
+      contactId: z.string().optional().describe('Kapcsolat ID'),
+    },
+    async ({ companyId, contactId }) => {
+      if (!companyId && !contactId) {
+        return { content: [{ type: 'text', text: 'Adj meg companyId-t vagy contactId-t.' }] }
+      }
+      const where: Record<string, string> = {}
+      if (companyId) where.companyId = companyId
+      if (contactId) where.contactId = contactId
+      const data = await prisma.memoryEntry.findMany({
+        where,
+        include: { type: true },
+        orderBy: { createdAt: 'desc' },
+      })
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'create_memory',
+    'Új memória-bejegyzés rögzítése egy céghez vagy kapcsolathoz. A típus megadható typeId-vel vagy typeLabel-lel (pl. "Preferencia") — a típusok a list_memory_types tool-lal kérdezhetők le. A bejegyzés "mcp" forrásjelöléssel jelenik meg a felületen.',
+    {
+      content:   z.string().describe('A bejegyzés szövege'),
+      companyId: z.string().optional().describe('Cég ID (companyId vagy contactId kötelező)'),
+      contactId: z.string().optional().describe('Kapcsolat ID'),
+      typeId:    z.string().optional().describe('Memória-típus ID'),
+      typeLabel: z.string().optional().describe('Memória-típus címkéje typeId helyett (pontos vagy részleges egyezés)'),
+      date:      z.string().optional().describe('A bejegyzéshez tartozó dátum YYYY-MM-DD (opcionális)'),
+    },
+    async ({ content, companyId, contactId, typeId, typeLabel, date }) => {
+      if (!companyId && !contactId) {
+        return { content: [{ type: 'text', text: 'Adj meg companyId-t vagy contactId-t.' }] }
+      }
+      let resolvedTypeId = typeId
+      if (!resolvedTypeId && typeLabel) {
+        const type = await prisma.memoryEntryType.findFirst({
+          where: { label: { contains: typeLabel } },
+          orderBy: { order: 'asc' },
+        })
+        if (!type) {
+          const types = await prisma.memoryEntryType.findMany({ orderBy: { order: 'asc' }, select: { id: true, label: true } })
+          return { content: [{ type: 'text', text: `Nincs "${typeLabel}" nevű memória-típus. Elérhető típusok:\n${types.map(t => `  • ${t.label} (${t.id})`).join('\n')}` }] }
+        }
+        resolvedTypeId = type.id
+      }
+      if (!resolvedTypeId) {
+        return { content: [{ type: 'text', text: 'Adj meg typeId-t vagy typeLabel-t (típusok: list_memory_types).' }] }
+      }
+      const data = await prisma.memoryEntry.create({
+        data: {
+          companyId: companyId || null,
+          contactId: contactId || null,
+          typeId:    resolvedTypeId,
+          content,
+          date:      date ? new Date(date) : null,
+          source:    'mcp',
+        },
+        include: { type: true, company: { select: { name: true } }, contact: { select: { firstName: true, lastName: true } } },
+      })
+      const who = data.company?.name ?? `${data.contact?.firstName ?? ''} ${data.contact?.lastName ?? ''}`.trim()
+      return { content: [{ type: 'text', text: `Memória rögzítve (${data.type.label}) — ${who} — ID: ${data.id}` }] }
+    }
+  )
+
+  server.tool(
+    'update_memory',
+    'Meglévő memória-bejegyzés módosítása. Csak a megadott mezők frissülnek.',
+    {
+      id:        z.string().describe('Memória-bejegyzés ID'),
+      content:   z.string().optional().describe('Új szöveg'),
+      typeId:    z.string().optional().describe('Új memória-típus ID'),
+      date:      z.string().optional().describe('Új dátum YYYY-MM-DD, vagy üres string a törléshez'),
+    },
+    async ({ id, content, typeId, date }) => {
+      const upd: Record<string, unknown> = {}
+      if (content !== undefined) upd.content = content
+      if (typeId  !== undefined) upd.typeId  = typeId
+      if (date    !== undefined) upd.date    = date ? new Date(date) : null
+      const data = await prisma.memoryEntry.update({
+        where: { id },
+        data: upd,
+        include: { type: true },
+      })
+      return { content: [{ type: 'text', text: `Memória frissítve (${data.type.label}): ${data.content.slice(0, 80)}` }] }
+    }
+  )
+
+  server.tool(
+    'delete_memory',
+    'Memória-bejegyzés végleges törlése ID alapján.',
+    { id: z.string().describe('Memória-bejegyzés ID') },
+    async ({ id }) => {
+      const data = await prisma.memoryEntry.findUnique({ where: { id }, select: { content: true } })
+      if (!data) return { content: [{ type: 'text', text: 'Memória-bejegyzés nem található.' }] }
+      await prisma.memoryEntry.delete({ where: { id } })
+      return { content: [{ type: 'text', text: `Memória törölve: ${data.content.slice(0, 80)}` }] }
     }
   )
 
