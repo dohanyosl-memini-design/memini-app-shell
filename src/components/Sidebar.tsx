@@ -166,7 +166,7 @@ export default function Sidebar({ session }: { session?: Session | null }) {
       </div>
 
       {/* ── Mobile bottom nav ── */}
-      <div className="md:hidden fixed bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] left-2 right-2 z-40 bg-slate-900 border border-slate-700 rounded-2xl shadow-lg">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900 border-t border-slate-700 safe-area-pb">
         <div className="flex items-stretch">
           {bottomNavItems.map(({ href, label, icon: Icon }) => (
             <Link

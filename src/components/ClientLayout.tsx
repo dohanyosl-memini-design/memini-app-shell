@@ -18,8 +18,8 @@ function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
       <Sidebar session={session} />
-      {/* pb-24 on mobile reserves space for the floating bottom nav */}
-      <main className="flex-1 overflow-auto pb-24 md:pb-0">
+      {/* pb-16 on mobile reserves space for the fixed bottom nav */}
+      <main className="flex-1 overflow-auto pb-16 md:pb-0">
         {children}
       </main>
     </div>
