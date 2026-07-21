@@ -20,9 +20,8 @@ const navGroups = [
     items: [
       { href: '/', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/naptar', label: 'Naptár', icon: CalendarDays },
+      { href: '/tasks', label: 'Feladatok', icon: CheckSquare },
       { href: '/marketing', label: 'Marketing', icon: Megaphone },
-      { href: '/chat', label: 'AI Chat', icon: Bot },
-      { href: '/arthur', label: 'Arthur', icon: Bot },
     ],
   },
   {
@@ -69,7 +68,8 @@ const navGroups = [
   {
     label: 'Egyéb',
     items: [
-      { href: '/tasks', label: 'Feladatok', icon: CheckSquare },
+      { href: '/chat', label: 'AI Chat', icon: Bot },
+      { href: '/arthur', label: 'Arthur', icon: Bot },
       { href: '/settings', label: 'Beállítások', icon: Shield },
       { href: '/faq', label: 'Súgó / FAQ', icon: HelpCircle },
       { href: '/backup', label: 'Adatmentés', icon: Shield },
