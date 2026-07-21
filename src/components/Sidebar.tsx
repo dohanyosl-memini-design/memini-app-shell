@@ -82,8 +82,8 @@ const allItems = navGroups.flatMap(g => g.items)
 const bottomNavItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/tasks', label: 'Feladatok', icon: CheckSquare },
-  { href: '/invoices', label: 'Számlák', icon: FileText },
-  { href: '/chat', label: 'AI Chat', icon: Bot },
+  { href: '/finance', label: 'Cashflow', icon: Wallet },
+  { href: '/marketing', label: 'Marketing', icon: Megaphone },
 ]
 
 export default function Sidebar({ session }: { session?: Session | null }) {
@@ -166,7 +166,7 @@ export default function Sidebar({ session }: { session?: Session | null }) {
       </div>
 
       {/* ── Mobile bottom nav ── */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900 border-t border-slate-700 safe-area-pb">
+      <div className="md:hidden fixed bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] left-2 right-2 z-40 bg-slate-900 border border-slate-700 rounded-2xl shadow-lg">
         <div className="flex items-stretch">
           {bottomNavItems.map(({ href, label, icon: Icon }) => (
             <Link
