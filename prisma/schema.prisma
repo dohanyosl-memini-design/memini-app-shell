@@ -130,6 +130,7 @@ model Goal {
   parent        Goal?     @relation("GoalTree", fields: [parentId], references: [id])
   children      Goal[]    @relation("GoalTree")
   tasks         Task[]
+  marketingArcs MarketingArc[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -159,6 +160,97 @@ model Task {
   events      TaskEvent[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+// ─── MARKETING (V1) ──────────────────────────────────────────────────────────
+// Marketing-ív: a célfával párhuzamos, de dedikált idő-hierarchia
+// (vision → yearly → quarterly → monthly). Az alsó szinteken kadencia
+// (heti hány tartalom csatornánként) — ebből számítódik a telítettség.
+model MarketingArc {
+  id            String         @id @default(cuid())
+  title         String
+  description   String?
+  level         String         // vision | yearly | quarterly | monthly
+  year          Int?
+  quarter       Int?
+  month         Int?
+  status        String         @default("active") // active | achieved | missed | dropped
+  strategicArea String?
+  cadence       Json?          // pl. { "blog": 3, "linkedin": 2 } (heti darab csatornánként)
+  goalId        String?        // opcionális kötés az éves üzleti célra
+  goal          Goal?          @relation(fields: [goalId], references: [id])
+  sortOrder     Int            @default(0)
+  archivedAt    DateTime?
+  parentId      String?
+  parent        MarketingArc?  @relation("ArcTree", fields: [parentId], references: [id])
+  children      MarketingArc[] @relation("ArcTree")
+  themes        ContentTheme[]
+  pieces        ContentPiece[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+// Téma / "kör": egy arc-node alatti tartalmi koncepció — mondanivaló + vázlat
+// (részek). Ebből származnak a konkrét tartalmak (blog → LinkedIn → Insta …).
+model ContentTheme {
+  id          String         @id @default(cuid())
+  title       String
+  message     String?        // a mondanivaló / core message
+  outline     String?        // a struktúra / részek (markdown szöveg)
+  status      String         @default("planned") // planned | approved | active | done
+  startDate   DateTime?
+  endDate     DateTime?
+  cadence     Json?
+  sortOrder   Int            @default(0)
+  archivedAt  DateTime?
+  arcId       String?
+  arc         MarketingArc?  @relation(fields: [arcId], references: [id])
+  pieces      ContentPiece[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+// Egy konkrét tartalom: egy üzenet három nyelven (német elsődleges), egy
+// csatornára. A parentPieceId a csatorna-származtatást köti (blog → LinkedIn).
+model ContentPiece {
+  id            String         @id @default(cuid())
+  title         String
+  channel       String         // blog | linkedin | facebook | instagram | newsletter | pinterest
+  bodyDe        String?        @db.Text  // elsődleges (német logika)
+  bodyHu        String?        @db.Text
+  bodyEn        String?        @db.Text
+  slug          String?        // weboldal-kész
+  seo           Json?          // { de: {title, description}, hu: {...}, en: {...} }
+  imagePrompt   String?
+  imageUrl      String?
+  status        String         @default("draft") // draft | ready | scheduled | published | archived
+  source        String         @default("human") // human | agent | automation
+  scheduledFor  DateTime?
+  publishedAt   DateTime?
+  themeId       String?
+  theme         ContentTheme?  @relation(fields: [themeId], references: [id])
+  arcId         String?        // ad-hoc: közvetlenül egy arc-hónaphoz tűzve, téma nélkül
+  arc           MarketingArc?  @relation(fields: [arcId], references: [id])
+  parentPieceId String?
+  parentPiece   ContentPiece?  @relation("PieceDerivation", fields: [parentPieceId], references: [id])
+  derivedPieces ContentPiece[] @relation("PieceDerivation")
+  events        ContentEvent[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+// Append-only tartalom-eseménytörténet (mint a TaskEvent) — ki mit generált /
+// szerkesztett és mi volt előtte.
+model ContentEvent {
+  id        String       @id @default(cuid())
+  pieceId   String
+  piece     ContentPiece @relation(fields: [pieceId], references: [id], onDelete: Cascade)
+  actor     String
+  action    String       // created | updated | status_changed | localized | derived | archived
+  field     String?
+  before    Json?
+  after     Json?
+  createdAt DateTime     @default(now())
 }
 
 // Könnyű, append-only feladat-eseménytörténet: ki (ember/agent/automatizáció)

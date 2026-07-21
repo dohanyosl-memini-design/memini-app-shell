@@ -10,6 +10,9 @@ import { computeReorderDue, reorderCallTaskTitle, FULFILLED_ORDER_STATUSES } fro
 import { buildGoalTree } from '@/lib/goalProgress'
 import { GOAL_LEVELS, GOAL_METRICS } from '@/lib/goalConstants'
 import { logTaskCreated, logTaskDiff, logTaskEvent } from '@/lib/taskEvents'
+import { buildMarketingTree } from '@/lib/marketingTree'
+import { ARC_LEVELS, CHANNEL_KEYS, LANGUAGES } from '@/lib/marketingConstants'
+import { logPieceCreated, logPieceDiff, logPieceEvent } from '@/lib/contentEvents'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +25,7 @@ const normalizeTaskStatus = (s: string) => (s === 'done' ? 'completed' : s)
 const dealStageEnum = z.enum([...DEAL_STAGE_KEYS, ...LEGACY_STAGE_KEYS] as [string, ...string[]])
 
 function buildServer() {
-  const server = new McpServer({ name: 'memini-crm', version: '1.1.0' })
+  const server = new McpServer({ name: 'memini-crm', version: '1.2.0' })
 
   // ─── SZÁMLÁK ─────────────────────────────────────────────────────────────
 
@@ -2048,6 +2051,333 @@ function buildServer() {
       if (!data) return { content: [{ type: 'text', text: 'Memória-bejegyzés nem található.' }] }
       await prisma.memoryEntry.delete({ where: { id } })
       return { content: [{ type: 'text', text: `Memória törölve: ${data.content.slice(0, 80)}` }] }
+    }
+  )
+
+  // ─── MARKETING: ÍV & TÉMÁK (V1/V2) ───────────────────────────────────────────
+
+  server.tool(
+    'get_marketing_tree',
+    'A teljes marketing-ív egy hívásban, kiszámolt telítettséggel: hosszú távú (vision) → éves → negyedéves → havi szintek, mindegyiknél a kadencia (heti hány tartalom csatornánként) és a telítettség %-a (tervezett vs. ütemezett tartalom). MINDIG ezzel kezdd, mielőtt marketing-ívet, témát vagy tartalmat kezelsz — ez adja a stratégiai és időbeli kontextust.',
+    { includeArchived: z.boolean().optional().describe('Archivált ívek is (alapértelmezett: nem)') },
+    async ({ includeArchived }) => {
+      const tree = await buildMarketingTree({ includeArchived })
+      if (tree.length === 0) {
+        return { content: [{ type: 'text', text: 'Még nincs marketing-ív felvéve. A create_marketing_arc tool-lal hozható létre — kezdd a vision szinttel.' }] }
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(tree, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'create_marketing_arc',
+    'Új marketing-ív szint létrehozása. Szintek: vision (hosszú távú, nincs éve) → yearly (year kötelező) → quarterly (year + quarter) → monthly (year + month). A parentId köti a szülőhöz. A cadence a heti tartalom-terv csatornánként, pl. { "blog": 3, "linkedin": 2 } — ebből számítódik a telítettség.',
+    {
+      title:         z.string(),
+      level:         z.enum(ARC_LEVELS as unknown as [string, ...string[]]),
+      description:   z.string().optional(),
+      year:          z.number().int().min(2020).max(2040).optional(),
+      quarter:       z.number().int().min(1).max(4).optional(),
+      month:         z.number().int().min(1).max(12).optional(),
+      parentId:      z.string().optional(),
+      strategicArea: z.string().optional(),
+      cadence:       z.record(z.string(), z.number()).optional().describe('Heti darab csatornánként, pl. { "blog": 3 }'),
+      goalId:        z.string().optional().describe('Opcionális kötés az éves üzleti célra'),
+    },
+    async (body) => {
+      if (body.level !== 'vision' && !body.year) return { content: [{ type: 'text', text: 'Az év kötelező ezen a szinten.' }] }
+      if (body.level === 'quarterly' && !body.quarter) return { content: [{ type: 'text', text: 'Negyedéves ívhez a quarter (1-4) kötelező.' }] }
+      if (body.level === 'monthly' && !body.month) return { content: [{ type: 'text', text: 'Havi ívhez a month (1-12) kötelező.' }] }
+      if (body.parentId) {
+        const parent = await prisma.marketingArc.findUnique({ where: { id: body.parentId }, select: { id: true } })
+        if (!parent) return { content: [{ type: 'text', text: `Nincs ilyen szülő-ív: ${body.parentId}` }] }
+      }
+      const arc = await prisma.marketingArc.create({
+        data: {
+          title: body.title,
+          description: body.description || null,
+          level: body.level,
+          year: body.level === 'vision' ? null : body.year,
+          quarter: body.level === 'quarterly' ? body.quarter : null,
+          month: body.level === 'monthly' ? body.month : null,
+          strategicArea: body.strategicArea || null,
+          cadence: body.cadence ?? undefined,
+          goalId: body.goalId || null,
+          parentId: body.parentId || null,
+        },
+      })
+      return { content: [{ type: 'text', text: `Marketing-ív létrehozva (${arc.level}): ${arc.title} — ID: ${arc.id}` }] }
+    }
+  )
+
+  server.tool(
+    'update_marketing_arc',
+    'Marketing-ív módosítása: cím, leírás, státusz, kadencia, stratégiai terület, üzleti cél. Csak a megadott mezők frissülnek. A szint nem módosítható.',
+    {
+      id:            z.string(),
+      title:         z.string().optional(),
+      description:   z.string().optional(),
+      status:        z.enum(['active', 'achieved', 'missed', 'dropped']).optional(),
+      strategicArea: z.string().optional(),
+      cadence:       z.record(z.string(), z.number()).optional(),
+      goalId:        z.string().optional(),
+    },
+    async ({ id, ...fields }) => {
+      const arc = await prisma.marketingArc.findUnique({ where: { id }, select: { id: true } })
+      if (!arc) return { content: [{ type: 'text', text: 'Marketing-ív nem található.' }] }
+      const upd: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(fields)) {
+        if (v === undefined) continue
+        upd[k] = (k === 'description' || k === 'strategicArea' || k === 'goalId') ? (v || null) : v
+      }
+      const data = await prisma.marketingArc.update({ where: { id }, data: upd })
+      return { content: [{ type: 'text', text: `Marketing-ív frissítve: ${data.title} (${data.status})` }] }
+    }
+  )
+
+  server.tool(
+    'archive_marketing_arc',
+    'Marketing-ív archiválása — eltűnik a fából, de nem törlődik. KORLÁT: vision és yearly szintű ívet az MCP nem archiválhat — a stratégiai gerincet csak a webes felületen lehet módosítani. Végleges törlés az MCP-n keresztül nincs.',
+    { id: z.string(), reason: z.string().optional() },
+    async ({ id, reason }) => {
+      const arc = await prisma.marketingArc.findUnique({
+        where: { id },
+        select: { id: true, title: true, level: true, children: { where: { archivedAt: null }, select: { id: true } } },
+      })
+      if (!arc) return { content: [{ type: 'text', text: 'Marketing-ív nem található.' }] }
+      if (arc.level === 'vision' || arc.level === 'yearly') {
+        return { content: [{ type: 'text', text: `A(z) ${arc.level} szintű ív archiválása az MCP-n keresztül nem engedélyezett — csak a webes felületen.` }] }
+      }
+      if (arc.children.length > 0) {
+        return { content: [{ type: 'text', text: `Az ívnek ${arc.children.length} aktív al-szintje van — előbb azokat kell kezelni.` }] }
+      }
+      await prisma.marketingArc.update({ where: { id }, data: { archivedAt: new Date() } })
+      return { content: [{ type: 'text', text: `Marketing-ív archiválva: ${arc.title}${reason ? ` — indok: ${reason}` : ''}` }] }
+    }
+  )
+
+  server.tool(
+    'create_content_theme',
+    'Új téma ("kör") létrehozása egy marketing-ív alá: a mondanivaló (message) és a struktúra/részek (outline) rögzítése. A témából származnak a konkrét tartalmak. Állapotok: planned → approved → active → done.',
+    {
+      title:     z.string(),
+      arcId:     z.string().optional().describe('A marketing-ív ID, amihez a téma tartozik'),
+      message:   z.string().optional().describe('A mondanivaló / core message'),
+      outline:   z.string().optional().describe('A struktúra / részek (markdown)'),
+      status:    z.enum(['planned', 'approved', 'active', 'done']).optional(),
+      startDate: z.string().optional().describe('YYYY-MM-DD'),
+      endDate:   z.string().optional().describe('YYYY-MM-DD'),
+    },
+    async (body) => {
+      if (body.arcId) {
+        const arc = await prisma.marketingArc.findUnique({ where: { id: body.arcId }, select: { id: true } })
+        if (!arc) return { content: [{ type: 'text', text: `Nincs ilyen marketing-ív: ${body.arcId}` }] }
+      }
+      const theme = await prisma.contentTheme.create({
+        data: {
+          title: body.title,
+          message: body.message || null,
+          outline: body.outline || null,
+          status: body.status || 'planned',
+          startDate: body.startDate ? new Date(body.startDate) : null,
+          endDate: body.endDate ? new Date(body.endDate) : null,
+          arcId: body.arcId || null,
+        },
+      })
+      return { content: [{ type: 'text', text: `Téma létrehozva: ${theme.title} (${theme.status}) — ID: ${theme.id}` }] }
+    }
+  )
+
+  server.tool(
+    'update_content_theme',
+    'Téma módosítása: cím, mondanivaló, vázlat, állapot, időablak, ív-kötés. Csak a megadott mezők frissülnek.',
+    {
+      id:        z.string(),
+      title:     z.string().optional(),
+      message:   z.string().optional(),
+      outline:   z.string().optional(),
+      status:    z.enum(['planned', 'approved', 'active', 'done']).optional(),
+      arcId:     z.string().optional(),
+      startDate: z.string().optional(),
+      endDate:   z.string().optional(),
+    },
+    async ({ id, startDate, endDate, ...fields }) => {
+      const theme = await prisma.contentTheme.findUnique({ where: { id }, select: { id: true } })
+      if (!theme) return { content: [{ type: 'text', text: 'Téma nem található.' }] }
+      const upd: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(fields)) {
+        if (v === undefined) continue
+        upd[k] = (k === 'message' || k === 'outline' || k === 'arcId') ? (v || null) : v
+      }
+      if (startDate !== undefined) upd.startDate = startDate ? new Date(startDate) : null
+      if (endDate !== undefined) upd.endDate = endDate ? new Date(endDate) : null
+      const data = await prisma.contentTheme.update({ where: { id }, data: upd })
+      return { content: [{ type: 'text', text: `Téma frissítve: ${data.title} (${data.status})` }] }
+    }
+  )
+
+  // ─── MARKETING: TARTALMAK (V1/V2) ────────────────────────────────────────────
+
+  const channelEnum = z.enum(CHANNEL_KEYS as [string, ...string[]])
+  const langEnum = z.enum(LANGUAGES.map(l => l.key) as [string, ...string[]])
+
+  server.tool(
+    'list_content_pieces',
+    'Tartalmak listázása. Szűrhető csatorna, státusz, téma, ív és ütemezési dátum-tartomány szerint. Csatornák: blog, linkedin, facebook, instagram, newsletter, pinterest. A tartalom három nyelvet tart (bodyDe elsődleges, bodyHu, bodyEn).',
+    {
+      channel: channelEnum.optional(),
+      status:  z.enum(['draft', 'ready', 'scheduled', 'published', 'archived']).optional(),
+      themeId: z.string().optional(),
+      arcId:   z.string().optional(),
+      from:    z.string().optional().describe('Ütemezés ettől, YYYY-MM-DD'),
+      to:      z.string().optional().describe('Ütemezés eddig, YYYY-MM-DD'),
+    },
+    async ({ channel, status, themeId, arcId, from, to }) => {
+      const where: Record<string, unknown> = {}
+      if (channel) where.channel = channel
+      if (status) where.status = status
+      else where.status = { not: 'archived' }
+      if (themeId) where.themeId = themeId
+      if (arcId) where.arcId = arcId
+      if (from || to) where.scheduledFor = { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(`${to}T23:59:59`) } : {}) }
+      const data = await prisma.contentPiece.findMany({
+        where,
+        include: {
+          theme: { select: { id: true, title: true } },
+          parentPiece: { select: { id: true, title: true, channel: true } },
+        },
+        orderBy: [{ scheduledFor: 'asc' }, { createdAt: 'desc' }],
+      })
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'get_content_piece',
+    'Egy tartalom teljes lekérése — mindhárom nyelvű törzs, származtatott gyerekek és a legutóbbi eseménytörténet.',
+    { id: z.string() },
+    async ({ id }) => {
+      const data = await prisma.contentPiece.findUnique({
+        where: { id },
+        include: {
+          theme: { select: { id: true, title: true } },
+          arc: { select: { id: true, title: true } },
+          parentPiece: { select: { id: true, title: true, channel: true } },
+          derivedPieces: { select: { id: true, title: true, channel: true, status: true } },
+          events: { orderBy: { createdAt: 'desc' }, take: 15 },
+        },
+      })
+      if (!data) return { content: [{ type: 'text', text: 'Tartalom nem található.' }] }
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'create_content_piece',
+    'Új tartalom létrehozása. A szöveget a megfelelő nyelvi mezőbe írd (bodyDe = német/elsődleges, bodyHu, bodyEn). Csatorna-származtatáshoz (pl. blogból LinkedIn) add meg a parentPieceId-t; témához/ívhez a themeId/arcId-t; ütemezéshez a scheduledFor-t. KORLÁT: a "published" státuszt az MCP nem állíthatja — publikálni csak a webes felületen lehet. A tartalom "agent" forrásjelöléssel jön létre és naplózódik.',
+    {
+      title:         z.string(),
+      channel:       channelEnum,
+      bodyDe:        z.string().optional().describe('Német törzsszöveg (elsődleges)'),
+      bodyHu:        z.string().optional(),
+      bodyEn:        z.string().optional(),
+      status:        z.enum(['draft', 'ready', 'scheduled']).optional().describe('published nem engedélyezett'),
+      scheduledFor:  z.string().optional().describe('Ütemezés dátuma, YYYY-MM-DD'),
+      themeId:       z.string().optional(),
+      arcId:         z.string().optional().describe('Ad-hoc: közvetlenül egy ív-hónaphoz tűzve, téma nélkül'),
+      parentPieceId: z.string().optional().describe('Csatorna-származtatás szülője (pl. a blog, amiből ez készült)'),
+      slug:          z.string().optional().describe('Weboldal-kész URL-slug (blognál hasznos)'),
+      imagePrompt:   z.string().optional().describe('Vizuális koncepció / kép-prompt'),
+    },
+    async (body) => {
+      if (body.themeId) {
+        const t = await prisma.contentTheme.findUnique({ where: { id: body.themeId }, select: { id: true } })
+        if (!t) return { content: [{ type: 'text', text: `Nincs ilyen téma: ${body.themeId}` }] }
+      }
+      const piece = await prisma.contentPiece.create({
+        data: {
+          title: body.title,
+          channel: body.channel,
+          bodyDe: body.bodyDe || null,
+          bodyHu: body.bodyHu || null,
+          bodyEn: body.bodyEn || null,
+          status: body.status || 'draft',
+          source: 'agent',
+          scheduledFor: body.scheduledFor ? new Date(body.scheduledFor) : null,
+          themeId: body.themeId || null,
+          arcId: body.arcId || null,
+          parentPieceId: body.parentPieceId || null,
+          slug: body.slug || null,
+          imagePrompt: body.imagePrompt || null,
+        },
+        include: { theme: { select: { title: true } } },
+      })
+      await logPieceCreated(piece.id, 'agent', body.parentPieceId ? 'derived' : 'created')
+      return { content: [{ type: 'text', text: `Tartalom létrehozva: ${piece.title} (${piece.channel}) — ID: ${piece.id}` }] }
+    }
+  )
+
+  server.tool(
+    'update_content_piece',
+    'Tartalom módosítása: cím, bármelyik nyelvi törzs (bodyDe/bodyHu/bodyEn — lokalizációhoz ideális), csatorna, státusz, ütemezés, téma/ív/szülő kötés, slug. Csak a megadott mezők frissülnek; minden változás naplózódik. KORLÁT: a "published" státuszt az MCP nem állíthatja — publikálni csak a webes felületen lehet.',
+    {
+      id:            z.string(),
+      title:         z.string().optional(),
+      channel:       channelEnum.optional(),
+      bodyDe:        z.string().optional(),
+      bodyHu:        z.string().optional(),
+      bodyEn:        z.string().optional(),
+      status:        z.enum(['draft', 'ready', 'scheduled']).optional().describe('published nem engedélyezett'),
+      scheduledFor:  z.string().optional().describe('YYYY-MM-DD, vagy üres string a törléshez'),
+      themeId:       z.string().optional(),
+      arcId:         z.string().optional(),
+      slug:          z.string().optional(),
+      imagePrompt:   z.string().optional(),
+    },
+    async ({ id, scheduledFor, ...fields }) => {
+      const before = await prisma.contentPiece.findUnique({ where: { id } })
+      if (!before) return { content: [{ type: 'text', text: 'Tartalom nem található.' }] }
+      const upd: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(fields)) {
+        if (v === undefined) continue
+        upd[k] = (k === 'title' || k === 'channel' || k === 'status') ? v : (v || null)
+      }
+      if (scheduledFor !== undefined) upd.scheduledFor = scheduledFor ? new Date(scheduledFor) : null
+      const data = await prisma.contentPiece.update({ where: { id }, data: upd })
+      await logPieceDiff(id, 'agent', before, data)
+      return { content: [{ type: 'text', text: `Tartalom frissítve: ${data.title} → ${data.status}` }] }
+    }
+  )
+
+  server.tool(
+    'schedule_content_piece',
+    'Tartalom ütemezése egy dátumra (a naptárra kerül) és a státusz "scheduled"-re állítása. Az ütemezés naplózódik.',
+    {
+      id:   z.string(),
+      date: z.string().describe('Ütemezés dátuma, YYYY-MM-DD'),
+    },
+    async ({ id, date }) => {
+      const before = await prisma.contentPiece.findUnique({ where: { id } })
+      if (!before) return { content: [{ type: 'text', text: 'Tartalom nem található.' }] }
+      const data = await prisma.contentPiece.update({
+        where: { id },
+        data: { scheduledFor: new Date(date), status: before.status === 'draft' ? 'scheduled' : before.status },
+      })
+      await logPieceDiff(id, 'agent', before, data)
+      return { content: [{ type: 'text', text: `Tartalom ütemezve: ${data.title} → ${date}` }] }
+    }
+  )
+
+  server.tool(
+    'archive_content_piece',
+    'Tartalom archiválása (eltűnik a listákból/naptárból, de nem törlődik). Végleges törlés az MCP-n keresztül nincs — az csak a webes felületen.',
+    { id: z.string(), reason: z.string().optional() },
+    async ({ id, reason }) => {
+      const before = await prisma.contentPiece.findUnique({ where: { id }, select: { title: true, status: true } })
+      if (!before) return { content: [{ type: 'text', text: 'Tartalom nem található.' }] }
+      await prisma.contentPiece.update({ where: { id }, data: { status: 'archived' } })
+      await logPieceEvent(id, 'agent', 'archived', 'status', before.status, reason ? `archived (${reason})` : 'archived')
+      return { content: [{ type: 'text', text: `Tartalom archiválva: ${before.title}` }] }
     }
   )
 
