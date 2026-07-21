@@ -5,9 +5,9 @@ import { logPieceDiff, logPieceEvent } from '@/lib/contentEvents'
 export const dynamic = 'force-dynamic'
 
 const include = {
-  theme: { select: { id: true, title: true, arcId: true } },
+  theme: { select: { id: true, title: true, arcId: true, message: true, outline: true } },
   arc: { select: { id: true, title: true, level: true } },
-  parentPiece: { select: { id: true, title: true, channel: true } },
+  parentPiece: { select: { id: true, title: true, channel: true, bodyDe: true } },
   derivedPieces: { select: { id: true, title: true, channel: true, status: true } },
   events: { orderBy: { createdAt: 'desc' as const }, take: 50 },
 }

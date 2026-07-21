@@ -25,7 +25,7 @@ const normalizeTaskStatus = (s: string) => (s === 'done' ? 'completed' : s)
 const dealStageEnum = z.enum([...DEAL_STAGE_KEYS, ...LEGACY_STAGE_KEYS] as [string, ...string[]])
 
 function buildServer() {
-  const server = new McpServer({ name: 'memini-crm', version: '1.1.0' })
+  const server = new McpServer({ name: 'memini-crm', version: '1.2.0' })
 
   // ─── SZÁMLÁK ─────────────────────────────────────────────────────────────
 
