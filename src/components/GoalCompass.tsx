@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import {
   Plus, Edit2, Trash2, Archive, ChevronRight, ChevronDown,
@@ -157,6 +157,30 @@ function findNode(nodes: GoalNode[], id: string): GoalNode | null {
   return null
 }
 
+function flatten(nodes: GoalNode[]): GoalNode[] {
+  const out: GoalNode[] = []
+  const walk = (ns: GoalNode[]) => { for (const n of ns) { out.push(n); walk(n.children) } }
+  walk(nodes)
+  return out
+}
+
+// Betöltéskor a legrelevánsabb célt választjuk ki, hogy a részletező soha ne
+// legyen üres: az aktuális havi cél a legjobb, majd negyedéves, éves, végül vision.
+function pickDefaultSelection(nodes: GoalNode[]): string | null {
+  const flat = flatten(nodes)
+  if (flat.length === 0) return null
+  const now = new Date()
+  const y = now.getFullYear(), q = Math.floor(now.getMonth() / 3) + 1, m = now.getMonth() + 1
+  const rank = (n: GoalNode) => {
+    if (n.level === 'monthly'   && n.year === y && n.month === m)   return 5
+    if (n.level === 'quarterly' && n.year === y && n.quarter === q) return 4
+    if (n.level === 'yearly'    && n.year === y)                    return 3
+    if (n.level === 'vision')                                      return 2
+    return 1
+  }
+  return flat.reduce((best, n) => (rank(n) > rank(best) ? n : best), flat[0]).id
+}
+
 export default function GoalCompass() {
   const [tree, setTree] = useState<GoalNode[]>([])
   const [loading, setLoading] = useState(true)
@@ -165,6 +189,7 @@ export default function GoalCompass() {
   const [tasks, setTasks] = useState<GoalTask[]>([])
   const [goalModal, setGoalModal] = useState<{ goal: GoalNode | null; defaultLevel?: string; defaultParentId?: string } | null>(null)
   const [taskModal, setTaskModal] = useState(false)
+  const didInitSelect = useRef(false)
 
   const fetchTree = useCallback(async () => {
     const res = await fetch('/api/goals/tree')
@@ -188,6 +213,13 @@ export default function GoalCompass() {
       walk(data, [])
       return open
     })
+
+    // Első betöltéskor kiválasztjuk az aktuális időszak célját.
+    if (!didInitSelect.current) {
+      didInitSelect.current = true
+      const def = pickDefaultSelection(data)
+      if (def) setSelectedId(def)
+    }
   }, [])
 
   useEffect(() => { fetchTree() }, [fetchTree])
@@ -236,9 +268,9 @@ export default function GoalCompass() {
   const nextLevel = selected ? NEXT_LEVEL[selected.level] : null
 
   return (
-    <div className="grid md:grid-cols-[minmax(280px,360px)_1fr] gap-4 items-start">
+    <div className="grid md:grid-cols-[minmax(300px,380px)_1fr] gap-4 items-start">
       {/* ── Fa ── */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 md:sticky md:top-4">
         <div className="flex items-center justify-between px-1 mb-2">
           <span className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
             <Target size={14} className="text-indigo-500" />
@@ -290,9 +322,22 @@ export default function GoalCompass() {
 
       {/* ── Részletek ── */}
       {!selected ? (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center text-gray-400 text-sm">
-          Válassz egy célt a fából a részletekhez —<br />
-          vagy hozz létre újat a „+ Új cél" gombbal.
+        <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-10 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center mx-auto mb-4">
+            <Target size={26} className="text-indigo-400" />
+          </div>
+          <p className="text-base font-semibold text-gray-700 mb-1">Kezdd a hosszú távú céllal</p>
+          <p className="text-sm text-gray-400 max-w-sm mx-auto mb-5">
+            Hová akartok eljutni 5 éven belül? Ebből bomlik le a rendszer éves →
+            negyedéves → havi célokra, és ide köthetők a napi feladatok.
+          </p>
+          <button
+            onClick={() => setGoalModal({ goal: null, defaultLevel: 'vision' })}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors"
+          >
+            <Plus size={15} />
+            Hosszú távú cél létrehozása
+          </button>
         </div>
       ) : (
         <div className="space-y-4">
