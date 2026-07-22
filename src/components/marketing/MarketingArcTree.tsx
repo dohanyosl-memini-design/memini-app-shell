@@ -11,7 +11,7 @@ import ArcForm from '@/components/marketing/ArcForm'
 import ThemeForm from '@/components/marketing/ThemeForm'
 import PieceForm from '@/components/marketing/PieceForm'
 import { useRouter } from 'next/navigation'
-import { ARC_LEVEL_LABELS, ARC_STATUS_LABELS, THEME_STATUS_LABELS, channelInfo, arcPeriodLabel } from '@/lib/marketingConstants'
+import { ARC_LEVEL_LABELS, ARC_STATUS_LABELS, THEME_STATUS_LABELS, PIECE_STATUS_LABELS, channelInfo, arcPeriodLabel } from '@/lib/marketingConstants'
 
 interface Fill { planned: number; actual: number; percent: number | null }
 interface ArcNode {
@@ -286,10 +286,13 @@ export default function MarketingArcTree() {
                 {detail.pieces.map(p => {
                   const ci = channelInfo(p.channel)
                   return (
-                    <Link key={p.id} href={`/marketing/piece/${p.id}`} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-gray-50 hover:bg-violet-50">
+                    <Link key={p.id} href={`/marketing/piece/${p.id}`} className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-gray-50 hover:bg-violet-50">
                       <span className="text-sm shrink-0">{ci?.icon}</span>
                       <span className="flex-1 text-sm text-gray-800 truncate">{p.title}</span>
-                      {p.scheduledFor && <span className="text-[10px] text-gray-400 shrink-0">{new Date(p.scheduledFor).toLocaleDateString('hu-HU', { month: '2-digit', day: '2-digit' })}</span>}
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${PIECE_STATUS_LABELS[p.status]?.color ?? 'bg-gray-100 text-gray-500'}`}>
+                        {PIECE_STATUS_LABELS[p.status]?.label ?? p.status}
+                      </span>
+                      {p.scheduledFor && <span className="text-[10px] text-gray-400 shrink-0 w-10 text-right">{new Date(p.scheduledFor).toLocaleDateString('hu-HU', { month: '2-digit', day: '2-digit' })}</span>}
                     </Link>
                   )
                 })}
