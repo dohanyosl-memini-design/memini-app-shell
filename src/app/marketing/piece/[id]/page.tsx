@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import Modal from '@/components/Modal'
 import PieceForm from '@/components/marketing/PieceForm'
+import PieceImageGallery, { PieceImage } from '@/components/marketing/PieceImageGallery'
 import { CHANNELS, CHANNEL_KEYS, channelInfo, LANGUAGES, PIECE_STATUS_LABELS } from '@/lib/marketingConstants'
 
 interface DerivedPiece { id: string; title: string; channel: string; status: string }
@@ -30,6 +31,7 @@ interface Piece {
   arc: { id: string; title: string; level: string } | null
   parentPiece: { id: string; title: string; channel: string; bodyDe: string | null } | null
   derivedPieces: DerivedPiece[]
+  images: PieceImage[]
   events: PieceEvent[]
 }
 
@@ -211,6 +213,9 @@ export default function PieceEditorPage({ params }: { params: { id: string } }) 
           </div>
         ))}
       </div>
+
+      {/* Képek */}
+      <PieceImageGallery pieceId={piece.id} images={piece.images} onChange={load} />
 
       {/* Származtatás */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-4">

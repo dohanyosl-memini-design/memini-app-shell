@@ -13,6 +13,7 @@ import { logTaskCreated, logTaskDiff, logTaskEvent } from '@/lib/taskEvents'
 import { buildMarketingTree } from '@/lib/marketingTree'
 import { ARC_LEVELS, CHANNEL_KEYS, LANGUAGES } from '@/lib/marketingConstants'
 import { logPieceCreated, logPieceDiff, logPieceEvent } from '@/lib/contentEvents'
+import { ingestImageFromUrl, deleteContentImage, setPrimaryImage } from '@/lib/imageProcessing'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,7 +26,7 @@ const normalizeTaskStatus = (s: string) => (s === 'done' ? 'completed' : s)
 const dealStageEnum = z.enum([...DEAL_STAGE_KEYS, ...LEGACY_STAGE_KEYS] as [string, ...string[]])
 
 function buildServer() {
-  const server = new McpServer({ name: 'memini-crm', version: '1.2.0' })
+  const server = new McpServer({ name: 'memini-crm', version: '1.3.0' })
 
   // ─── SZÁMLÁK ─────────────────────────────────────────────────────────────
 
@@ -2378,6 +2379,87 @@ function buildServer() {
       await prisma.contentPiece.update({ where: { id }, data: { status: 'archived' } })
       await logPieceEvent(id, 'agent', 'archived', 'status', before.status, reason ? `archived (${reason})` : 'archived')
       return { content: [{ type: 'text', text: `Tartalom archiválva: ${before.title}` }] }
+    }
+  )
+
+  // ─── MARKETING: KÉPEK (V1/V2) ────────────────────────────────────────────────
+
+  server.tool(
+    'attach_content_image',
+    'Kép hozzáadása egy tartalomhoz URL alapján. A szerver letölti a képet, WebP-be konvertálja (helytakarékos) és tárolja. Az első kép automatikusan borító lesz. Adj meg egy publikusan elérhető kép-URL-t (JPEG/PNG/WebP/HEIC).',
+    {
+      pieceId:  z.string().describe('A tartalom ID-ja'),
+      imageUrl: z.string().describe('Publikusan elérhető kép-URL, amit a szerver letölt és WebP-be konvertál'),
+      altDe:    z.string().optional().describe('Alt-szöveg németül (weboldal-SEO, opcionális)'),
+      altHu:    z.string().optional(),
+      altEn:    z.string().optional(),
+    },
+    async ({ pieceId, imageUrl, altDe, altHu, altEn }) => {
+      const piece = await prisma.contentPiece.findUnique({ where: { id: pieceId }, select: { id: true } })
+      if (!piece) return { content: [{ type: 'text', text: 'Tartalom nem található.' }] }
+      try {
+        const img = await ingestImageFromUrl(pieceId, imageUrl, 'agent')
+        if (altDe || altHu || altEn) {
+          await prisma.contentImage.update({ where: { id: img.id }, data: { altDe: altDe || null, altHu: altHu || null, altEn: altEn || null } })
+        }
+        await logPieceEvent(pieceId, 'agent', 'image_added', 'image', null, `${Math.round(img.bytes / 1024)} KB WebP`)
+        return { content: [{ type: 'text', text: `Kép hozzáadva és WebP-be konvertálva (${img.width}×${img.height}, ${Math.round(img.bytes / 1024)} KB) — ID: ${img.id}` }] }
+      } catch (e) {
+        return { content: [{ type: 'text', text: `Kép hozzáadása sikertelen: ${e instanceof Error ? e.message : 'ismeretlen hiba'}` }] }
+      }
+    }
+  )
+
+  server.tool(
+    'list_content_images',
+    'Egy tartalom képeinek listázása (borító elöl).',
+    { pieceId: z.string() },
+    async ({ pieceId }) => {
+      const images = await prisma.contentImage.findMany({
+        where: { pieceId },
+        orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
+        select: { id: true, url: true, isPrimary: true, altDe: true, altHu: true, altEn: true, width: true, height: true, bytes: true },
+      })
+      return { content: [{ type: 'text', text: JSON.stringify(images, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'set_image_alt',
+    'Kép alt-szövegének beállítása nyelvenként (weboldal-SEO). Csak a megadott nyelvek frissülnek.',
+    {
+      id:    z.string().describe('Kép ID'),
+      altDe: z.string().optional(),
+      altHu: z.string().optional(),
+      altEn: z.string().optional(),
+    },
+    async ({ id, altDe, altHu, altEn }) => {
+      const upd: Record<string, unknown> = {}
+      if (altDe !== undefined) upd.altDe = altDe || null
+      if (altHu !== undefined) upd.altHu = altHu || null
+      if (altEn !== undefined) upd.altEn = altEn || null
+      const img = await prisma.contentImage.update({ where: { id }, data: upd })
+      return { content: [{ type: 'text', text: `Alt-szöveg frissítve (kép: ${img.id})` }] }
+    }
+  )
+
+  server.tool(
+    'set_primary_image',
+    'Borítókép kijelölése egy tartalomhoz (ez lesz az előnézet/gyorshivatkozás).',
+    { id: z.string().describe('Kép ID') },
+    async ({ id }) => {
+      await setPrimaryImage(id)
+      return { content: [{ type: 'text', text: 'Borítókép beállítva.' }] }
+    }
+  )
+
+  server.tool(
+    'remove_content_image',
+    'Kép törlése egy tartalomból (a tárhelyből is). Ha borító volt, a következő kép lesz az új borító.',
+    { id: z.string().describe('Kép ID') },
+    async ({ id }) => {
+      await deleteContentImage(id)
+      return { content: [{ type: 'text', text: 'Kép törölve.' }] }
     }
   )
 

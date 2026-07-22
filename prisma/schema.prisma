@@ -234,9 +234,31 @@ model ContentPiece {
   parentPieceId String?
   parentPiece   ContentPiece?  @relation("PieceDerivation", fields: [parentPieceId], references: [id])
   derivedPieces ContentPiece[] @relation("PieceDerivation")
+  images        ContentImage[]
   events        ContentEvent[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+}
+
+// Tartalomhoz tartozó kép — feltöltéskor / MCP-ingesztáláskor WebP-be konvertálva
+// (sharp) és Vercel Blobban tárolva. Egy piece-nek több képe lehet, egy a borító
+// (isPrimary → a piece.imageUrl gyorshivatkozás). Az alt-szöveg nyelvenként
+// opcionális (weboldal-SEO).
+model ContentImage {
+  id        String       @id @default(cuid())
+  pieceId   String
+  piece     ContentPiece @relation(fields: [pieceId], references: [id], onDelete: Cascade)
+  url       String
+  isPrimary Boolean      @default(false)
+  altDe     String?
+  altHu     String?
+  altEn     String?
+  width     Int?
+  height    Int?
+  bytes     Int?
+  source    String       @default("human") // human | agent
+  sortOrder Int          @default(0)
+  createdAt DateTime     @default(now())
 }
 
 // Append-only tartalom-eseménytörténet (mint a TaskEvent) — ki mit generált /

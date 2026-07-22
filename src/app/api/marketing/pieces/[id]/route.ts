@@ -9,6 +9,7 @@ const include = {
   arc: { select: { id: true, title: true, level: true } },
   parentPiece: { select: { id: true, title: true, channel: true, bodyDe: true } },
   derivedPieces: { select: { id: true, title: true, channel: true, status: true } },
+  images: { orderBy: [{ isPrimary: 'desc' as const }, { sortOrder: 'asc' as const }] },
   events: { orderBy: { createdAt: 'desc' as const }, take: 50 },
 }
 
