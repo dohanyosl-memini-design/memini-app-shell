@@ -15,7 +15,7 @@ import { format, isPast, isToday, isTomorrow } from 'date-fns'
 import { hu } from 'date-fns/locale'
 import { dueHasTime } from '@/lib/datetime'
 
-interface SubTask { id: string; title: string; completed: boolean }
+interface SubTask { id: string; title: string; completed: boolean; dueDate: string | null }
 
 interface TaskEvent {
   id: string
@@ -122,6 +122,15 @@ export default function TaskDetailPage({ params }: { params: { id: string } }) {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ completed: updated.find(s => s.id === subtaskId)?.completed }),
+    })
+  }
+
+  async function setSubtaskDue(subtaskId: string, value: string) {
+    setSubtasks(prev => prev.map(s => s.id === subtaskId ? { ...s, dueDate: value || null } : s))
+    await fetch(`/api/subtasks/${subtaskId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dueDate: value || null }),
     })
   }
 
@@ -399,6 +408,13 @@ export default function TaskDetailPage({ params }: { params: { id: string } }) {
               <span className={`flex-1 text-sm leading-snug ${s.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
                 {s.title}
               </span>
+              <input
+                type="date"
+                value={s.dueDate ? s.dueDate.slice(0, 10) : ''}
+                onChange={(e) => setSubtaskDue(s.id, e.target.value)}
+                title="Előkészítési határidő (megjelenik a Fókuszban)"
+                className={`shrink-0 w-[122px] px-1.5 py-0.5 rounded-lg border text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-400 ${s.dueDate ? 'border-blue-200 text-blue-600 bg-blue-50' : 'border-transparent text-gray-300 bg-transparent group-hover:border-gray-200'}`}
+              />
               <button
                 onClick={() => promoteSubtask(s.id, s.title)}
                 title="Önálló feladattá alakítás"

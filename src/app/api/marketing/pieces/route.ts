@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
       imageUrl: body.imageUrl || null,
       status: body.status || 'draft',
       source: body.source || 'human',
+      focused: body.focused ?? false,
       scheduledFor: body.scheduledFor ? new Date(body.scheduledFor) : null,
       themeId: body.themeId || null,
       arcId: body.arcId || null,

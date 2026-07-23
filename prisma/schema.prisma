@@ -144,6 +144,7 @@ model Task {
   priority    String    @default("medium")
   taskType    String?
   source      String    @default("human") // human | agent | automation
+  focused     Boolean   @default(false)   // kézzel a Fókuszba emelve
   waitingFor  String?   // waiting státusznál: kire/mire várunk
   followUpAt  DateTime? // waiting státusznál: mikor kell újra ránézni
   goalId      String?
@@ -225,6 +226,7 @@ model ContentPiece {
   imageUrl      String?
   status        String         @default("draft") // draft | ready | scheduled | published | archived
   source        String         @default("human") // human | agent | automation
+  focused       Boolean        @default(false)   // kézzel a Fókuszba emelve
   scheduledFor  DateTime?
   publishedAt   DateTime?
   themeId       String?
@@ -290,12 +292,13 @@ model TaskEvent {
 }
 
 model SubTask {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   title     String
-  completed Boolean  @default(false)
+  completed Boolean   @default(false)
+  dueDate   DateTime? // opcionális saját határidő — így az előkészítő lépés önállóan a Fókuszba kerül
   taskId    String
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
 }
 
 model Activity {

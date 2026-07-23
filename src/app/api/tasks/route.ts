@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
       priority: body.priority || 'medium',
       taskType: body.taskType || null,
       source: body.source || 'human',
+      focused: body.focused ?? false,
       waitingFor: body.waitingFor || null,
       followUpAt: body.followUpAt ? new Date(body.followUpAt) : null,
       goalId: body.goalId || null,

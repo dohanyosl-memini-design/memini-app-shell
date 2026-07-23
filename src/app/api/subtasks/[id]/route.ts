@@ -5,10 +5,11 @@ export const dynamic = 'force-dynamic'
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const body = await request.json()
-  const subtask = await prisma.subTask.update({
-    where: { id: params.id },
-    data: { completed: body.completed },
-  })
+  const data: Record<string, unknown> = {}
+  if (body.completed !== undefined) data.completed = body.completed
+  if (body.title !== undefined) data.title = body.title
+  if (body.dueDate !== undefined) data.dueDate = body.dueDate ? new Date(body.dueDate) : null
+  const subtask = await prisma.subTask.update({ where: { id: params.id }, data })
   return NextResponse.json(subtask)
 }
 

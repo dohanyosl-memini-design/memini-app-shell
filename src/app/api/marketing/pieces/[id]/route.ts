@@ -35,6 +35,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   if (body.seo !== undefined) upd.seo = body.seo
   if (body.imagePrompt !== undefined) upd.imagePrompt = body.imagePrompt || null
   if (body.imageUrl !== undefined) upd.imageUrl = body.imageUrl || null
+  if (body.focused !== undefined) upd.focused = body.focused
   if (body.status !== undefined) {
     upd.status = body.status
     if (body.status === 'published' && !before.publishedAt) upd.publishedAt = new Date()
