@@ -15,6 +15,7 @@ import { ARC_LEVELS, CHANNEL_KEYS, LANGUAGES } from '@/lib/marketingConstants'
 import { logPieceCreated, logPieceDiff, logPieceEvent } from '@/lib/contentEvents'
 import { ingestImageFromUrl, deleteContentImage, setPrimaryImage } from '@/lib/imageProcessing'
 import { parseDueInput } from '@/lib/datetime'
+import { buildFocus } from '@/lib/focus'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +28,7 @@ const normalizeTaskStatus = (s: string) => (s === 'done' ? 'completed' : s)
 const dealStageEnum = z.enum([...DEAL_STAGE_KEYS, ...LEGACY_STAGE_KEYS] as [string, ...string[]])
 
 function buildServer() {
-  const server = new McpServer({ name: 'memini-crm', version: '1.3.1' })
+  const server = new McpServer({ name: 'memini-crm', version: '1.4.0' })
 
   // ─── SZÁMLÁK ─────────────────────────────────────────────────────────────
 
@@ -1117,7 +1118,7 @@ function buildServer() {
 
   server.tool(
     'update_task',
-    'Feladat módosítása: státusz, prioritás, határidő, leírás, típus, felelős, cél-kapcsolat, várakozás-mezők. Csak a megadott mezők frissülnek; minden változás naplózódik a feladat eseménytörténetébe. "waiting" státuszra váltásnál a waitingFor és followUpAt kötelező.',
+    'Feladat módosítása: státusz, prioritás, határidő, leírás, típus, felelős, cél-kapcsolat, várakozás-mezők, Fókusz-kiemelés. Csak a megadott mezők frissülnek; minden változás naplózódik a feladat eseménytörténetébe. "waiting" státuszra váltásnál a waitingFor és followUpAt kötelező.',
     {
       id:          z.string(),
       status:      taskStatusEnum.optional(),
@@ -1128,10 +1129,11 @@ function buildServer() {
       taskType:    z.enum(['gyartas', 'email', 'minta', 'csomagolas', 'hivas', 'admin', 'szallitas', 'megbeszeles', 'szamlairas', 'egyeb']).optional(),
       goalId:      z.string().optional().describe('Új cél ID, vagy üres string a cél-kapcsolat törléséhez'),
       assigneeId:  z.string().optional().describe('Felelős user ID, vagy üres string a törléshez'),
+      focused:     z.boolean().optional().describe('Fókuszba emelés (a Fókusz nézet tetején jelenik meg, dátumtól függetlenül)'),
       waitingFor:  z.string().optional().describe('waiting státusznál: kire/mire várunk'),
       followUpAt:  z.string().optional().describe('waiting státusznál: mikor nézzük újra. YYYY-MM-DD vagy YYYY-MM-DDTHH:mm (Europe/Budapest).'),
     },
-    async ({ id, status, priority, title, description, dueDate, taskType, goalId, assigneeId, waitingFor, followUpAt }) => {
+    async ({ id, status, priority, title, description, dueDate, taskType, goalId, assigneeId, focused, waitingFor, followUpAt }) => {
       const before = await prisma.task.findUnique({ where: { id } })
       if (!before) return { content: [{ type: 'text', text: 'Feladat nem található.' }] }
 
@@ -1159,6 +1161,7 @@ function buildServer() {
           ...(taskType    ? { taskType }    : {}),
           ...(goalId !== undefined ? { goalId: goalId || null } : {}),
           ...(assigneeId !== undefined ? { assigneeId: assigneeId || null } : {}),
+          ...(focused !== undefined ? { focused } : {}),
           ...(newStatus === 'waiting'
             ? {
                 ...(waitingFor !== undefined ? { waitingFor } : {}),
@@ -1196,14 +1199,34 @@ function buildServer() {
     'add_subtask',
     'Alfeladat hozzáadása egy meglévő feladathoz.',
     {
-      taskId: z.string().describe('Feladat ID'),
-      title:  z.string().describe('Alfeladat szövege'),
+      taskId:  z.string().describe('Feladat ID'),
+      title:   z.string().describe('Alfeladat szövege'),
+      dueDate: z.string().optional().describe('Előkészítési határidő (opcionális). YYYY-MM-DD vagy YYYY-MM-DDTHH:mm (Europe/Budapest). Ha van, az alfeladat önállóan megjelenik a Fókuszban a saját napján.'),
     },
-    async ({ taskId, title }) => {
+    async ({ taskId, title, dueDate }) => {
       const task = await prisma.task.findUnique({ where: { id: taskId }, select: { title: true } })
       if (!task) return { content: [{ type: 'text', text: 'Feladat nem található.' }] }
-      const sub = await prisma.subTask.create({ data: { taskId, title } })
-      return { content: [{ type: 'text', text: `Alfeladat hozzáadva a(z) „${task.title}" feladathoz: ${sub.title} (${sub.id})` }] }
+      const sub = await prisma.subTask.create({ data: { taskId, title, dueDate: parseDueInput(dueDate) } })
+      return { content: [{ type: 'text', text: `Alfeladat hozzáadva a(z) „${task.title}" feladathoz: ${sub.title} (${sub.id})${sub.dueDate ? ` — határidő: ${sub.dueDate.toISOString().slice(0, 10)}` : ''}` }] }
+    }
+  )
+
+  server.tool(
+    'update_subtask',
+    'Alfeladat módosítása: kész-állapot, cím, előkészítési határidő. Csak a megadott mezők frissülnek.',
+    {
+      id:        z.string().describe('Alfeladat ID'),
+      completed: z.boolean().optional(),
+      title:     z.string().optional(),
+      dueDate:   z.string().optional().describe('YYYY-MM-DD vagy YYYY-MM-DDTHH:mm (Europe/Budapest), vagy üres string a törléshez'),
+    },
+    async ({ id, completed, title, dueDate }) => {
+      const data: Record<string, unknown> = {}
+      if (completed !== undefined) data.completed = completed
+      if (title !== undefined) data.title = title
+      if (dueDate !== undefined) data.dueDate = dueDate ? parseDueInput(dueDate) : null
+      const sub = await prisma.subTask.update({ where: { id }, data })
+      return { content: [{ type: 'text', text: `Alfeladat frissítve: ${sub.title}` }] }
     }
   )
 
@@ -1359,63 +1382,14 @@ function buildServer() {
 
   server.tool(
     'get_daily_focus',
-    'Napi fókusz-adatok egy hívásban: javasolt top 3 feladat (pontszám-alapú rangsor: lejárt határidő, esedékes követés, prioritás, cél-kapcsolat), plusz a lejárt, ma esedékes, követésre érett (waiting + lejárt followUpAt) és elakadt (14+ napja álló) feladatok listái. A top 3 csak javaslat — a felhasználó felülbírálhatja.',
-    {},
-    async () => {
-      const now = new Date()
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
-
-      const open = await prisma.task.findMany({
-        where: { status: { notIn: ['completed', 'cancelled'] } },
-        include: {
-          company: { select: { id: true, name: true } },
-          goal: { select: { id: true, title: true, level: true } },
-          assignee: { select: { id: true, name: true } },
-          subtasks: { select: { completed: true } },
-        },
-        orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
-      })
-
-      const overdue = open.filter(t => t.dueDate && t.dueDate < todayStart && t.status !== 'waiting')
-      const dueToday = open.filter(t => t.dueDate && t.dueDate >= todayStart && t.dueDate <= todayEnd && t.status !== 'waiting')
-      const followUpDue = open.filter(t => t.status === 'waiting' && t.followUpAt && t.followUpAt <= todayEnd)
-      const stalled = open.filter(t =>
-        t.status === 'in_progress' && now.getTime() - t.updatedAt.getTime() > 14 * 86400000
-      )
-
-      const scored = open
-        .filter(t => t.status !== 'waiting' || (t.followUpAt && t.followUpAt <= todayEnd))
-        .map(t => {
-          let score = 0
-          const reasons: string[] = []
-          if (t.dueDate && t.dueDate < todayStart) { score += 3; reasons.push('lejárt határidő') }
-          else if (t.dueDate && t.dueDate <= todayEnd) { score += 2; reasons.push('ma esedékes') }
-          if (t.status === 'waiting' && t.followUpAt && t.followUpAt <= todayEnd) { score += 3; reasons.push('követés esedékes') }
-          if (t.priority === 'high') { score += 2; reasons.push('magas prioritás') }
-          else if (t.priority === 'medium') { score += 1 }
-          if (t.goalId) { score += 1; reasons.push('célhoz kötött') }
-          if (t.status === 'in_progress' && now.getTime() - t.updatedAt.getTime() > 14 * 86400000) { score += 1; reasons.push('régóta áll') }
-          return { task: t, score, reasons }
-        })
-        .sort((a, b) => b.score - a.score)
-
-      const brief = (t: (typeof open)[number]) => ({
-        id: t.id, title: t.title, status: t.status, priority: t.priority,
-        dueDate: t.dueDate, waitingFor: t.waitingFor, followUpAt: t.followUpAt,
-        goal: t.goal ? t.goal.title : null,
-        company: t.company ? t.company.name : null,
-      })
-
-      const result = {
-        date: now.toISOString().slice(0, 10),
-        suggestedTop3: scored.slice(0, 3).map(s => ({ ...brief(s.task), score: s.score, reasons: s.reasons })),
-        overdue: overdue.map(brief),
-        dueToday: dueToday.map(brief),
-        followUpDue: followUpDue.map(brief),
-        stalled: stalled.map(brief),
-        openTaskCount: open.length,
-        note: 'A suggestedTop3 pontszám-alapú javaslat (lejárt/esedékes + prioritás + cél-kapcsolat) — a felhasználó felülbírálhatja.',
+    'Egységes Fókusz-nézet egy hívásban: a következő N nap (alap: 3) MINDEN időzített tennivalója, típustól függetlenül — feladatok (deal/lead/cég kontextussal), időzített alfeladatok (előkészítő lépések a szülő feladatukkal), ütemezett marketing-posztok, lejáró utánkövetések. Napi bontásban (bucket: overdue/today/day1/day2), a kézzel kiemelt (focused) tételekkel. Ez a felhasználó napi vezérlőnézete — a feladatok/posztok időzítésével és a focused kapcsolóval alakítható.',
+    {
+      days: z.number().int().min(1).max(14).optional().describe('Ablak napokban (alapértelmezett: 3 = ma + 2 nap)'),
+    },
+    async ({ days }) => {
+      const result = await buildFocus({ days: days ?? 3 })
+      if (result.items.length === 0) {
+        return { content: [{ type: 'text', text: 'A megadott időablakra nincs időzített tennivaló. Adj határidőt feladatoknak/alfeladatoknak, ütemezz posztot, vagy emelj ki (focused) tételt.' }] }
       }
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
     }
@@ -2335,8 +2309,9 @@ function buildServer() {
       arcId:         z.string().optional(),
       slug:          z.string().optional(),
       imagePrompt:   z.string().optional(),
+      focused:       z.boolean().optional().describe('Fókuszba emelés (a Fókusz nézet tetején jelenik meg)'),
     },
-    async ({ id, scheduledFor, ...fields }) => {
+    async ({ id, scheduledFor, focused, ...fields }) => {
       const before = await prisma.contentPiece.findUnique({ where: { id } })
       if (!before) return { content: [{ type: 'text', text: 'Tartalom nem található.' }] }
       const upd: Record<string, unknown> = {}
@@ -2344,6 +2319,7 @@ function buildServer() {
         if (v === undefined) continue
         upd[k] = (k === 'title' || k === 'channel' || k === 'status') ? v : (v || null)
       }
+      if (focused !== undefined) upd.focused = focused
       if (scheduledFor !== undefined) upd.scheduledFor = scheduledFor ? new Date(scheduledFor) : null
       const data = await prisma.contentPiece.update({ where: { id }, data: upd })
       await logPieceDiff(id, 'agent', before, data)

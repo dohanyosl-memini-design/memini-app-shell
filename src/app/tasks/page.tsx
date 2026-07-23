@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, Edit2, Trash2, LayoutGrid, List, User, Building2, AlertCircle, Calendar, CheckSquare, Compass, Target, Hourglass } from 'lucide-react'
+import { Plus, Edit2, Trash2, LayoutGrid, List, User, Building2, AlertCircle, Calendar, CheckSquare, Compass, Target, Hourglass, Focus } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
 import TaskForm, { TASK_TYPES } from '@/components/TaskForm'
 import GoalCompass from '@/components/GoalCompass'
+import FocusView from '@/components/FocusView'
 import { format, isPast, isToday, isTomorrow } from 'date-fns'
 import { hu } from 'date-fns/locale'
 import { dueHasTime } from '@/lib/datetime'
@@ -260,7 +261,7 @@ export default function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [overdueInvoices, setOverdueInvoices] = useState<OverdueInvoice[]>([])
   const [loading, setLoading] = useState(true)
-  const [mainView, setMainView] = useState<'board' | 'compass'>('board')
+  const [mainView, setMainView] = useState<'focus' | 'board' | 'compass'>('focus')
   const [view, setView] = useState<'kanban' | 'list'>(
     typeof window !== 'undefined' && window.innerWidth < 640 ? 'list' : 'kanban'
   )
@@ -362,12 +363,20 @@ export default function TasksPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Feladatok</h1>
           <p className="text-gray-500 mt-0.5 text-sm">
-            {mainView === 'compass' ? 'Célok és irányok' : `${filtered.length} feladat`}
+            {mainView === 'compass' ? 'Célok és irányok' : mainView === 'focus' ? 'A következő 3 nap — minden tennivaló' : `${filtered.length} feladat`}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Fő nézetváltó: Iránytű / Tábla */}
+          {/* Fő nézetváltó: Fókusz / Iránytű / Tábla */}
           <div className="flex bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setMainView('focus')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-colors text-sm ${mainView === 'focus' ? 'bg-white shadow-sm text-violet-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+              title="Fókusz — a következő 3 nap"
+            >
+              <Focus size={15} />
+              <span className="hidden sm:inline">Fókusz</span>
+            </button>
             <button
               onClick={() => setMainView('compass')}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-colors text-sm ${mainView === 'compass' ? 'bg-white shadow-sm text-indigo-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
@@ -415,7 +424,9 @@ export default function TasksPage() {
         </div>
       </div>
 
-      {mainView === 'compass' ? (
+      {mainView === 'focus' ? (
+        <FocusView />
+      ) : mainView === 'compass' ? (
         <GoalCompass />
       ) : (
       <>

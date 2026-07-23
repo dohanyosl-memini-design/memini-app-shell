@@ -42,12 +42,28 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       contactId: body.contactId || null,
       dealId: body.dealId || null,
       companyId: body.companyId || null,
+      // Csak ha explicit jön — a csillag külön művelet, a form-mentés ne törölje.
+      ...(body.focused !== undefined ? { focused: body.focused } : {}),
     },
     include,
   })
 
   await logTaskDiff(params.id, body.actor || 'web', before, task)
 
+  return NextResponse.json(task)
+}
+
+// Részleges frissítés — pl. a Fókusz-csillag vagy gyors státuszváltás.
+export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+  const body = await request.json()
+  const before = await prisma.task.findUnique({ where: { id: params.id } })
+  if (!before) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const data: Record<string, unknown> = {}
+  if (body.focused !== undefined) data.focused = body.focused
+  if (body.status !== undefined) data.status = body.status
+  if (body.priority !== undefined) data.priority = body.priority
+  const task = await prisma.task.update({ where: { id: params.id }, data, include })
+  await logTaskDiff(params.id, body.actor || 'web', before, task)
   return NextResponse.json(task)
 }
 
