@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, Edit2, Trash2, LayoutGrid, List, User, Building2, AlertCircle, Calendar, CheckSquare, Compass, Target, Hourglass, Focus, CheckCircle2 } from 'lucide-react'
+import { Plus, Edit2, Trash2, LayoutGrid, List, User, Building2, AlertCircle, Calendar, CheckSquare, Compass, Target, Hourglass, Focus, CheckCircle2, Star } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
@@ -23,6 +23,7 @@ interface Task {
   priority: string
   taskType: string | null
   source: string
+  focused: boolean
   waitingFor: string | null
   followUpAt: string | null
   goalId: string | null
@@ -80,6 +81,7 @@ function TaskCard({
   onEdit,
   onDelete,
   onComplete,
+  onFocus,
   onDragStart,
   onDragEnd,
   isDragging,
@@ -88,6 +90,7 @@ function TaskCard({
   onEdit: (t: Task) => void
   onDelete: (id: string) => void
   onComplete: (id: string) => void
+  onFocus: (id: string, focused: boolean) => void
   onDragStart: (t: Task) => void
   onDragEnd: () => void
   isDragging: boolean
@@ -129,11 +132,18 @@ function TaskCard({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={(e) => { e.stopPropagation(); onEdit(task) }} className="p-1 text-gray-400 hover:text-blue-600 rounded">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); onFocus(task.id, !task.focused) }}
+            title={task.focused ? 'Kivétel a Fókuszból' : 'Fókuszba emel'}
+            className={`p-1 rounded transition-colors ${task.focused ? 'text-amber-500' : 'text-gray-300 opacity-0 group-hover:opacity-100 hover:text-amber-500'}`}
+          >
+            <Star size={13} fill={task.focused ? 'currentColor' : 'none'} />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); onEdit(task) }} className="p-1 text-gray-400 hover:text-blue-600 rounded opacity-0 group-hover:opacity-100 transition-opacity">
             <Edit2 size={12} />
           </button>
-          <button onClick={(e) => { e.stopPropagation(); onDelete(task.id) }} className="p-1 text-gray-400 hover:text-red-600 rounded">
+          <button onClick={(e) => { e.stopPropagation(); onDelete(task.id) }} className="p-1 text-gray-400 hover:text-red-600 rounded opacity-0 group-hover:opacity-100 transition-opacity">
             <Trash2 size={12} />
           </button>
         </div>
@@ -206,6 +216,7 @@ function KanbanColumn({
   onEdit,
   onDelete,
   onComplete,
+  onFocus,
   onDragStart,
   onDragEnd,
   onDrop,
@@ -216,6 +227,7 @@ function KanbanColumn({
   onEdit: (t: Task) => void
   onDelete: (id: string) => void
   onComplete: (id: string) => void
+  onFocus: (id: string, focused: boolean) => void
   onDragStart: (t: Task) => void
   onDragEnd: () => void
   onDrop: (status: string) => void
@@ -244,6 +256,7 @@ function KanbanColumn({
             onEdit={onEdit}
             onDelete={onDelete}
             onComplete={onComplete}
+            onFocus={onFocus}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
             isDragging={draggingId === t.id}
@@ -320,6 +333,15 @@ export default function TasksPage() {
       body: JSON.stringify({ status: 'completed' }),
     })
     fetchTasks()
+  }
+
+  async function handleFocus(id: string, focused: boolean) {
+    setTasks((prev) => prev.map((t) => t.id === id ? { ...t, focused } : t))
+    await fetch(`/api/tasks/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ focused }),
+    })
   }
 
   function handleEdit(task: Task) {
@@ -544,6 +566,7 @@ export default function TasksPage() {
               onEdit={handleEdit}
               onDelete={handleDelete}
               onComplete={handleComplete}
+              onFocus={handleFocus}
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
               onDrop={onDrop}
@@ -595,6 +618,13 @@ export default function TasksPage() {
                   <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${PRIORITY_BADGE[task.priority]}`}>
                     {PRIORITY_LABEL[task.priority]}
                   </span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleFocus(task.id, !task.focused) }}
+                    title={task.focused ? 'Kivétel a Fókuszból' : 'Fókuszba emel'}
+                    className={`shrink-0 transition-colors ${task.focused ? 'text-amber-500' : 'text-gray-300 hover:text-amber-500'}`}
+                  >
+                    <Star size={14} fill={task.focused ? 'currentColor' : 'none'} />
+                  </button>
                   <button onClick={(e) => { e.stopPropagation(); handleEdit(task) }} className="text-gray-400 hover:text-blue-600 transition-colors shrink-0">
                     <Edit2 size={14} />
                   </button>

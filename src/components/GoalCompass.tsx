@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import {
   Plus, Edit2, Trash2, Archive, ChevronRight, ChevronDown,
-  Target, CheckSquare, TrendingUp, ListChecks,
+  Target, CheckSquare, TrendingUp, ListChecks, Star,
 } from 'lucide-react'
 import Modal from '@/components/Modal'
 import GoalForm from '@/components/GoalForm'
@@ -43,6 +43,7 @@ interface GoalTask {
   status: string
   priority: string
   dueDate: string | null
+  focused: boolean
   assignee: { id: string; name: string } | null
   subtasks: { id: string; completed: boolean }[]
 }
@@ -242,6 +243,15 @@ export default function GoalCompass() {
     })
     if (selectedId === goal.id) setSelectedId(null)
     fetchTree()
+  }
+
+  async function handleTaskFocus(taskId: string, focused: boolean) {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, focused } : t))
+    await fetch(`/api/tasks/${taskId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ focused }),
+    })
   }
 
   async function handleDelete(goal: GoalNode) {
@@ -479,7 +489,7 @@ export default function GoalCompass() {
                     <Link
                       key={t.id}
                       href={`/tasks/${t.id}`}
-                      className="flex items-center gap-3 px-3 py-2 rounded-xl bg-gray-50 hover:bg-blue-50 transition-colors"
+                      className="flex items-center gap-3 px-3 py-2 rounded-xl bg-gray-50 hover:bg-blue-50 transition-colors group"
                     >
                       <span className={`w-2 h-2 rounded-full shrink-0 ${TASK_STATUS_DOT[t.status] || 'bg-gray-300'}`} />
                       <span className={`flex-1 text-sm truncate ${t.status === 'completed' ? 'line-through text-gray-400' : 'text-gray-800'}`}>
@@ -496,6 +506,13 @@ export default function GoalCompass() {
                           {new Date(t.dueDate).toLocaleDateString('hu-HU', { month: '2-digit', day: '2-digit' })}
                         </span>
                       )}
+                      <button
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleTaskFocus(t.id, !t.focused) }}
+                        title={t.focused ? 'Kivétel a Fókuszból' : 'Fókuszba emel'}
+                        className={`shrink-0 transition-colors ${t.focused ? 'text-amber-500' : 'text-gray-300 opacity-0 group-hover:opacity-100 hover:text-amber-500'}`}
+                      >
+                        <Star size={13} fill={t.focused ? 'currentColor' : 'none'} />
+                      </button>
                     </Link>
                   )
                 })}
