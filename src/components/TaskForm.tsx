@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { Plus, X, CheckSquare, Square } from 'lucide-react'
 import { GOAL_LEVEL_LABELS, goalPeriodLabel } from '@/lib/goalConstants'
+import { dueHasTime } from '@/lib/datetime'
+
+const pad = (n: number) => String(n).padStart(2, '0')
 
 interface Contact { id: string; firstName: string; lastName: string }
 interface Company { id: string; name: string }
@@ -72,10 +75,12 @@ export default function TaskForm({ task, defaultStatus = 'pending', defaultCompa
   const [subtaskInput, setSubtaskInput] = useState('')
   const subtaskRef = useRef<HTMLInputElement>(null)
 
+  const initDue = task?.dueDate ? new Date(task.dueDate) : null
   const [form, setForm] = useState({
     title: task?.title || '',
     description: task?.description || '',
-    dueDate: task?.dueDate ? task.dueDate.slice(0, 10) : '',
+    dueDate: initDue ? `${initDue.getFullYear()}-${pad(initDue.getMonth() + 1)}-${pad(initDue.getDate())}` : '',
+    dueTime: initDue && dueHasTime(initDue) ? `${pad(initDue.getHours())}:${pad(initDue.getMinutes())}` : '',
     status: task?.status || defaultStatus,
     priority: task?.priority || 'medium',
     taskType: task?.taskType || '',
@@ -141,10 +146,15 @@ export default function TaskForm({ task, defaultStatus = 'pending', defaultCompa
     const method = task ? 'PUT' : 'POST'
     const url = task ? `/api/tasks/${task.id}` : '/api/tasks'
 
+    // Ha van időpont, teljes ISO-instant (helyi böngésző-időzóna); különben csak nap.
+    const duePayload = form.dueDate
+      ? (form.dueTime ? new Date(`${form.dueDate}T${form.dueTime}`).toISOString() : form.dueDate)
+      : ''
+
     await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, subtasks: pendingSubtasks }),
+      body: JSON.stringify({ ...form, dueDate: duePayload, subtasks: pendingSubtasks }),
     })
 
     setLoading(false)
@@ -398,9 +408,14 @@ export default function TaskForm({ task, defaultStatus = 'pending', defaultCompa
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Határidő</label>
-          <input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+          <label className="block text-sm font-medium text-gray-700 mb-1">Határidő {form.dueTime && <span className="text-xs font-normal text-gray-400">(idővel)</span>}</label>
+          <div className="flex gap-1.5">
+            <input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
+              className="flex-1 min-w-0 px-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+            <input type="time" value={form.dueTime} onChange={(e) => setForm({ ...form, dueTime: e.target.value })}
+              disabled={!form.dueDate} title="Pontos időpont (opcionális)"
+              className="w-[86px] shrink-0 px-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm disabled:bg-gray-50 disabled:text-gray-400" />
+          </div>
         </div>
       </div>
 

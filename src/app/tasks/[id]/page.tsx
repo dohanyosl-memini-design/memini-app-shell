@@ -13,6 +13,7 @@ import TaskForm, { TASK_TYPES } from '@/components/TaskForm'
 import { GOAL_LEVEL_LABELS } from '@/lib/goalConstants'
 import { format, isPast, isToday, isTomorrow } from 'date-fns'
 import { hu } from 'date-fns/locale'
+import { dueHasTime } from '@/lib/datetime'
 
 interface SubTask { id: string; title: string; completed: boolean }
 
@@ -181,10 +182,11 @@ export default function TaskDetailPage({ params }: { params: { id: string } }) {
   const dueLabel = (() => {
     if (!task.dueDate) return null
     const d = new Date(task.dueDate)
-    if (isPast(d) && !isToday(d)) return { text: `Lejárt: ${format(d, 'yyyy. MM. dd.')}`, cls: 'text-red-600' }
-    if (isToday(d)) return { text: 'Ma esedékes', cls: 'text-red-600 font-semibold' }
-    if (isTomorrow(d)) return { text: `Holnap (${format(d, 'MM. dd.')})`, cls: 'text-amber-600' }
-    return { text: format(d, 'yyyy. MMMM d.', { locale: hu }), cls: 'text-gray-700' }
+    const t = dueHasTime(d) ? ` ${format(d, 'HH:mm')}` : ''
+    if (isPast(d) && !isToday(d)) return { text: `Lejárt: ${format(d, 'yyyy. MM. dd.')}${t}`, cls: 'text-red-600' }
+    if (isToday(d)) return { text: dueHasTime(d) ? `Ma esedékes – ${format(d, 'HH:mm')}` : 'Ma esedékes', cls: 'text-red-600 font-semibold' }
+    if (isTomorrow(d)) return { text: `Holnap (${format(d, 'MM. dd.')})${t}`, cls: 'text-amber-600' }
+    return { text: `${format(d, 'yyyy. MMMM d.', { locale: hu })}${t}`, cls: 'text-gray-700' }
   })()
 
   return (
