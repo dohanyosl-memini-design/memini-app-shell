@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Star, CornerDownRight, Hourglass, AlertTriangle, Calendar, CheckSquare } from 'lucide-react'
+import { Star, CornerDownRight, Hourglass, AlertTriangle, Calendar, CheckSquare, CheckCircle2 } from 'lucide-react'
 import { TASK_TYPES } from '@/components/TaskForm'
 import { channelInfo } from '@/lib/marketingConstants'
 import { format } from 'date-fns'
@@ -42,7 +42,7 @@ function itemIcon(it: Item) {
   return <span className="text-sm">{t?.icon ?? '✓'}</span>
 }
 
-function Row({ it, onStar, onToggleSub }: { it: Item; onStar: (it: Item) => void; onToggleSub: (id: string) => void }) {
+function Row({ it, onStar, onToggleSub, onComplete }: { it: Item; onStar: (it: Item) => void; onToggleSub: (id: string) => void; onComplete: (it: Item) => void }) {
   const router = useRouter()
   const time = it.date && it.hasTime ? format(new Date(it.date), 'HH:mm') : null
   return (
@@ -76,6 +76,12 @@ function Row({ it, onStar, onToggleSub }: { it: Item; onStar: (it: Item) => void
       </div>
 
       {time && <span className="text-xs font-medium text-gray-500 shrink-0">{time}</span>}
+      {(it.kind === 'task' || it.kind === 'followup') && (
+        <button onClick={e => { e.stopPropagation(); onComplete(it) }} title="Késznek jelöl"
+          className="shrink-0 text-gray-300 hover:text-green-600 transition-colors">
+          <CheckCircle2 size={17} />
+        </button>
+      )}
       {it.kind !== 'subtask' && (
         <button onClick={e => { e.stopPropagation(); onStar(it) }} title="Kiemelés"
           className={`shrink-0 transition-colors ${it.focused ? 'text-amber-500' : 'text-gray-300 opacity-0 group-hover:opacity-100 hover:text-amber-500'}`}>
@@ -88,7 +94,7 @@ function Row({ it, onStar, onToggleSub }: { it: Item; onStar: (it: Item) => void
 
 function Section({ title, icon, items, accent, ...rest }: {
   title: string; icon: React.ReactNode; items: Item[]; accent?: string
-  onStar: (it: Item) => void; onToggleSub: (id: string) => void
+  onStar: (it: Item) => void; onToggleSub: (id: string) => void; onComplete: (it: Item) => void
 }) {
   if (items.length === 0) return null
   return (
@@ -99,7 +105,7 @@ function Section({ title, icon, items, accent, ...rest }: {
         <span className="text-xs text-gray-400">{items.length}</span>
       </div>
       <div className="space-y-1.5">
-        {items.map(it => <Row key={`${it.kind}-${it.id}`} it={it} onStar={rest.onStar} onToggleSub={rest.onToggleSub} />)}
+        {items.map(it => <Row key={`${it.kind}-${it.id}`} it={it} onStar={rest.onStar} onToggleSub={rest.onToggleSub} onComplete={rest.onComplete} />)}
       </div>
     </div>
   )
@@ -128,6 +134,10 @@ export default function FocusView() {
     await fetch(`/api/subtasks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ completed: true }) })
     load()
   }
+  async function onComplete(it: Item) {
+    await fetch(`/api/tasks/${it.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'completed' }) })
+    load()
+  }
 
   if (loading) return <div className="py-24 text-center text-gray-400">Betöltés...</div>
   if (!data) return null
@@ -154,11 +164,11 @@ export default function FocusView() {
         </div>
       ) : (
         <>
-          <Section title="Kiemelt" icon={<Star size={15} className="text-amber-500" fill="currentColor" />} items={focused} accent="text-amber-600" onStar={onStar} onToggleSub={onToggleSub} />
-          <Section title="Lejárt" icon={<AlertTriangle size={15} className="text-red-500" />} items={byBucket('overdue')} accent="text-red-600" onStar={onStar} onToggleSub={onToggleSub} />
-          <Section title={`Ma · ${dayLabel(0)}`} icon={<span className="w-2 h-2 rounded-full bg-violet-500" />} items={byBucket('today')} onStar={onStar} onToggleSub={onToggleSub} />
-          <Section title={`Holnap · ${dayLabel(1)}`} icon={<span className="w-2 h-2 rounded-full bg-blue-400" />} items={byBucket('day1')} onStar={onStar} onToggleSub={onToggleSub} />
-          <Section title={`Holnapután · ${dayLabel(2)}`} icon={<span className="w-2 h-2 rounded-full bg-gray-300" />} items={byBucket('day2')} onStar={onStar} onToggleSub={onToggleSub} />
+          <Section title="Kiemelt" icon={<Star size={15} className="text-amber-500" fill="currentColor" />} items={focused} accent="text-amber-600" onStar={onStar} onToggleSub={onToggleSub} onComplete={onComplete} />
+          <Section title="Lejárt" icon={<AlertTriangle size={15} className="text-red-500" />} items={byBucket('overdue')} accent="text-red-600" onStar={onStar} onToggleSub={onToggleSub} onComplete={onComplete} />
+          <Section title={`Ma · ${dayLabel(0)}`} icon={<span className="w-2 h-2 rounded-full bg-violet-500" />} items={byBucket('today')} onStar={onStar} onToggleSub={onToggleSub} onComplete={onComplete} />
+          <Section title={`Holnap · ${dayLabel(1)}`} icon={<span className="w-2 h-2 rounded-full bg-blue-400" />} items={byBucket('day1')} onStar={onStar} onToggleSub={onToggleSub} onComplete={onComplete} />
+          <Section title={`Holnapután · ${dayLabel(2)}`} icon={<span className="w-2 h-2 rounded-full bg-gray-300" />} items={byBucket('day2')} onStar={onStar} onToggleSub={onToggleSub} onComplete={onComplete} />
         </>
       )}
     </div>
