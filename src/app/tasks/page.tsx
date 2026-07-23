@@ -9,6 +9,7 @@ import TaskForm, { TASK_TYPES } from '@/components/TaskForm'
 import GoalCompass from '@/components/GoalCompass'
 import { format, isPast, isToday, isTomorrow } from 'date-fns'
 import { hu } from 'date-fns/locale'
+import { dueHasTime } from '@/lib/datetime'
 
 interface SubTask { id: string; title: string; completed: boolean }
 
@@ -66,10 +67,11 @@ const PRIORITY_LABEL: Record<string, string> = {
 function dueBadge(dateStr: string | null) {
   if (!dateStr) return null
   const d = new Date(dateStr)
-  if (isPast(d) && !isToday(d)) return { text: `Lejárt: ${format(d, 'MM.dd.')}`, cls: 'text-red-600 bg-red-50' }
-  if (isToday(d))     return { text: 'Ma', cls: 'text-red-600 bg-red-50 font-semibold' }
-  if (isTomorrow(d))  return { text: 'Holnap', cls: 'text-amber-600 bg-amber-50' }
-  return { text: format(d, 'MM.dd.', { locale: hu }), cls: 'text-gray-400 bg-gray-50' }
+  const t = dueHasTime(d) ? ` ${format(d, 'HH:mm')}` : ''
+  if (isPast(d) && !isToday(d)) return { text: `Lejárt: ${format(d, 'MM.dd.')}${t}`, cls: 'text-red-600 bg-red-50' }
+  if (isToday(d))     return { text: dueHasTime(d) ? format(d, 'HH:mm') : 'Ma', cls: 'text-red-600 bg-red-50 font-semibold' }
+  if (isTomorrow(d))  return { text: `Holnap${t}`, cls: 'text-amber-600 bg-amber-50' }
+  return { text: `${format(d, 'MM.dd.', { locale: hu })}${t}`, cls: 'text-gray-400 bg-gray-50' }
 }
 
 function TaskCard({

@@ -14,6 +14,7 @@ import { buildMarketingTree } from '@/lib/marketingTree'
 import { ARC_LEVELS, CHANNEL_KEYS, LANGUAGES } from '@/lib/marketingConstants'
 import { logPieceCreated, logPieceDiff, logPieceEvent } from '@/lib/contentEvents'
 import { ingestImageFromUrl, deleteContentImage, setPrimaryImage } from '@/lib/imageProcessing'
+import { parseDueInput } from '@/lib/datetime'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +27,7 @@ const normalizeTaskStatus = (s: string) => (s === 'done' ? 'completed' : s)
 const dealStageEnum = z.enum([...DEAL_STAGE_KEYS, ...LEGACY_STAGE_KEYS] as [string, ...string[]])
 
 function buildServer() {
-  const server = new McpServer({ name: 'memini-crm', version: '1.3.0' })
+  const server = new McpServer({ name: 'memini-crm', version: '1.3.1' })
 
   // ─── SZÁMLÁK ─────────────────────────────────────────────────────────────
 
@@ -1060,14 +1061,14 @@ function buildServer() {
     {
       title:       z.string(),
       description: z.string().optional(),
-      dueDate:     z.string().optional().describe('Határidő, YYYY-MM-DD formátum'),
+      dueDate:     z.string().optional().describe('Határidő. Csak nap: YYYY-MM-DD. Pontos időpont: YYYY-MM-DDTHH:mm (pl. 2026-07-25T14:30) — az idő magyar/német (Europe/Budapest) helyi idő szerint értendő.'),
       priority:    z.enum(['low', 'medium', 'high']).optional(),
       status:      taskStatusEnum.optional(),
       taskType:    z.enum(['gyartas', 'email', 'minta', 'csomagolas', 'hivas', 'admin', 'szallitas', 'megbeszeles', 'szamlairas', 'egyeb']).optional().describe('Feladat típusa'),
       goalId:      z.string().optional().describe('Cél ID, amihez a feladat tartozik'),
       assigneeId:  z.string().optional().describe('Felelős user ID'),
       waitingFor:  z.string().optional().describe('waiting státusznál: kire/mire várunk'),
-      followUpAt:  z.string().optional().describe('waiting státusznál: mikor nézzük újra, YYYY-MM-DD'),
+      followUpAt:  z.string().optional().describe('waiting státusznál: mikor nézzük újra. YYYY-MM-DD vagy YYYY-MM-DDTHH:mm (Europe/Budapest).'),
       contactId:   z.string().optional(),
       companyId:   z.string().optional(),
       dealId:      z.string().optional(),
@@ -1086,7 +1087,7 @@ function buildServer() {
         data: {
           title:       body.title,
           description: body.description || null,
-          dueDate:     body.dueDate ? new Date(body.dueDate) : null,
+          dueDate:     parseDueInput(body.dueDate),
           priority:    body.priority || 'medium',
           status,
           taskType:    body.taskType || null,
@@ -1094,7 +1095,7 @@ function buildServer() {
           goalId:      body.goalId || null,
           assigneeId:  body.assigneeId || null,
           waitingFor:  status === 'waiting' ? body.waitingFor : null,
-          followUpAt:  status === 'waiting' && body.followUpAt ? new Date(body.followUpAt) : null,
+          followUpAt:  status === 'waiting' ? parseDueInput(body.followUpAt) : null,
           contactId:   body.contactId || null,
           companyId:   body.companyId || null,
           dealId:      body.dealId || null,
@@ -1123,12 +1124,12 @@ function buildServer() {
       priority:    z.enum(['low', 'medium', 'high']).optional(),
       title:       z.string().optional(),
       description: z.string().optional(),
-      dueDate:     z.string().optional().describe('Új határidő YYYY-MM-DD, vagy üres string a törléshez'),
+      dueDate:     z.string().optional().describe('Új határidő. Csak nap: YYYY-MM-DD. Pontos időpont: YYYY-MM-DDTHH:mm (Europe/Budapest helyi idő). Üres string a törléshez.'),
       taskType:    z.enum(['gyartas', 'email', 'minta', 'csomagolas', 'hivas', 'admin', 'szallitas', 'megbeszeles', 'szamlairas', 'egyeb']).optional(),
       goalId:      z.string().optional().describe('Új cél ID, vagy üres string a cél-kapcsolat törléséhez'),
       assigneeId:  z.string().optional().describe('Felelős user ID, vagy üres string a törléshez'),
       waitingFor:  z.string().optional().describe('waiting státusznál: kire/mire várunk'),
-      followUpAt:  z.string().optional().describe('waiting státusznál: mikor nézzük újra, YYYY-MM-DD'),
+      followUpAt:  z.string().optional().describe('waiting státusznál: mikor nézzük újra. YYYY-MM-DD vagy YYYY-MM-DDTHH:mm (Europe/Budapest).'),
     },
     async ({ id, status, priority, title, description, dueDate, taskType, goalId, assigneeId, waitingFor, followUpAt }) => {
       const before = await prisma.task.findUnique({ where: { id } })
@@ -1154,14 +1155,14 @@ function buildServer() {
           ...(priority    ? { priority }    : {}),
           ...(title       ? { title }       : {}),
           ...(description !== undefined ? { description } : {}),
-          ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}),
+          ...(dueDate !== undefined ? { dueDate: parseDueInput(dueDate) } : {}),
           ...(taskType    ? { taskType }    : {}),
           ...(goalId !== undefined ? { goalId: goalId || null } : {}),
           ...(assigneeId !== undefined ? { assigneeId: assigneeId || null } : {}),
           ...(newStatus === 'waiting'
             ? {
                 ...(waitingFor !== undefined ? { waitingFor } : {}),
-                ...(followUpAt !== undefined ? { followUpAt: new Date(followUpAt) } : {}),
+                ...(followUpAt !== undefined ? { followUpAt: parseDueInput(followUpAt) } : {}),
               }
             : status
               ? { waitingFor: null, followUpAt: null }
