@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, Edit2, Trash2, LayoutGrid, List, User, Building2, AlertCircle, Calendar, CheckSquare, Compass, Target, Hourglass, Focus } from 'lucide-react'
+import { Plus, Edit2, Trash2, LayoutGrid, List, User, Building2, AlertCircle, Calendar, CheckSquare, Compass, Target, Hourglass, Focus, CheckCircle2 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
@@ -79,6 +79,7 @@ function TaskCard({
   task,
   onEdit,
   onDelete,
+  onComplete,
   onDragStart,
   onDragEnd,
   isDragging,
@@ -86,6 +87,7 @@ function TaskCard({
   task: Task
   onEdit: (t: Task) => void
   onDelete: (id: string) => void
+  onComplete: (id: string) => void
   onDragStart: (t: Task) => void
   onDragEnd: () => void
   isDragging: boolean
@@ -112,6 +114,15 @@ function TaskCard({
       {/* Type + priority row */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5">
+          {task.status !== 'completed' && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onComplete(task.id) }}
+              title="Késznek jelöl"
+              className="text-gray-300 hover:text-green-600 transition-colors"
+            >
+              <CheckCircle2 size={17} />
+            </button>
+          )}
           {typeInfo && (
             <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${typeInfo.color}`}>
               {typeInfo.icon} {typeInfo.label}
@@ -194,6 +205,7 @@ function KanbanColumn({
   tasks,
   onEdit,
   onDelete,
+  onComplete,
   onDragStart,
   onDragEnd,
   onDrop,
@@ -203,6 +215,7 @@ function KanbanColumn({
   tasks: Task[]
   onEdit: (t: Task) => void
   onDelete: (id: string) => void
+  onComplete: (id: string) => void
   onDragStart: (t: Task) => void
   onDragEnd: () => void
   onDrop: (status: string) => void
@@ -230,6 +243,7 @@ function KanbanColumn({
             task={t}
             onEdit={onEdit}
             onDelete={onDelete}
+            onComplete={onComplete}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
             isDragging={draggingId === t.id}
@@ -294,6 +308,17 @@ export default function TasksPage() {
   async function handleDelete(id: string) {
     if (!confirm('Biztosan törölni szeretné ezt a feladatot?')) return
     await fetch(`/api/tasks/${id}`, { method: 'DELETE' })
+    fetchTasks()
+  }
+
+  async function handleComplete(id: string) {
+    // Optimista frissítés, majd PATCH.
+    setTasks((prev) => prev.map((t) => t.id === id ? { ...t, status: 'completed' } : t))
+    await fetch(`/api/tasks/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'completed' }),
+    })
     fetchTasks()
   }
 
@@ -518,6 +543,7 @@ export default function TasksPage() {
               tasks={byStatus(col.id)}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              onComplete={handleComplete}
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
               onDrop={onDrop}
@@ -542,7 +568,17 @@ export default function TasksPage() {
                   onClick={() => window.location.href = `/tasks/${task.id}`}
                   className={`bg-white rounded-xl border border-gray-100 px-4 py-3 hover:shadow-sm transition-shadow flex items-center gap-3 cursor-pointer hover:bg-gray-50 ${task.status === 'completed' ? 'opacity-60' : ''}`}
                 >
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${col?.dot || 'bg-gray-300'}`} />
+                  {task.status === 'completed' ? (
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${col?.dot || 'bg-gray-300'}`} />
+                  ) : (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleComplete(task.id) }}
+                      title="Késznek jelöl"
+                      className="shrink-0 text-gray-300 hover:text-green-600 transition-colors"
+                    >
+                      <CheckCircle2 size={18} />
+                    </button>
+                  )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2 flex-wrap">
                       <span className={`text-sm font-medium text-gray-900 ${task.status === 'completed' ? 'line-through text-gray-400' : ''}`}>
