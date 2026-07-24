@@ -1,0 +1,75 @@
+// Nyers levél → ParsedEmail. A memini-mail-bridge `@memini/email-parser`
+// hű portja (mailparser + sanitize-html). Tartalmilag változatlan.
+
+import { simpleParser, type AddressObject } from 'mailparser'
+import sanitizeHtml from 'sanitize-html'
+import { normalizeEmail, normalizeSubject } from './normalize'
+import type { EmailAddress, ParsedEmail } from './types'
+
+function addresses(value?: AddressObject | AddressObject[] | null): EmailAddress[] {
+  const objects = !value ? [] : Array.isArray(value) ? value : [value]
+  return objects.flatMap((item) =>
+    item.value
+      .filter((entry) => entry.address)
+      .map((entry) => ({
+        address: normalizeEmail(entry.address!),
+        ...(entry.name ? { name: entry.name } : {}),
+      })),
+  )
+}
+
+// A HTML-törzs fertőtlenítése — script/külső kép nélkül, biztonságos linkekkel.
+export function sanitizeEmailHtml(html: string): string {
+  return sanitizeHtml(html, {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img']),
+    allowedAttributes: {
+      ...sanitizeHtml.defaults.allowedAttributes,
+      a: ['href', 'name', 'target', 'rel'],
+      img: ['src', 'alt', 'title', 'width', 'height'],
+    },
+    allowedSchemes: ['http', 'https', 'mailto', 'cid'],
+    transformTags: {
+      a: sanitizeHtml.simpleTransform('a', { rel: 'noopener noreferrer', target: '_blank' }),
+    },
+    exclusiveFilter: (frame) => frame.tag === 'img' && /^https?:/i.test(frame.attribs.src ?? ''),
+  })
+}
+
+export async function parseEmail(raw: Buffer | string): Promise<ParsedEmail> {
+  const mail = await simpleParser(raw, { skipHtmlToText: false })
+  const from = addresses(mail.from)[0] ?? null
+  const text = (mail.text ?? '').replace(/\r\n/g, '\n').trim()
+  const html = typeof mail.html === 'string' ? sanitizeEmailHtml(mail.html) : null
+  const receivedAt = mail.date ?? new Date()
+  return {
+    messageId: mail.messageId?.trim() ?? null,
+    inReplyTo: mail.inReplyTo?.trim() ?? null,
+    references: Array.isArray(mail.references)
+      ? mail.references.map(String)
+      : mail.references
+        ? [String(mail.references)]
+        : [],
+    subject: mail.subject?.trim() || '(Nincs tárgy)',
+    normalizedSubject: normalizeSubject(mail.subject ?? ''),
+    from,
+    to: addresses(mail.to),
+    cc: addresses(mail.cc),
+    bcc: addresses(mail.bcc),
+    sentAt: mail.date ?? receivedAt,
+    receivedAt,
+    textBody: text,
+    htmlBody: html,
+    snippet: text.replace(/\s+/g, ' ').slice(0, 240),
+    headers: Object.fromEntries(
+      Array.from(mail.headers.entries()).map(([key, value]) => [key, String(value).slice(0, 10_000)]),
+    ),
+    attachments: mail.attachments.map((attachment) => ({
+      filename: attachment.filename || 'attachment',
+      contentType: attachment.contentType,
+      sizeBytes: attachment.size,
+      contentId: attachment.cid ?? null,
+      isInline: attachment.contentDisposition === 'inline' || Boolean(attachment.cid),
+      content: attachment.content,
+    })),
+  }
+}

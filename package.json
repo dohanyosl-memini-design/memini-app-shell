@@ -15,7 +15,9 @@
     "backtest:fixture": "tsx scripts/backtest/make-fixture.ts",
     "backtest:export": "tsx scripts/backtest/export.ts",
     "backtest:replay": "tsx scripts/backtest/replay.ts",
-    "backtest:score": "tsx scripts/backtest/score.ts"
+    "backtest:score": "tsx scripts/backtest/score.ts",
+    "email:sync": "tsx scripts/email-sync.ts",
+    "email:seed": "tsx scripts/seed-emails.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.1",
@@ -28,20 +30,25 @@
     "date-fns": "^3.6.0",
     "docx": "^9.6.1",
     "heic-convert": "^2.1.0",
+    "imapflow": "^1.5.0",
     "lucide-react": "^0.395.0",
+    "mailparser": "^3.9.14",
     "next": "14.2.5",
     "next-auth": "^4.24.14",
     "react": "^18",
     "react-dom": "^18",
     "recharts": "^2.12.7",
     "resend": "^6.12.4",
+    "sanitize-html": "^2.17.6",
     "sharp": "^0.34.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/mailparser": "^3.4.6",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@types/sanitize-html": "^2.16.1",
     "autoprefixer": "^10.0.1",
     "eslint": "^8",
     "eslint-config-next": "14.2.5",
