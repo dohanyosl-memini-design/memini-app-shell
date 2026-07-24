@@ -10,7 +10,7 @@ import {
   CheckSquare, BarChart3, Package, FileText, Wallet,
   ClipboardList, ShoppingCart, LogOut, Euro, Menu, X,
   GitMerge, BookOpen, Calculator, HelpCircle, Shield,
-  Sun, Moon, Bot, Factory, RefreshCw, CalendarDays, Megaphone,
+  Sun, Moon, Bot, Factory, RefreshCw, CalendarDays, Megaphone, Mail,
 } from 'lucide-react'
 import { useTheme } from '@/components/ThemeProvider'
 
@@ -31,6 +31,12 @@ const navGroups = [
       { href: '/companies', label: 'Cégek', icon: Building2 },
       { href: '/leads', label: 'Lead Pipeline', icon: GitMerge },
       { href: '/deals', label: 'Dealek', icon: TrendingUp },
+    ],
+  },
+  {
+    label: 'Kommunikáció',
+    items: [
+      { href: '/emails', label: 'Levelek', icon: Mail },
     ],
   },
   {

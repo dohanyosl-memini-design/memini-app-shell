@@ -47,7 +47,7 @@ async function main() {
   if (to) events = events.filter(e => e.ts.slice(0, 10) <= to)
 
   const byDay = groupByDay(events)
-  let days = [...byDay.keys()].sort()
+  let days = Array.from(byDay.keys()).sort()
   if (maxDays) days = days.slice(0, maxDays)
 
   console.log(`Export: ${exportFile} (exportálva: ${snap.exportedAt}, anonim: ${snap.anonymized})`)
@@ -57,7 +57,7 @@ async function main() {
     const kinds = new Map<string, number>()
     for (const e of events) kinds.set(e.kind, (kinds.get(e.kind) ?? 0) + 1)
     console.log('\nEseménytípusok:')
-    for (const [k, v] of [...kinds].sort((a, b) => b[1] - a[1])) console.log(`  ${k}: ${v}`)
+    for (const [k, v] of Array.from(kinds).sort((a, b) => b[1] - a[1])) console.log(`  ${k}: ${v}`)
     return
   }
 
@@ -108,7 +108,7 @@ async function main() {
         companyId: d.companyId && snap.companies.some(c => c.id === d.companyId) ? d.companyId : null,
         companyName: null,
         sourceEventIds: srcIds,
-        sourceKinds: [...new Set(srcEvents.map(e => e.kind))],
+        sourceKinds: Array.from(new Set(srcEvents.map(e => e.kind))),
       }
       obs.companyName = obs.companyId
         ? snap.companies.find(c => c.id === obs.companyId)?.name ?? null
@@ -142,7 +142,7 @@ async function main() {
       if (!draft.falsifyCondition?.trim() || !draft.claim?.trim()) continue
       if (hypotheses.some(h => h.claim === draft.claim)) continue
       const expiryDays = Math.min(Math.max(draft.expiryDays || 90, 14), 365)
-      const bornWith = [...new Set(draft.supportingObservationIds ?? [])]
+      const bornWith = Array.from(new Set(draft.supportingObservationIds ?? []))
         .filter(id => obsById.has(id))
       hypotheses.push({
         id: `hyp-${String(++hypSeq).padStart(3, '0')}`,
