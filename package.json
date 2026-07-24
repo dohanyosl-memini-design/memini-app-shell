@@ -11,7 +11,11 @@
     "db:studio": "prisma studio",
     "db:seed": "node prisma/seed.js",
     "postinstall": "prisma generate",
-    "mcp": "tsx mcp/server.ts"
+    "mcp": "tsx mcp/server.ts",
+    "backtest:fixture": "tsx scripts/backtest/make-fixture.ts",
+    "backtest:export": "tsx scripts/backtest/export.ts",
+    "backtest:replay": "tsx scripts/backtest/replay.ts",
+    "backtest:score": "tsx scripts/backtest/score.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.1",

@@ -1,0 +1,572 @@
+{
+ "exportedAt": "2026-05-21T09:00:00.000Z",
+ "anonymized": false,
+ "counts": {
+  "companies": 8,
+  "contacts": 8,
+  "deals": 0,
+  "tasks": 0,
+  "taskEvents": 0,
+  "activities": 18,
+  "invoices": 7,
+  "orders": 7,
+  "quotes": 0,
+  "deliveryNotes": 0,
+  "memoryEntries": 0,
+  "stockMovements": 0,
+  "expenses": 0,
+  "purchaseOrders": 0
+ },
+ "companies": [
+  {
+   "id": "comp-01",
+   "name": "Dom-Shop Heidelberg",
+   "partnerType": "gift_shop",
+   "classification": "B",
+   "city": "Heidelberg",
+   "region": null,
+   "country": "DE",
+   "channel": "direct",
+   "notes": null,
+   "createdAt": "2026-03-02T09:00:00.000Z"
+  },
+  {
+   "id": "comp-02",
+   "name": "Ulmer Münster Laden",
+   "partnerType": "gift_shop",
+   "classification": "B",
+   "city": "Laden",
+   "region": null,
+   "country": "DE",
+   "channel": "direct",
+   "notes": null,
+   "createdAt": "2026-02-27T09:00:00.000Z"
+  },
+  {
+   "id": "comp-03",
+   "name": "Museumsshop Freiburg",
+   "partnerType": "gift_shop",
+   "classification": "B",
+   "city": "Freiburg",
+   "region": null,
+   "country": "DE",
+   "channel": "direct",
+   "notes": null,
+   "createdAt": "2026-02-24T09:00:00.000Z"
+  },
+  {
+   "id": "comp-04",
+   "name": "Burg Querfurt Shop",
+   "partnerType": "gift_shop",
+   "classification": "B",
+   "city": "Shop",
+   "region": null,
+   "country": "DE",
+   "channel": "direct",
+   "notes": null,
+   "createdAt": "2026-02-21T09:00:00.000Z"
+  },
+  {
+   "id": "comp-05",
+   "name": "Kloster Andechs Laden",
+   "partnerType": "gift_shop",
+   "classification": "B",
+   "city": "Laden",
+   "region": null,
+   "country": "DE",
+   "channel": "direct",
+   "notes": null,
+   "createdAt": "2026-02-18T09:00:00.000Z"
+  },
+  {
+   "id": "comp-06",
+   "name": "Schloss Marburg Shop",
+   "partnerType": "gift_shop",
+   "classification": "B",
+   "city": "Shop",
+   "region": null,
+   "country": "DE",
+   "channel": "direct",
+   "notes": null,
+   "createdAt": "2026-02-15T09:00:00.000Z"
+  },
+  {
+   "id": "comp-07",
+   "name": "Touristinfo Bamberg",
+   "partnerType": "gift_shop",
+   "classification": "B",
+   "city": "Bamberg",
+   "region": null,
+   "country": "DE",
+   "channel": "direct",
+   "notes": null,
+   "createdAt": "2026-02-12T09:00:00.000Z"
+  },
+  {
+   "id": "comp-08",
+   "name": "Domschatz Köln Shop",
+   "partnerType": "gift_shop",
+   "classification": "B",
+   "city": "Shop",
+   "region": null,
+   "country": "DE",
+   "channel": "direct",
+   "notes": null,
+   "createdAt": "2026-02-09T09:00:00.000Z"
+  }
+ ],
+ "contacts": [
+  {
+   "id": "cont-01",
+   "name": "Kontakt 1",
+   "status": "customer",
+   "companyId": "comp-01",
+   "notes": null,
+   "createdAt": "2026-03-02T09:00:00.000Z"
+  },
+  {
+   "id": "cont-02",
+   "name": "Kontakt 2",
+   "status": "customer",
+   "companyId": "comp-02",
+   "notes": null,
+   "createdAt": "2026-02-27T09:00:00.000Z"
+  },
+  {
+   "id": "cont-03",
+   "name": "Kontakt 3",
+   "status": "customer",
+   "companyId": "comp-03",
+   "notes": null,
+   "createdAt": "2026-02-24T09:00:00.000Z"
+  },
+  {
+   "id": "cont-04",
+   "name": "Kontakt 4",
+   "status": "customer",
+   "companyId": "comp-04",
+   "notes": null,
+   "createdAt": "2026-02-21T09:00:00.000Z"
+  },
+  {
+   "id": "cont-05",
+   "name": "Kontakt 5",
+   "status": "customer",
+   "companyId": "comp-05",
+   "notes": null,
+   "createdAt": "2026-02-18T09:00:00.000Z"
+  },
+  {
+   "id": "cont-06",
+   "name": "Kontakt 6",
+   "status": "customer",
+   "companyId": "comp-06",
+   "notes": null,
+   "createdAt": "2026-02-15T09:00:00.000Z"
+  },
+  {
+   "id": "cont-07",
+   "name": "Kontakt 7",
+   "status": "customer",
+   "companyId": "comp-07",
+   "notes": null,
+   "createdAt": "2026-02-12T09:00:00.000Z"
+  },
+  {
+   "id": "cont-08",
+   "name": "Kontakt 8",
+   "status": "customer",
+   "companyId": "comp-08",
+   "notes": null,
+   "createdAt": "2026-02-09T09:00:00.000Z"
+  }
+ ],
+ "deals": [],
+ "tasks": [],
+ "taskEvents": [],
+ "activities": [
+  {
+   "id": "act-moq-0",
+   "type": "call",
+   "subject": "Rendelési feltételek",
+   "description": "Dom-Shop Heidelberg kisebb minimum rendelést (MOQ) kért — a mostani 250 db-os kezdőcsomag túl nagy nekik.",
+   "outcome": "follow-up",
+   "activityDate": "2026-04-06T09:00:00.000Z",
+   "companyId": "comp-01",
+   "contactId": "cont-01",
+   "createdAt": "2026-04-06T09:00:00.000Z"
+  },
+  {
+   "id": "act-moq-1",
+   "type": "call",
+   "subject": "Rendelési feltételek",
+   "description": "Ulmer Münster Laden kisebb minimum rendelést (MOQ) kért — a mostani 250 db-os kezdőcsomag túl nagy nekik.",
+   "outcome": "follow-up",
+   "activityDate": "2026-04-13T09:00:00.000Z",
+   "companyId": "comp-02",
+   "contactId": "cont-02",
+   "createdAt": "2026-04-13T09:00:00.000Z"
+  },
+  {
+   "id": "act-moq-2",
+   "type": "call",
+   "subject": "Rendelési feltételek",
+   "description": "Museumsshop Freiburg kisebb minimum rendelést (MOQ) kért — a mostani 250 db-os kezdőcsomag túl nagy nekik.",
+   "outcome": "follow-up",
+   "activityDate": "2026-04-20T09:00:00.000Z",
+   "companyId": "comp-03",
+   "contactId": "cont-03",
+   "createdAt": "2026-04-20T09:00:00.000Z"
+  },
+  {
+   "id": "act-moq-3",
+   "type": "call",
+   "subject": "Rendelési feltételek",
+   "description": "Burg Querfurt Shop kisebb minimum rendelést (MOQ) kért — a mostani 250 db-os kezdőcsomag túl nagy nekik.",
+   "outcome": "follow-up",
+   "activityDate": "2026-05-04T09:00:00.000Z",
+   "companyId": "comp-04",
+   "contactId": "cont-04",
+   "createdAt": "2026-05-04T09:00:00.000Z"
+  },
+  {
+   "id": "act-moq-4",
+   "type": "call",
+   "subject": "Rendelési feltételek",
+   "description": "Kloster Andechs Laden kisebb minimum rendelést (MOQ) kért — a mostani 250 db-os kezdőcsomag túl nagy nekik.",
+   "outcome": "follow-up",
+   "activityDate": "2026-05-12T09:00:00.000Z",
+   "companyId": "comp-05",
+   "contactId": "cont-05",
+   "createdAt": "2026-05-12T09:00:00.000Z"
+  },
+  {
+   "id": "act-exkl-0",
+   "type": "meeting",
+   "subject": "Együttműködés feltételei",
+   "description": "Schloss Marburg Shop az exkluzivitást hangsúlyozta: a városban más ne árulja ugyanazt a terméket.",
+   "outcome": null,
+   "activityDate": "2026-04-09T09:00:00.000Z",
+   "companyId": "comp-06",
+   "contactId": "cont-06",
+   "createdAt": "2026-04-09T09:00:00.000Z"
+  },
+  {
+   "id": "act-exkl-1",
+   "type": "meeting",
+   "subject": "Együttműködés feltételei",
+   "description": "Touristinfo Bamberg az exkluzivitást hangsúlyozta: a városban más ne árulja ugyanazt a terméket.",
+   "outcome": null,
+   "activityDate": "2026-04-28T09:00:00.000Z",
+   "companyId": "comp-07",
+   "contactId": "cont-07",
+   "createdAt": "2026-04-28T09:00:00.000Z"
+  },
+  {
+   "id": "act-single-0",
+   "type": "call",
+   "subject": "Szállítási idő",
+   "description": "Domschatz Köln Shop ismét a szállítási időre panaszkodott (fizetési késés is szóba került).",
+   "outcome": null,
+   "activityDate": "2026-04-11T09:00:00.000Z",
+   "companyId": "comp-08",
+   "contactId": "cont-08",
+   "createdAt": "2026-04-11T09:00:00.000Z"
+  },
+  {
+   "id": "act-single-1",
+   "type": "call",
+   "subject": "Szállítási idő",
+   "description": "Domschatz Köln Shop ismét a szállítási időre panaszkodott (fizetési késés is szóba került).",
+   "outcome": null,
+   "activityDate": "2026-04-18T09:00:00.000Z",
+   "companyId": "comp-08",
+   "contactId": "cont-08",
+   "createdAt": "2026-04-18T09:00:00.000Z"
+  },
+  {
+   "id": "act-single-2",
+   "type": "call",
+   "subject": "Szállítási idő",
+   "description": "Domschatz Köln Shop ismét a szállítási időre panaszkodott (fizetési késés is szóba került).",
+   "outcome": null,
+   "activityDate": "2026-04-25T09:00:00.000Z",
+   "companyId": "comp-08",
+   "contactId": "cont-08",
+   "createdAt": "2026-04-25T09:00:00.000Z"
+  },
+  {
+   "id": "act-single-3",
+   "type": "call",
+   "subject": "Szállítási idő",
+   "description": "Domschatz Köln Shop ismét a szállítási időre panaszkodott (fizetési késés is szóba került).",
+   "outcome": null,
+   "activityDate": "2026-05-02T09:00:00.000Z",
+   "companyId": "comp-08",
+   "contactId": "cont-08",
+   "createdAt": "2026-05-02T09:00:00.000Z"
+  },
+  {
+   "id": "act-noise-0",
+   "type": "email",
+   "subject": "Rutin egyeztetés",
+   "description": "Szokásos negyedéves készlet-egyeztetés, különösebb esemény nélkül.",
+   "outcome": null,
+   "activityDate": "2026-04-04T09:00:00.000Z",
+   "companyId": "comp-01",
+   "contactId": "cont-01",
+   "createdAt": "2026-04-04T09:00:00.000Z"
+  },
+  {
+   "id": "act-noise-1",
+   "type": "email",
+   "subject": "Rutin egyeztetés",
+   "description": "Szokásos negyedéves készlet-egyeztetés, különösebb esemény nélkül.",
+   "outcome": null,
+   "activityDate": "2026-04-10T09:00:00.000Z",
+   "companyId": "comp-02",
+   "contactId": "cont-02",
+   "createdAt": "2026-04-10T09:00:00.000Z"
+  },
+  {
+   "id": "act-noise-2",
+   "type": "email",
+   "subject": "Rutin egyeztetés",
+   "description": "Szokásos negyedéves készlet-egyeztetés, különösebb esemény nélkül.",
+   "outcome": null,
+   "activityDate": "2026-04-16T09:00:00.000Z",
+   "companyId": "comp-03",
+   "contactId": "cont-03",
+   "createdAt": "2026-04-16T09:00:00.000Z"
+  },
+  {
+   "id": "act-noise-3",
+   "type": "email",
+   "subject": "Rutin egyeztetés",
+   "description": "Szokásos negyedéves készlet-egyeztetés, különösebb esemény nélkül.",
+   "outcome": null,
+   "activityDate": "2026-04-23T09:00:00.000Z",
+   "companyId": "comp-04",
+   "contactId": "cont-04",
+   "createdAt": "2026-04-23T09:00:00.000Z"
+  },
+  {
+   "id": "act-noise-4",
+   "type": "email",
+   "subject": "Rutin egyeztetés",
+   "description": "Szokásos negyedéves készlet-egyeztetés, különösebb esemény nélkül.",
+   "outcome": null,
+   "activityDate": "2026-04-30T09:00:00.000Z",
+   "companyId": "comp-05",
+   "contactId": "cont-05",
+   "createdAt": "2026-04-30T09:00:00.000Z"
+  },
+  {
+   "id": "act-noise-5",
+   "type": "email",
+   "subject": "Rutin egyeztetés",
+   "description": "Szokásos negyedéves készlet-egyeztetés, különösebb esemény nélkül.",
+   "outcome": null,
+   "activityDate": "2026-05-07T09:00:00.000Z",
+   "companyId": "comp-06",
+   "contactId": "cont-06",
+   "createdAt": "2026-05-07T09:00:00.000Z"
+  },
+  {
+   "id": "act-noise-6",
+   "type": "email",
+   "subject": "Rutin egyeztetés",
+   "description": "Szokásos negyedéves készlet-egyeztetés, különösebb esemény nélkül.",
+   "outcome": null,
+   "activityDate": "2026-05-14T09:00:00.000Z",
+   "companyId": "comp-07",
+   "contactId": "cont-07",
+   "createdAt": "2026-05-14T09:00:00.000Z"
+  }
+ ],
+ "invoices": [
+  {
+   "id": "inv-0",
+   "number": "INV-26001",
+   "date": "2026-04-03T09:00:00.000Z",
+   "dueDate": "2026-04-17T09:00:00.000Z",
+   "total": 400,
+   "paidAt": null,
+   "companyId": "comp-03"
+  },
+  {
+   "id": "inv-1",
+   "number": "INV-26002",
+   "date": "2026-04-08T09:00:00.000Z",
+   "dueDate": "2026-04-24T09:00:00.000Z",
+   "total": 455,
+   "paidAt": "2026-04-20T09:00:00.000Z",
+   "companyId": "comp-04"
+  },
+  {
+   "id": "inv-2",
+   "number": "INV-26003",
+   "date": "2026-04-15T09:00:00.000Z",
+   "dueDate": "2026-05-01T09:00:00.000Z",
+   "total": 510,
+   "paidAt": "2026-04-27T09:00:00.000Z",
+   "companyId": "comp-05"
+  },
+  {
+   "id": "inv-3",
+   "number": "INV-26004",
+   "date": "2026-04-22T09:00:00.000Z",
+   "dueDate": "2026-05-08T09:00:00.000Z",
+   "total": 565,
+   "paidAt": null,
+   "companyId": "comp-06"
+  },
+  {
+   "id": "inv-4",
+   "number": "INV-26005",
+   "date": "2026-04-29T09:00:00.000Z",
+   "dueDate": "2026-05-15T09:00:00.000Z",
+   "total": 620,
+   "paidAt": "2026-05-11T09:00:00.000Z",
+   "companyId": "comp-07"
+  },
+  {
+   "id": "inv-5",
+   "number": "INV-26006",
+   "date": "2026-05-06T09:00:00.000Z",
+   "dueDate": "2026-05-22T09:00:00.000Z",
+   "total": 675,
+   "paidAt": "2026-05-18T09:00:00.000Z",
+   "companyId": "comp-08"
+  },
+  {
+   "id": "inv-6",
+   "number": "INV-26007",
+   "date": "2026-05-13T09:00:00.000Z",
+   "dueDate": "2026-05-29T09:00:00.000Z",
+   "total": 730,
+   "paidAt": null,
+   "companyId": "comp-01"
+  }
+ ],
+ "orders": [
+  {
+   "id": "ord-0",
+   "number": "ORD-26001",
+   "date": "2026-04-03T09:00:00.000Z",
+   "total": 400,
+   "notes": null,
+   "internalNotes": null,
+   "deliveryDate": "2026-04-07T09:00:00.000Z",
+   "companyId": "comp-03",
+   "items": [
+    {
+     "description": "Hűtőmágnes szett",
+     "quantity": 100
+    }
+   ]
+  },
+  {
+   "id": "ord-1",
+   "number": "ORD-26002",
+   "date": "2026-04-08T09:00:00.000Z",
+   "total": 455,
+   "notes": null,
+   "internalNotes": null,
+   "deliveryDate": "2026-04-12T09:00:00.000Z",
+   "companyId": "comp-04",
+   "items": [
+    {
+     "description": "Hűtőmágnes szett",
+     "quantity": 110
+    }
+   ]
+  },
+  {
+   "id": "ord-2",
+   "number": "ORD-26003",
+   "date": "2026-04-15T09:00:00.000Z",
+   "total": 510,
+   "notes": null,
+   "internalNotes": null,
+   "deliveryDate": "2026-04-19T09:00:00.000Z",
+   "companyId": "comp-05",
+   "items": [
+    {
+     "description": "Hűtőmágnes szett",
+     "quantity": 120
+    }
+   ]
+  },
+  {
+   "id": "ord-3",
+   "number": "ORD-26004",
+   "date": "2026-04-22T09:00:00.000Z",
+   "total": 565,
+   "notes": null,
+   "internalNotes": null,
+   "deliveryDate": "2026-04-26T09:00:00.000Z",
+   "companyId": "comp-06",
+   "items": [
+    {
+     "description": "Hűtőmágnes szett",
+     "quantity": 130
+    }
+   ]
+  },
+  {
+   "id": "ord-4",
+   "number": "ORD-26005",
+   "date": "2026-04-29T09:00:00.000Z",
+   "total": 620,
+   "notes": null,
+   "internalNotes": null,
+   "deliveryDate": "2026-05-03T09:00:00.000Z",
+   "companyId": "comp-07",
+   "items": [
+    {
+     "description": "Hűtőmágnes szett",
+     "quantity": 140
+    }
+   ]
+  },
+  {
+   "id": "ord-5",
+   "number": "ORD-26006",
+   "date": "2026-05-06T09:00:00.000Z",
+   "total": 675,
+   "notes": null,
+   "internalNotes": null,
+   "deliveryDate": "2026-05-10T09:00:00.000Z",
+   "companyId": "comp-08",
+   "items": [
+    {
+     "description": "Hűtőmágnes szett",
+     "quantity": 150
+    }
+   ]
+  },
+  {
+   "id": "ord-6",
+   "number": "ORD-26007",
+   "date": "2026-05-13T09:00:00.000Z",
+   "total": 730,
+   "notes": null,
+   "internalNotes": null,
+   "deliveryDate": "2026-05-17T09:00:00.000Z",
+   "companyId": "comp-01",
+   "items": [
+    {
+     "description": "Hűtőmágnes szett",
+     "quantity": 160
+    }
+   ]
+  }
+ ],
+ "quotes": [],
+ "deliveryNotes": [],
+ "memoryEntries": [],
+ "stockMovements": [],
+ "expenses": [],
+ "purchaseOrders": []
+}

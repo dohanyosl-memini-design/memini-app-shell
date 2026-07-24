@@ -36,3 +36,8 @@ next-env.d.ts
 # Database
 prisma/dev.db
 prisma/dev.db-journal
+
+# Companion backtest — futás-kimenetek és DB-exportok soha nem kerülnek repóba
+scripts/backtest/runs/
+/exports/
+*.mapping.json
