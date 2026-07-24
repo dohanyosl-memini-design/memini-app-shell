@@ -17,6 +17,7 @@ import TaskForm from '@/components/TaskForm'
 import InvoicePreview from '@/components/InvoicePreview'
 import MemoryTab from '@/components/MemoryTab'
 import TemplatesTab from '@/components/TemplatesTab'
+import CompanyEmails from '@/components/email/CompanyEmails'
 import { DEAL_STAGE_LABELS } from '@/lib/dealStages'
 
 interface Activity {
@@ -285,7 +286,7 @@ export default function CompanyDetailPage() {
   const [editActivity, setEditActivity] = useState<Activity | null>(null)
   const [showNewContactModal, setShowNewContactModal] = useState(false)
   const [showNewTaskModal, setShowNewTaskModal] = useState(false)
-  const [activeTab, setActiveTab] = useState<'timeline' | 'contacts' | 'tasks' | 'memory' | 'templates' | 'deals' | 'quotes' | 'orders' | 'invoices'>('timeline')
+  const [activeTab, setActiveTab] = useState<'timeline' | 'levelezes' | 'contacts' | 'tasks' | 'memory' | 'templates' | 'deals' | 'quotes' | 'orders' | 'invoices'>('timeline')
   const [previewInvoiceFull, setPreviewInvoiceFull] = useState<null | Record<string, unknown>>(null)
   const [previewOrderData, setPreviewOrderData] = useState<null | Record<string, unknown>>(null)
   const [autoTaskCreated, setAutoTaskCreated] = useState(false)
@@ -564,6 +565,7 @@ export default function CompanyDetailPage() {
           <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto">
             {([
               { key: 'timeline', label: 'Kommunikáció', count: company.activities.length },
+              { key: 'levelezes', label: 'Levelezés', count: 0 },
               { key: 'contacts', label: 'Kapcsolatok', count: company.contacts.length },
               { key: 'tasks', label: 'Feladatok', count: company.tasks.length },
               { key: 'memory', label: 'Memória', count: 0 },
@@ -654,6 +656,13 @@ export default function CompanyDetailPage() {
                   })}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Levelezés */}
+          {activeTab === 'levelezes' && (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+              <CompanyEmails companyId={id} />
             </div>
           )}
 
