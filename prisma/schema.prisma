@@ -21,60 +21,67 @@ model User {
 }
 
 model Contact {
-  id            String         @id @default(cuid())
-  salutation    String?
-  firstName     String
-  lastName      String
-  email         String?
-  phone         String?
-  status        String         @default("lead")
-  notes         String?
-  companyId     String?
-  company       Company?       @relation(fields: [companyId], references: [id])
-  deals         Deal[]
-  tasks         Task[]
-  activities    Activity[]
-  invoices      Invoice[]
-  quotes        Quote[]
-  orders        Order[]
-  deliveryNotes DeliveryNote[]
-  memories      MemoryEntry[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id                String             @id @default(cuid())
+  salutation        String?
+  firstName         String
+  lastName          String
+  email             String?
+  phone             String?
+  status            String             @default("lead")
+  notes             String?
+  marketingOptOut   Boolean            @default(false) // kampány-etaphoz: leiratkozás (GDPR/UWG)
+  companyId         String?
+  company           Company?           @relation(fields: [companyId], references: [id])
+  deals             Deal[]
+  tasks             Task[]
+  activities        Activity[]
+  invoices          Invoice[]
+  quotes            Quote[]
+  orders            Order[]
+  deliveryNotes     DeliveryNote[]
+  memories          MemoryEntry[]
+  emailThreads      EmailThread[]
+  emailParticipants EmailParticipant[]
+  emailDrafts       EmailDraft[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 }
 
 model Company {
-  id             String     @id @default(cuid())
-  name           String
-  partnerType    String?
-  industry       String?
-  website        String?
-  phone          String?
-  email          String?
-  address        String?
-  zip            String?
-  city           String?
-  region         String?
-  country        String?    @default("DE")
-  vatId          String?
-  customerNumber String?
-  classification String?    @default("D")
-  language       String?    @default("DE")
-  channel        String?
-  notes          String?
-  businessHours  Json?
-  lastOrderDate  DateTime?
-  contacts       Contact[]
-  deals          Deal[]
-  invoices       Invoice[]
-  activities     Activity[]
-  quotes         Quote[]
-  orders         Order[]
-  tasks          Task[]
-  deliveryNotes  DeliveryNote[]
-  memories       MemoryEntry[]
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  id                String             @id @default(cuid())
+  name              String
+  partnerType       String?
+  industry          String?
+  website           String?
+  phone             String?
+  email             String?
+  address           String?
+  zip               String?
+  city              String?
+  region            String?
+  country           String?            @default("DE")
+  vatId             String?
+  customerNumber    String?
+  classification    String?            @default("D")
+  language          String?            @default("DE")
+  channel           String?
+  notes             String?
+  businessHours     Json?
+  lastOrderDate     DateTime?
+  contacts          Contact[]
+  deals             Deal[]
+  invoices          Invoice[]
+  activities        Activity[]
+  quotes            Quote[]
+  orders            Order[]
+  tasks             Task[]
+  deliveryNotes     DeliveryNote[]
+  memories          MemoryEntry[]
+  emailThreads      EmailThread[]
+  emailParticipants EmailParticipant[]
+  emailDrafts       EmailDraft[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 }
 
 model Deal {
@@ -98,13 +105,13 @@ model Deal {
 // Havi tölcsér-tervszámok (FÁZIS 2) — a get_funnel_stats terv/tény összevetéséhez.
 // Runtime-ban szerkeszthető; hiányzó hónapokra a kód a beépített defaultokra esik vissza.
 model FunnelTarget {
-  yearMonth      String   @id          // 'YYYY-MM'
-  outreach       Int      @default(0)  // kiküldött outreach dealek terve
-  followup       Int      @default(0)  // follow-up aktivitások terve
-  sampleRequests Int      @default(0)  // mintakérések terve
-  newPartners    Int      @default(0)  // új partnerek (won) terve
-  reorders       Int      @default(0)  // reorderek terve
-  volumeEur      Float    @default(0)  // rendelési volumen terve EUR-ban
+  yearMonth      String   @id // 'YYYY-MM'
+  outreach       Int      @default(0) // kiküldött outreach dealek terve
+  followup       Int      @default(0) // follow-up aktivitások terve
+  sampleRequests Int      @default(0) // mintakérések terve
+  newPartners    Int      @default(0) // új partnerek (won) terve
+  reorders       Int      @default(0) // reorderek terve
+  volumeEur      Float    @default(0) // rendelési volumen terve EUR-ban
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }
@@ -113,54 +120,54 @@ model FunnelTarget {
 // A haladás nem tárolt: metricKey esetén a funnel/CRM-adatokból, egyébként a
 // gyerek-célok / hozzákötött feladatok kész-arányából számítódik (lib/goalProgress).
 model Goal {
-  id            String    @id @default(cuid())
+  id            String         @id @default(cuid())
   title         String
   description   String?
-  level         String    // vision | yearly | quarterly | monthly
-  year          Int?      // yearly/quarterly/monthly szinten kötelező
-  quarter       Int?      // 1-4, quarterly szinten
-  month         Int?      // 1-12, monthly szinten
-  status        String    @default("active") // active | achieved | missed | dropped
-  strategicArea String?   // opcionális stratégiai terület címke
-  metricKey     String?   // funnel-metrika kulcs (outreach, followup, sampleRequests, newPartners, reorders, volumeEur)
-  targetValue   Float?    // számszerű célérték a metricKey-hez
-  sortOrder     Int       @default(0)
+  level         String // vision | yearly | quarterly | monthly
+  year          Int? // yearly/quarterly/monthly szinten kötelező
+  quarter       Int? // 1-4, quarterly szinten
+  month         Int? // 1-12, monthly szinten
+  status        String         @default("active") // active | achieved | missed | dropped
+  strategicArea String? // opcionális stratégiai terület címke
+  metricKey     String? // funnel-metrika kulcs (outreach, followup, sampleRequests, newPartners, reorders, volumeEur)
+  targetValue   Float? // számszerű célérték a metricKey-hez
+  sortOrder     Int            @default(0)
   archivedAt    DateTime?
   parentId      String?
-  parent        Goal?     @relation("GoalTree", fields: [parentId], references: [id])
-  children      Goal[]    @relation("GoalTree")
+  parent        Goal?          @relation("GoalTree", fields: [parentId], references: [id])
+  children      Goal[]         @relation("GoalTree")
   tasks         Task[]
   marketingArcs MarketingArc[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 }
 
 model Task {
-  id          String    @id @default(cuid())
+  id          String      @id @default(cuid())
   title       String
   description String?
   dueDate     DateTime?
-  status      String    @default("pending")
-  priority    String    @default("medium")
+  status      String      @default("pending")
+  priority    String      @default("medium")
   taskType    String?
-  source      String    @default("human") // human | agent | automation
-  focused     Boolean   @default(false)   // kézzel a Fókuszba emelve
-  waitingFor  String?   // waiting státusznál: kire/mire várunk
+  source      String      @default("human") // human | agent | automation
+  focused     Boolean     @default(false) // kézzel a Fókuszba emelve
+  waitingFor  String? // waiting státusznál: kire/mire várunk
   followUpAt  DateTime? // waiting státusznál: mikor kell újra ránézni
   goalId      String?
-  goal        Goal?     @relation(fields: [goalId], references: [id])
+  goal        Goal?       @relation(fields: [goalId], references: [id])
   assigneeId  String?
-  assignee    User?     @relation(fields: [assigneeId], references: [id])
+  assignee    User?       @relation(fields: [assigneeId], references: [id])
   contactId   String?
-  contact     Contact?  @relation(fields: [contactId], references: [id])
+  contact     Contact?    @relation(fields: [contactId], references: [id])
   dealId      String?
-  deal        Deal?     @relation(fields: [dealId], references: [id])
+  deal        Deal?       @relation(fields: [dealId], references: [id])
   companyId   String?
-  company     Company?  @relation(fields: [companyId], references: [id])
+  company     Company?    @relation(fields: [companyId], references: [id])
   subtasks    SubTask[]
   events      TaskEvent[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 }
 
 // ─── MARKETING (V1) ──────────────────────────────────────────────────────────
@@ -171,14 +178,14 @@ model MarketingArc {
   id            String         @id @default(cuid())
   title         String
   description   String?
-  level         String         // vision | yearly | quarterly | monthly
+  level         String // vision | yearly | quarterly | monthly
   year          Int?
   quarter       Int?
   month         Int?
   status        String         @default("active") // active | achieved | missed | dropped
   strategicArea String?
-  cadence       Json?          // pl. { "blog": 3, "linkedin": 2 } (heti darab csatornánként)
-  goalId        String?        // opcionális kötés az éves üzleti célra
+  cadence       Json? // pl. { "blog": 3, "linkedin": 2 } (heti darab csatornánként)
+  goalId        String? // opcionális kötés az éves üzleti célra
   goal          Goal?          @relation(fields: [goalId], references: [id])
   sortOrder     Int            @default(0)
   archivedAt    DateTime?
@@ -194,21 +201,21 @@ model MarketingArc {
 // Téma / "kör": egy arc-node alatti tartalmi koncepció — mondanivaló + vázlat
 // (részek). Ebből származnak a konkrét tartalmak (blog → LinkedIn → Insta …).
 model ContentTheme {
-  id          String         @id @default(cuid())
-  title       String
-  message     String?        // a mondanivaló / core message
-  outline     String?        // a struktúra / részek (markdown szöveg)
-  status      String         @default("planned") // planned | approved | active | done
-  startDate   DateTime?
-  endDate     DateTime?
-  cadence     Json?
-  sortOrder   Int            @default(0)
-  archivedAt  DateTime?
-  arcId       String?
-  arc         MarketingArc?  @relation(fields: [arcId], references: [id])
-  pieces      ContentPiece[]
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id         String         @id @default(cuid())
+  title      String
+  message    String? // a mondanivaló / core message
+  outline    String? // a struktúra / részek (markdown szöveg)
+  status     String         @default("planned") // planned | approved | active | done
+  startDate  DateTime?
+  endDate    DateTime?
+  cadence    Json?
+  sortOrder  Int            @default(0)
+  archivedAt DateTime?
+  arcId      String?
+  arc        MarketingArc?  @relation(fields: [arcId], references: [id])
+  pieces     ContentPiece[]
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
 }
 
 // Egy konkrét tartalom: egy üzenet három nyelven (német elsődleges), egy
@@ -216,22 +223,22 @@ model ContentTheme {
 model ContentPiece {
   id            String         @id @default(cuid())
   title         String
-  channel       String         // blog | linkedin | facebook | instagram | newsletter | pinterest
-  bodyDe        String?        @db.Text  // elsődleges (német logika)
+  channel       String // blog | linkedin | facebook | instagram | newsletter | pinterest
+  bodyDe        String?        @db.Text // elsődleges (német logika)
   bodyHu        String?        @db.Text
   bodyEn        String?        @db.Text
-  slug          String?        // weboldal-kész
-  seo           Json?          // { de: {title, description}, hu: {...}, en: {...} }
+  slug          String? // weboldal-kész
+  seo           Json? // { de: {title, description}, hu: {...}, en: {...} }
   imagePrompt   String?
   imageUrl      String?
   status        String         @default("draft") // draft | ready | scheduled | published | archived
   source        String         @default("human") // human | agent | automation
-  focused       Boolean        @default(false)   // kézzel a Fókuszba emelve
+  focused       Boolean        @default(false) // kézzel a Fókuszba emelve
   scheduledFor  DateTime?
   publishedAt   DateTime?
   themeId       String?
   theme         ContentTheme?  @relation(fields: [themeId], references: [id])
-  arcId         String?        // ad-hoc: közvetlenül egy arc-hónaphoz tűzve, téma nélkül
+  arcId         String? // ad-hoc: közvetlenül egy arc-hónaphoz tűzve, téma nélkül
   arc           MarketingArc?  @relation(fields: [arcId], references: [id])
   parentPieceId String?
   parentPiece   ContentPiece?  @relation("PieceDerivation", fields: [parentPieceId], references: [id])
@@ -270,7 +277,7 @@ model ContentEvent {
   pieceId   String
   piece     ContentPiece @relation(fields: [pieceId], references: [id], onDelete: Cascade)
   actor     String
-  action    String       // created | updated | status_changed | localized | derived | archived
+  action    String // created | updated | status_changed | localized | derived | archived
   field     String?
   before    Json?
   after     Json?
@@ -283,9 +290,9 @@ model TaskEvent {
   id        String   @id @default(cuid())
   taskId    String
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  actor     String   // pl. felhasználónév, "agent", "automation"
-  action    String   // created | updated | status_changed | archived | subtask_promoted ...
-  field     String?  // melyik mező változott (updated esetén)
+  actor     String // pl. felhasználónév, "agent", "automation"
+  action    String // created | updated | status_changed | archived | subtask_promoted ...
+  field     String? // melyik mező változott (updated esetén)
   before    Json?
   after     Json?
   createdAt DateTime @default(now())
@@ -302,52 +309,52 @@ model SubTask {
 }
 
 model Activity {
-  id           String    @id @default(cuid())
+  id           String   @id @default(cuid())
   type         String
   subject      String?
   description  String
-  activityDate DateTime  @default(now())
+  activityDate DateTime @default(now())
   duration     Int?
   outcome      String?
   contactId    String?
-  contact      Contact?  @relation(fields: [contactId], references: [id])
+  contact      Contact? @relation(fields: [contactId], references: [id])
   companyId    String?
-  company      Company?  @relation(fields: [companyId], references: [id])
+  company      Company? @relation(fields: [companyId], references: [id])
   dealId       String?
-  deal         Deal?     @relation(fields: [dealId], references: [id])
-  createdAt    DateTime  @default(now())
+  deal         Deal?    @relation(fields: [dealId], references: [id])
+  createdAt    DateTime @default(now())
 }
 
 model Product {
-  id           String          @id @default(cuid())
-  name         String
-  nameDE       String?
-  sku          String          @unique
-  description  String?
-  material     String?
-  productType  String?
-  site         String?
-  city         String?
-  locationCabinet String?
-  locationShelf   String?
-  locationBox     String?
-  costPrice    Float           @default(0)
-  salesPrice   Float           @default(0)
-  stock        Int             @default(0)
-  minStock     Int             @default(10)
-  unit         String          @default("db")
-  vatRate      Float           @default(19)
-  active       Boolean         @default(true)
-  imageUrl     String?
-  priceListEntryId String?
+  id                 String              @id @default(cuid())
+  name               String
+  nameDE             String?
+  sku                String              @unique
+  description        String?
+  material           String?
+  productType        String?
+  site               String?
+  city               String?
+  locationCabinet    String?
+  locationShelf      String?
+  locationBox        String?
+  costPrice          Float               @default(0)
+  salesPrice         Float               @default(0)
+  stock              Int                 @default(0)
+  minStock           Int                 @default(10)
+  unit               String              @default("db")
+  vatRate            Float               @default(19)
+  active             Boolean             @default(true)
+  imageUrl           String?
+  priceListEntryId   String?
   purchaseOrderItems PurchaseOrderItem[]
-  movements         StockMovement[]
-  invoiceItems      InvoiceItem[]
-  quoteItems        QuoteItem[]
-  orderItems        OrderItem[]
-  deliveryNoteItems DeliveryNoteItem[]
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  movements          StockMovement[]
+  invoiceItems       InvoiceItem[]
+  quoteItems         QuoteItem[]
+  orderItems         OrderItem[]
+  deliveryNoteItems  DeliveryNoteItem[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 }
 
 model StockMovement {
@@ -363,31 +370,31 @@ model StockMovement {
 }
 
 model Invoice {
-  id        String        @id @default(cuid())
-  number    String        @unique
-  date      DateTime      @default(now())
-  dueDate   DateTime
-  status       String        @default("open")
-  notes        String?
-  deliveryInfo String?
-  stornoOf     String?
+  id             String        @id @default(cuid())
+  number         String        @unique
+  date           DateTime      @default(now())
+  dueDate        DateTime
+  status         String        @default("open")
+  notes          String?
+  deliveryInfo   String?
+  stornoOf       String?
   billingName    String?
   billingAddress String?
   billingZip     String?
   billingCity    String?
   billingCountry String?
-  contactId    String?
-  contact   Contact?      @relation(fields: [contactId], references: [id])
-  companyId String?
-  company   Company?      @relation(fields: [companyId], references: [id])
-  items     InvoiceItem[]
-  subtotal  Float         @default(0)
-  vatAmount Float         @default(0)
-  total     Float         @default(0)
-  currency  String        @default("EUR")
-  paidAt    DateTime?
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  contactId      String?
+  contact        Contact?      @relation(fields: [contactId], references: [id])
+  companyId      String?
+  company        Company?      @relation(fields: [companyId], references: [id])
+  items          InvoiceItem[]
+  subtotal       Float         @default(0)
+  vatAmount      Float         @default(0)
+  total          Float         @default(0)
+  currency       String        @default("EUR")
+  paidAt         DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 }
 
 model InvoiceItem {
@@ -629,16 +636,16 @@ model Supplier {
 }
 
 model PurchaseOrder {
-  id          String              @id @default(cuid())
-  number      String              @unique
-  supplierId  String
-  supplier    Supplier            @relation(fields: [supplierId], references: [id])
-  status      String              @default("draft")
-  notes       String?
-  orderedAt   DateTime?
-  items       PurchaseOrderItem[]
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  id         String              @id @default(cuid())
+  number     String              @unique
+  supplierId String
+  supplier   Supplier            @relation(fields: [supplierId], references: [id])
+  status     String              @default("draft")
+  notes      String?
+  orderedAt  DateTime?
+  items      PurchaseOrderItem[]
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
 }
 
 model PurchaseOrderItem {
@@ -680,18 +687,18 @@ model MemoryEntryType {
 }
 
 model MemoryEntry {
-  id        String           @id @default(cuid())
+  id        String          @id @default(cuid())
   companyId String?
-  company   Company?         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company   Company?        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   contactId String?
-  contact   Contact?         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contact   Contact?        @relation(fields: [contactId], references: [id], onDelete: Cascade)
   typeId    String
-  type      MemoryEntryType  @relation(fields: [typeId], references: [id])
+  type      MemoryEntryType @relation(fields: [typeId], references: [id])
   content   String
   date      DateTime?
-  source    String           @default("user")
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  source    String          @default("user")
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
 }
 
 model TemplateType {
@@ -716,4 +723,165 @@ model CommTemplate {
   order       Int          @default(0)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+}
+
+// ─── LEVELEZŐRENDSZER (Etap 1) ───────────────────────────────────────────────
+// A postafiók marad a forrásrendszer (IMAP); ez a réteg kereshető indexet,
+// partner-hozzárendelést és a kimenő jóváhagyási láncot adja. A modell a
+// memini-mail-bridge bevált táblatervének Prisma-portja, azzal a KÜLÖNBSÉGGEL,
+// hogy a cég/kontakt hivatkozás mostantól a CRM valódi Company/Contact
+// tábláira mutat — egyetlen igazság-forrás, nem külön mini-CRM.
+
+// Egy figyelt postafiók (pl. hello@memini-design.de) + IMAP-beállítás.
+model EmailAccount {
+  id           String             @id @default(cuid())
+  address      String             @unique
+  label        String?
+  inboxFolder  String             @default("INBOX")
+  sentFolder   String?
+  active       Boolean            @default(true)
+  emails       Email[]
+  folderStates EmailFolderState[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+}
+
+// Inkrementális szinkron állapota mappánként: honnan folytassa a következő
+// futás (UID + UIDVALIDITY), hogy ne olvassa újra az egész postafiókot.
+model EmailFolderState {
+  id           String       @id @default(cuid())
+  accountId    String
+  account      EmailAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  folderName   String
+  uidValidity  BigInt       @default(0)
+  lastSeenUid  BigInt       @default(0)
+  lastSyncedAt DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([accountId, folderName])
+}
+
+// Levélszál — a párosítás Message-ID/References, majd tárgy+résztvevő+idő
+// heurisztikával történik (lib/email/matching). A válaszstátusz adja a
+// "válaszra vár" listát, ami a proaktív munkás egyik fő jelzése.
+model EmailThread {
+  id                String       @id @default(cuid())
+  subject           String
+  normalizedSubject String
+  firstMessageAt    DateTime
+  lastMessageAt     DateTime
+  messageCount      Int          @default(0)
+  replyStatus       String       @default("unanswered") // unanswered | answered | no_reply_needed | reply_later | closed
+  contactId         String?
+  contact           Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  companyId         String?
+  company           Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  emails            Email[]
+  drafts            EmailDraft[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([lastMessageAt])
+  @@index([companyId])
+  @@index([contactId])
+  @@index([replyStatus])
+}
+
+model Email {
+  id                String             @id @default(cuid())
+  accountId         String
+  account           EmailAccount       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  threadId          String
+  thread            EmailThread        @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  messageId         String?
+  inReplyTo         String?
+  references        String[]           @default([])
+  fallbackHash      String // dedup, ha nincs Message-ID
+  subject           String
+  normalizedSubject String
+  textBody          String             @db.Text
+  htmlBody          String?            @db.Text
+  snippet           String             @default("")
+  direction         String // inbound | outbound
+  folderName        String
+  imapUid           BigInt
+  uidValidity       BigInt
+  sentAt            DateTime
+  receivedAt        DateTime
+  processingStatus  String             @default("processed")
+  rawHeaders        Json               @default("{}")
+  participants      EmailParticipant[]
+  attachments       EmailAttachment[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@unique([accountId, folderName, uidValidity, imapUid])
+  @@index([threadId, sentAt])
+  @@index([messageId])
+  @@index([fallbackHash])
+  @@index([receivedAt])
+}
+
+model EmailParticipant {
+  id           String   @id @default(cuid())
+  emailId      String
+  email        Email    @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  type         String // from | to | cc | bcc
+  emailAddress String
+  displayName  String?
+  contactId    String?
+  contact      Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  companyId    String?
+  company      Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([emailId])
+  @@index([emailAddress])
+  @@index([contactId])
+  @@index([companyId])
+}
+
+model EmailAttachment {
+  id          String   @id @default(cuid())
+  emailId     String
+  email       Email    @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  filename    String
+  contentType String
+  sizeBytes   BigInt   @default(0)
+  blobUrl     String? // Vercel Blob (a CRM már ezt használja képekhez)
+  contentId   String?
+  isInline    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([emailId])
+}
+
+// EGYETLEN kimenő csővezeték: kézzel írt válasz, agent-tervezet és később a
+// kampánylevél is ide kerül — a source mező különbözteti meg. Az élet-ciklus
+// draft → approved → sent adja a jóváhagyási kaput (a "Küldd" gomb).
+model EmailDraft {
+  id          String       @id @default(cuid())
+  threadId    String?
+  thread      EmailThread? @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  contactId   String?
+  contact     Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  companyId   String?
+  company     Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  toAddresses Json         @default("[]")
+  ccAddresses Json         @default("[]")
+  subject     String
+  bodyText    String       @db.Text
+  bodyHtml    String?      @db.Text
+  status      String       @default("draft") // draft | approved | sent | discarded | failed
+  source      String       @default("human") // human | agent | campaign
+  createdBy   String?
+  approvedBy  String?
+  sentAt      DateTime?
+  sendError   String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([status])
+  @@index([threadId])
+  @@index([companyId])
 }
