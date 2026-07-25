@@ -28,7 +28,7 @@ const normalizeTaskStatus = (s: string) => (s === 'done' ? 'completed' : s)
 const dealStageEnum = z.enum([...DEAL_STAGE_KEYS, ...LEGACY_STAGE_KEYS] as [string, ...string[]])
 
 function buildServer() {
-  const server = new McpServer({ name: 'memini-crm', version: '1.5.0' })
+  const server = new McpServer({ name: 'memini-crm', version: '1.6.0' })
 
   // ─── SZÁMLÁK ─────────────────────────────────────────────────────────────
 
@@ -2444,14 +2444,14 @@ function buildServer() {
 
   server.tool(
     'list_unanswered_emails',
-    'Válaszra váró levélszálak — a proaktív munka egyik fő jelzése. A legutóbbi levél a partnertől jött, és még nincs rá válasz. Opcionálisan cégre szűrhető.',
+    'Válaszra váró VALÓDI beszélgetések — a proaktív munka fő jelzése. Csak emberi levelek, amikre érdemes válaszolni (az automatikus/hírlevél/spam levelek KI vannak zárva). A legutóbbi levél a partnertől jött, és még nincs rá válasz. Opcionálisan cégre szűrhető.',
     {
       companyId: z.string().optional(),
       limit: z.number().int().min(1).max(100).optional().describe('Alap: 25'),
     },
     async ({ companyId, limit }) => {
       const data = await prisma.emailThread.findMany({
-        where: { replyStatus: 'unanswered', ...(companyId ? { companyId } : {}) },
+        where: { replyStatus: 'unanswered', category: 'conversation', ...(companyId ? { companyId } : {}) },
         orderBy: { lastMessageAt: 'desc' },
         take: limit ?? 25,
         select: {
@@ -2462,6 +2462,38 @@ function buildServer() {
             orderBy: { sentAt: 'desc' }, take: 1,
             select: {
               direction: true, snippet: true, sentAt: true,
+              participants: { select: { type: true, emailAddress: true, displayName: true } },
+            },
+          },
+        },
+      })
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'list_recent_emails',
+    'A legutóbbi levélszálak időrendben (LEGÚJABB elöl). Erre kérdezz rá, ha "mi jött ma/tegnap". Alapból csak valódi beszélgetés; includeNoise=true az automata/hírlevél leveleket is hozza.',
+    {
+      days: z.number().int().min(1).max(90).optional().describe('Csak az elmúlt N nap'),
+      limit: z.number().int().min(1).max(100).optional().describe('Alap: 25'),
+      includeNoise: z.boolean().optional().describe('true esetén az automata/hírlevél is'),
+    },
+    async ({ days, limit, includeNoise }) => {
+      const where: Record<string, unknown> = {}
+      if (!includeNoise) where.category = 'conversation'
+      if (days) where.lastMessageAt = { gte: new Date(Date.now() - days * 86400000) }
+      const data = await prisma.emailThread.findMany({
+        where,
+        orderBy: { lastMessageAt: 'desc' },
+        take: limit ?? 25,
+        select: {
+          id: true, subject: true, replyStatus: true, category: true, lastMessageAt: true,
+          company: { select: { id: true, name: true } },
+          emails: {
+            orderBy: { sentAt: 'desc' }, take: 1,
+            select: {
+              direction: true, snippet: true,
               participants: { select: { type: true, emailAddress: true, displayName: true } },
             },
           },
