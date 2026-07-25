@@ -28,7 +28,7 @@ const normalizeTaskStatus = (s: string) => (s === 'done' ? 'completed' : s)
 const dealStageEnum = z.enum([...DEAL_STAGE_KEYS, ...LEGACY_STAGE_KEYS] as [string, ...string[]])
 
 function buildServer() {
-  const server = new McpServer({ name: 'memini-crm', version: '1.4.0' })
+  const server = new McpServer({ name: 'memini-crm', version: '1.5.0' })
 
   // ─── SZÁMLÁK ─────────────────────────────────────────────────────────────
 
@@ -2437,6 +2437,145 @@ function buildServer() {
     async ({ id }) => {
       await deleteContentImage(id)
       return { content: [{ type: 'text', text: 'Kép törölve.' }] }
+    }
+  )
+
+  // ─── LEVELEK ─────────────────────────────────────────────────────────────
+
+  server.tool(
+    'list_unanswered_emails',
+    'Válaszra váró levélszálak — a proaktív munka egyik fő jelzése. A legutóbbi levél a partnertől jött, és még nincs rá válasz. Opcionálisan cégre szűrhető.',
+    {
+      companyId: z.string().optional(),
+      limit: z.number().int().min(1).max(100).optional().describe('Alap: 25'),
+    },
+    async ({ companyId, limit }) => {
+      const data = await prisma.emailThread.findMany({
+        where: { replyStatus: 'unanswered', ...(companyId ? { companyId } : {}) },
+        orderBy: { lastMessageAt: 'desc' },
+        take: limit ?? 25,
+        select: {
+          id: true, subject: true, lastMessageAt: true, messageCount: true,
+          company: { select: { id: true, name: true } },
+          contact: { select: { id: true, firstName: true, lastName: true } },
+          emails: {
+            orderBy: { sentAt: 'desc' }, take: 1,
+            select: {
+              direction: true, snippet: true, sentAt: true,
+              participants: { select: { type: true, emailAddress: true, displayName: true } },
+            },
+          },
+        },
+      })
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'search_emails',
+    'Keresés a levelekben tárgy és tartalom alapján. Visszaadja a találó szálakat.',
+    {
+      query: z.string().describe('Keresőszó a tárgyban vagy a levél szövegében'),
+      companyId: z.string().optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+    },
+    async ({ query, companyId, limit }) => {
+      const data = await prisma.emailThread.findMany({
+        where: {
+          ...(companyId ? { companyId } : {}),
+          OR: [
+            { subject: { contains: query, mode: 'insensitive' } },
+            { emails: { some: { textBody: { contains: query, mode: 'insensitive' } } } },
+          ],
+        },
+        orderBy: { lastMessageAt: 'desc' },
+        take: limit ?? 25,
+        select: {
+          id: true, subject: true, replyStatus: true, lastMessageAt: true,
+          company: { select: { id: true, name: true } },
+        },
+      })
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'get_email_thread',
+    'Egy teljes levélszál időrendben: minden levél (feladó, irány, szöveg), résztvevők és a hozzá tartozó tervezetek.',
+    { id: z.string() },
+    async ({ id }) => {
+      const data = await prisma.emailThread.findUnique({
+        where: { id },
+        select: {
+          id: true, subject: true, replyStatus: true, firstMessageAt: true, lastMessageAt: true,
+          company: { select: { id: true, name: true } },
+          contact: { select: { id: true, firstName: true, lastName: true } },
+          emails: {
+            orderBy: { sentAt: 'asc' },
+            select: {
+              id: true, direction: true, subject: true, textBody: true, sentAt: true,
+              participants: { select: { type: true, emailAddress: true, displayName: true } },
+            },
+          },
+          drafts: {
+            where: { status: { in: ['draft', 'approved'] } },
+            select: { id: true, subject: true, bodyText: true, status: true, source: true, createdAt: true },
+          },
+        },
+      })
+      if (!data) return { content: [{ type: 'text', text: 'A levélszál nem található.' }] }
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'get_company_emails',
+    'Egy céghez tartozó levélszálak listája (a partner teljes levelezése a CRM-ben).',
+    { companyId: z.string(), limit: z.number().int().min(1).max(100).optional() },
+    async ({ companyId, limit }) => {
+      const data = await prisma.emailThread.findMany({
+        where: { companyId },
+        orderBy: { lastMessageAt: 'desc' },
+        take: limit ?? 50,
+        select: {
+          id: true, subject: true, replyStatus: true, lastMessageAt: true, messageCount: true,
+          emails: { orderBy: { sentAt: 'desc' }, take: 1, select: { direction: true, snippet: true } },
+        },
+      })
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'create_email_draft',
+    'Válasz-TERVEZET készítése egy levélszálhoz. FONTOS: ez NEM küld levelet — csak egy jóváhagyásra váró tervezetet hoz létre, amit az ember a Levelek fülön átnéz és jóváhagy. Erre való a proaktív előkészítés (pl. egy válaszra váró levélhez tervezet).',
+    {
+      threadId: z.string(),
+      subject: z.string(),
+      bodyText: z.string(),
+    },
+    async ({ threadId, subject, bodyText }) => {
+      const thread = await prisma.emailThread.findUnique({
+        where: { id: threadId },
+        select: { id: true, companyId: true, contactId: true },
+      })
+      if (!thread) return { content: [{ type: 'text', text: 'A levélszál nem található.' }] }
+      const draft = await prisma.emailDraft.create({
+        data: {
+          threadId, companyId: thread.companyId, contactId: thread.contactId,
+          subject, bodyText, source: 'agent', status: 'draft', createdBy: 'agent',
+        },
+        select: { id: true },
+      })
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify(
+            { ok: true, draftId: draft.id, note: 'Tervezet létrehozva (NEM elküldve). Az ember a Levelek fülön hagyja jóvá.' },
+            null, 2,
+          ),
+        }],
+      }
     }
   )
 
