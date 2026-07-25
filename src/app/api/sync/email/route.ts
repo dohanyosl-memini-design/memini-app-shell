@@ -24,6 +24,8 @@ async function run(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const limit = Math.min(Math.max(Number(searchParams.get('limit') ?? 40), 1), 300)
   const backfill = searchParams.get('backfill') ? Number(searchParams.get('backfill')) : undefined
+  // Idő-budget: a szinkron magától megáll ennyi mp után (a Vercel 504 előtt).
+  const maxSeconds = Math.min(Math.max(Number(searchParams.get('maxSeconds') ?? 50), 5), 55)
 
   const logs: string[] = []
   const log = (msg: string, extra?: Record<string, unknown>) =>
@@ -36,7 +38,7 @@ async function run(request: NextRequest) {
     // vissza, nem néma 500-ként.
     const { EmailSyncService } = await import('@/lib/email/sync')
     const service = new EmailSyncService(prisma, config, log)
-    const processed = await service.syncOnce({ backfillLimit: backfill, maxMessages: limit })
+    const processed = await service.syncOnce({ backfillLimit: backfill, maxMessages: limit, maxSeconds })
     return NextResponse.json({
       ok: true,
       processed,

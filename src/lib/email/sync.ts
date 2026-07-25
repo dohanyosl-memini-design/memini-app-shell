@@ -62,8 +62,8 @@ export class EmailSyncService {
     const client = new ImapFlow({
       host: this.config.host, port: this.config.port, secure: this.config.secure,
       auth, disableAutoIdle: true, logger: false, emitLogs: false,
-      // Gyors, olvasható hiba egy rossz kapcsolatnál (ne akassza a 60 mp-et).
-      greetingTimeout: 12000, socketTimeout: 40000, connectionTimeout: 15000,
+      // Gyors, olvasható hiba egy rossz/lassú kapcsolatnál (ne akassza a 60 mp-et).
+      greetingTimeout: 9000, socketTimeout: 25000, connectionTimeout: 9000,
       clientInfo: { name: 'Memini CRM', version: '1.0.0' },
     })
     client.on('error', (e) => this.log('IMAP hiba', { err: e.message }))
@@ -127,14 +127,19 @@ export class EmailSyncService {
   //  - maxMessages: hívásonkénti FELSŐ korlát (a Vercel 60 mp-es limitje miatt);
   //    ha elérjük, a kurzort az utolsó feldolgozottnál mentjük, és a következő
   //    hívás onnan folytatja.
-  async syncOnce(opts: { backfillLimit?: number; maxMessages?: number } = {}): Promise<number> {
+  async syncOnce(
+    opts: { backfillLimit?: number; maxMessages?: number; maxSeconds?: number } = {},
+  ): Promise<number> {
     await this.ensureAccount()
     const folders = await this.withClient((c) => this.discoverFolders(c))
     const budget = { remaining: opts.maxMessages ?? Number.POSITIVE_INFINITY }
+    // Óra-alapú határidő: a szinkron ELŐBB áll meg magától, mint hogy a Vercel
+    // levágja (504). A kurzort menti, a következő hívás onnan folytatja.
+    const deadline = Date.now() + (opts.maxSeconds ?? 50) * 1000
     let total = 0
     for (const folder of folders) {
-      if (budget.remaining <= 0) break
-      total += await this.syncFolder(folder, opts.backfillLimit, budget)
+      if (budget.remaining <= 0 || Date.now() >= deadline) break
+      total += await this.syncFolder(folder, opts.backfillLimit, budget, deadline)
     }
     return total
   }
@@ -143,6 +148,7 @@ export class EmailSyncService {
     folder: string,
     overrideLimit?: number,
     budget: { remaining: number } = { remaining: Number.POSITIVE_INFINITY },
+    deadline = Number.POSITIVE_INFINITY,
   ): Promise<number> {
     const accountId = await this.ensureAccount()
     return this.withClient(async (client) => {
@@ -185,9 +191,9 @@ export class EmailSyncService {
           }
           if (ok) { maxProcessedUid = Math.max(maxProcessedUid, uid); processed++ }
           else if (firstFailedUid === null) firstFailedUid = uid
-          // Hívásonkénti korlát (Vercel 60 mp): a kurzort a lentebb mentett
+          // Darabszám- VAGY idő-korlát: a kurzort a lentebb mentett
           // maxProcessedUid-nál hagyjuk, a következő hívás onnan folytatja.
-          if (--budget.remaining <= 0) break
+          if (--budget.remaining <= 0 || Date.now() >= deadline) break
         }
 
         // A kurzort nem visszük az első hibás UID elé — a dedup miatt a
