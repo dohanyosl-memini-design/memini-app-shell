@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { EmailSyncService } from '@/lib/email/sync'
 import { loadSyncConfig } from '@/lib/email/syncConfig'
 
 export const dynamic = 'force-dynamic'
@@ -26,22 +25,16 @@ async function run(request: NextRequest) {
   const limit = Math.min(Math.max(Number(searchParams.get('limit') ?? 40), 1), 300)
   const backfill = searchParams.get('backfill') ? Number(searchParams.get('backfill')) : undefined
 
-  let config
-  try {
-    config = loadSyncConfig()
-  } catch (e) {
-    // Hiányzó IMAP-env — értelmes üzenet, hogy a beállítás hiánya látszódjon.
-    return NextResponse.json(
-      { error: 'A levél-szinkron nincs beállítva.', detail: e instanceof Error ? e.message : String(e) },
-      { status: 503 },
-    )
-  }
-
   const logs: string[] = []
   const log = (msg: string, extra?: Record<string, unknown>) =>
     logs.push(`${msg}${extra ? ' ' + JSON.stringify(extra) : ''}`)
 
   try {
+    const config = loadSyncConfig()
+    // A nehéz csomagokat (imapflow/mailparser) futásidőben, a try-n BELÜL
+    // töltjük — így egy esetleges betöltési hiba is olvasható JSON-ként jön
+    // vissza, nem néma 500-ként.
+    const { EmailSyncService } = await import('@/lib/email/sync')
     const service = new EmailSyncService(prisma, config, log)
     const processed = await service.syncOnce({ backfillLimit: backfill, maxMessages: limit })
     return NextResponse.json({
@@ -52,9 +45,18 @@ async function run(request: NextRequest) {
       warning: secret ? undefined : 'Állíts be CRON_SECRET-et a végpont védelméhez.',
     })
   } catch (e) {
+    const err = e instanceof Error ? e : new Error(String(e))
+    const missingEnv = /Hiányzó környezeti változó/.test(err.message)
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : String(e), logs },
-      { status: 500 },
+      {
+        ok: false,
+        error: err.message,
+        hint: missingEnv
+          ? 'Egy IMAP-környezeti változó hiányzik a Vercelen — ellenőrizd a Settings → Environment Variables listát, majd Redeploy.'
+          : 'A hibaüzenet felül olvasható. Gyakori okok: rossz jelszó/host, vagy a levélszerver nem enged kapcsolódni.',
+        logs,
+      },
+      { status: missingEnv ? 503 : 500 },
     )
   }
 }

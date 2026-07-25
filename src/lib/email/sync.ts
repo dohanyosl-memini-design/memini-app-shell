@@ -62,6 +62,8 @@ export class EmailSyncService {
     const client = new ImapFlow({
       host: this.config.host, port: this.config.port, secure: this.config.secure,
       auth, disableAutoIdle: true, logger: false, emitLogs: false,
+      // Gyors, olvasható hiba egy rossz kapcsolatnál (ne akassza a 60 mp-et).
+      greetingTimeout: 12000, socketTimeout: 40000, connectionTimeout: 15000,
       clientInfo: { name: 'Memini CRM', version: '1.0.0' },
     })
     client.on('error', (e) => this.log('IMAP hiba', { err: e.message }))
