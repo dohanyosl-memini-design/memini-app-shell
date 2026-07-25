@@ -773,6 +773,7 @@ model EmailThread {
   lastMessageAt     DateTime
   messageCount      Int          @default(0)
   replyStatus       String       @default("unanswered") // unanswered | answered | no_reply_needed | reply_later | closed
+  category          String       @default("conversation") // conversation | automated | spam (lib/email/classify)
   contactId         String?
   contact           Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
   companyId         String?
@@ -786,6 +787,7 @@ model EmailThread {
   @@index([companyId])
   @@index([contactId])
   @@index([replyStatus])
+  @@index([category])
 }
 
 model Email {
@@ -804,6 +806,7 @@ model Email {
   htmlBody          String?            @db.Text
   snippet           String             @default("")
   direction         String // inbound | outbound
+  category          String             @default("conversation") // conversation | automated | spam
   folderName        String
   imapUid           BigInt
   uidValidity       BigInt

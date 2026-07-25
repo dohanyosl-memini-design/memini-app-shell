@@ -4,6 +4,7 @@ export interface ThreadListItem {
   id: string
   subject: string
   replyStatus: string
+  category: string
   lastMessageAt: string
   messageCount: number
   snippet: string

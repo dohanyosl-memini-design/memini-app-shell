@@ -10,8 +10,10 @@ import {
 
 const FILTERS: { key: string; label: string }[] = [
   { key: 'unanswered', label: 'Válaszra vár' },
-  { key: 'all', label: 'Összes' },
+  { key: 'inbox', label: 'Beszélgetések' },
   { key: 'answered', label: 'Válaszolt' },
+  { key: 'automated', label: 'Automata / hírlevél' },
+  { key: 'spam', label: 'Spam' },
 ]
 
 export default function EmailsPage() {

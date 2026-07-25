@@ -11,11 +11,14 @@ export async function GET(request: NextRequest) {
   const companyId = searchParams.get('companyId') || ''
   const search = searchParams.get('search') || ''
 
+  // A "Válaszra vár" CSAK valódi beszélgetés lehet (nem automata/spam).
   const statusFilter =
-    status === 'unanswered' ? { replyStatus: 'unanswered' }
-    : status === 'answered' ? { replyStatus: 'answered' }
-    : status === 'waiting' ? { replyStatus: { in: ['unanswered', 'reply_later'] } }
-    : {}
+    status === 'unanswered' ? { replyStatus: 'unanswered', category: 'conversation' }
+    : status === 'inbox' ? { category: 'conversation' }
+    : status === 'answered' ? { replyStatus: 'answered', category: 'conversation' }
+    : status === 'automated' ? { category: 'automated' }
+    : status === 'spam' ? { category: 'spam' }
+    : {} // 'all'
 
   const threads = await prisma.emailThread.findMany({
     where: {
@@ -31,7 +34,7 @@ export async function GET(request: NextRequest) {
     orderBy: { lastMessageAt: 'desc' },
     take: 100,
     select: {
-      id: true, subject: true, replyStatus: true,
+      id: true, subject: true, replyStatus: true, category: true,
       lastMessageAt: true, messageCount: true,
       company: { select: { id: true, name: true } },
       contact: { select: { id: true, firstName: true, lastName: true } },
@@ -67,6 +70,7 @@ export async function GET(request: NextRequest) {
       id: t.id,
       subject: t.subject,
       replyStatus: t.replyStatus,
+      category: t.category,
       lastMessageAt: t.lastMessageAt,
       messageCount: t.messageCount,
       snippet: latest?.snippet ?? '',
@@ -79,9 +83,9 @@ export async function GET(request: NextRequest) {
     }
   })
 
-  // Válaszra váró darabszám a fül-jelvényhez (a companyId szűrőt tiszteletben tartva).
+  // Válaszra váró darabszám a fül-jelvényhez — CSAK valódi beszélgetés.
   const unansweredCount = await prisma.emailThread.count({
-    where: { replyStatus: 'unanswered', ...(companyId ? { companyId } : {}) },
+    where: { replyStatus: 'unanswered', category: 'conversation', ...(companyId ? { companyId } : {}) },
   })
 
   return NextResponse.json({ threads: result, unansweredCount })

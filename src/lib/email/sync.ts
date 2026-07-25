@@ -19,6 +19,7 @@ import {
   type CompanyRecord, type ContactRecord, type ThreadCandidate,
 } from './matching'
 import { normalizeEmail } from './normalize'
+import { classifyEmail, threadCategory } from './classify'
 import type { SyncConfig } from './syncConfig'
 import type { ParsedEmail } from './types'
 
@@ -256,13 +257,19 @@ export class EmailSyncService {
     )
     const threadId = await this.resolveThread(parsed)
 
+    // Osztályozás: valódi beszélgetés / automatikus / spam (a "Válaszra vár"
+    // csak beszélgetést mutasson). Kimenő = mindig beszélgetés.
+    const category = direction === 'outbound'
+      ? 'conversation'
+      : classifyEmail(parsed.headers, parsed.from?.address ?? null)
+
     const email = await this.prisma.email.create({
       data: {
         accountId, threadId,
         messageId: parsed.messageId, inReplyTo: parsed.inReplyTo, references: parsed.references,
         fallbackHash, subject: parsed.subject, normalizedSubject: parsed.normalizedSubject,
         textBody: parsed.textBody, htmlBody: parsed.htmlBody, snippet: parsed.snippet,
-        direction, folderName: folder, imapUid: BigInt(uid), uidValidity,
+        direction, category, folderName: folder, imapUid: BigInt(uid), uidValidity,
         sentAt: parsed.sentAt, receivedAt: parsed.receivedAt,
         rawHeaders: parsed.headers as object,
       },
@@ -365,17 +372,19 @@ export class EmailSyncService {
 
   // Szál-aggregátumok újraszámolása (nincs DB-trigger, ezért kódból).
   private async refreshThread(threadId: string): Promise<void> {
-    const [agg, last, current] = await Promise.all([
+    const [agg, msgs, current] = await Promise.all([
       this.prisma.email.aggregate({
         where: { threadId }, _count: true, _min: { sentAt: true }, _max: { sentAt: true },
       }),
-      this.prisma.email.findFirst({
-        where: { threadId }, orderBy: { sentAt: 'desc' }, select: { direction: true },
+      this.prisma.email.findMany({
+        where: { threadId }, orderBy: { sentAt: 'desc' },
+        select: { direction: true, category: true },
       }),
       this.prisma.emailThread.findUnique({
         where: { id: threadId }, select: { replyStatus: true },
       }),
     ])
+    const last = msgs[0]
     // Kézi státuszt (lezárva / nem kell válasz) nem írunk felül.
     const keep = current && ['closed', 'no_reply_needed'].includes(current.replyStatus)
     const replyStatus = keep
@@ -388,6 +397,7 @@ export class EmailSyncService {
         firstMessageAt: agg._min.sentAt ?? undefined,
         lastMessageAt: agg._max.sentAt ?? undefined,
         replyStatus,
+        category: threadCategory(msgs),
       },
     })
   }
