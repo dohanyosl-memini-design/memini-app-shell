@@ -1,8 +1,14 @@
 // Nyers levél → ParsedEmail. A memini-mail-bridge `@memini/email-parser`
-// hű portja (mailparser + sanitize-html). Tartalmilag változatlan.
+// portja (mailparser).
+//
+// MEGJEGYZÉS a HTML-ről: a htmlBody-t NYERSEN tároljuk. A `sanitize-html`
+// csomagot szándékosan NEM használjuk itt, mert az egy csak-ESM htmlparser2-t
+// húz, amit a Vercel Node-futásideje require()-rel nem tud betölteni. A
+// Levelek fül jelenleg a sima szöveget (textBody) jeleníti meg; amikor a
+// HTML-nézetet megépítjük, a sanitizálás ott, megjelenítéskor történik
+// (böngészőoldali DOMPurify vagy CJS-kompatibilis sanitizáló).
 
 import { simpleParser, type AddressObject } from 'mailparser'
-import sanitizeHtml from 'sanitize-html'
 import { normalizeEmail, normalizeSubject } from './normalize'
 import type { EmailAddress, ParsedEmail } from './types'
 
@@ -18,28 +24,12 @@ function addresses(value?: AddressObject | AddressObject[] | null): EmailAddress
   )
 }
 
-// A HTML-törzs fertőtlenítése — script/külső kép nélkül, biztonságos linkekkel.
-export function sanitizeEmailHtml(html: string): string {
-  return sanitizeHtml(html, {
-    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img']),
-    allowedAttributes: {
-      ...sanitizeHtml.defaults.allowedAttributes,
-      a: ['href', 'name', 'target', 'rel'],
-      img: ['src', 'alt', 'title', 'width', 'height'],
-    },
-    allowedSchemes: ['http', 'https', 'mailto', 'cid'],
-    transformTags: {
-      a: sanitizeHtml.simpleTransform('a', { rel: 'noopener noreferrer', target: '_blank' }),
-    },
-    exclusiveFilter: (frame) => frame.tag === 'img' && /^https?:/i.test(frame.attribs.src ?? ''),
-  })
-}
-
 export async function parseEmail(raw: Buffer | string): Promise<ParsedEmail> {
   const mail = await simpleParser(raw, { skipHtmlToText: false })
   const from = addresses(mail.from)[0] ?? null
   const text = (mail.text ?? '').replace(/\r\n/g, '\n').trim()
-  const html = typeof mail.html === 'string' ? sanitizeEmailHtml(mail.html) : null
+  // Nyers HTML — megjelenítés előtt sanitizálni KELL (lásd fenti megjegyzés).
+  const html = typeof mail.html === 'string' ? mail.html : null
   const receivedAt = mail.date ?? new Date()
   return {
     messageId: mail.messageId?.trim() ?? null,
