@@ -38,6 +38,15 @@ async function run(request: NextRequest) {
     // vissza, nem néma 500-ként.
     const { EmailSyncService } = await import('@/lib/email/sync')
     const service = new EmailSyncService(prisma, config, log)
+
+    // Diagnosztika: ?folders=1 — az összes mappa listája, darabszámmal és a
+    // legfrissebb levél dátumával. Nem szinkronizál, csak megmutatja, hová
+    // érkezik a friss mail.
+    if (searchParams.get('folders')) {
+      const folders = await service.listFolders()
+      return NextResponse.json({ ok: true, folders })
+    }
+
     const processed = await service.syncOnce({ backfillLimit: backfill, maxMessages: limit, maxSeconds })
     return NextResponse.json({
       ok: true,

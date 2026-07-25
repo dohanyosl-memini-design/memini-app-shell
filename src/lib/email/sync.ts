@@ -110,6 +110,37 @@ export class EmailSyncService {
     return { contacts: this.contacts, companies: this.companies }
   }
 
+  // Diagnosztika: az ÖSSZES postafiók-mappa listája, darabszámmal és a
+  // legfrissebb levél dátumával — hogy kiderüljön, hová érkezik a friss mail
+  // (pl. egy szerveroldali szabály almappába szűri, nem az INBOX-ba).
+  async listFolders(): Promise<Array<Record<string, unknown>>> {
+    return this.withClient(async (client) => {
+      const list = await client.list()
+      const out: Array<Record<string, unknown>> = []
+      for (const item of list.slice(0, 60)) {
+        try {
+          const lock = await client.getMailboxLock(item.path)
+          try {
+            const mb = client.mailbox
+            const messages = mb ? mb.exists : 0
+            let newest: string | null = null
+            if (messages > 0) {
+              const msg = await client.fetchOne('*', { envelope: true })
+              const d = msg && typeof msg !== 'boolean' ? msg.envelope?.date : undefined
+              newest = d ? new Date(d).toISOString() : null
+            }
+            out.push({ path: item.path, specialUse: item.specialUse ?? null, messages, newest })
+          } finally {
+            lock.release()
+          }
+        } catch (e) {
+          out.push({ path: item.path, error: errMsg(e) })
+        }
+      }
+      return out
+    })
+  }
+
   private async discoverFolders(client: ImapFlow): Promise<string[]> {
     const listed = await client.list()
     const inbox =
