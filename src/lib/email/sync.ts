@@ -121,15 +121,27 @@ export class EmailSyncService {
   }
 
   // Egy teljes szinkron-ciklus: minden érintett mappa növekményesen.
-  async syncOnce(overrideLimit?: number): Promise<number> {
+  //  - backfillLimit: a kezdeti behúzás ablaka (levél/mappa)
+  //  - maxMessages: hívásonkénti FELSŐ korlát (a Vercel 60 mp-es limitje miatt);
+  //    ha elérjük, a kurzort az utolsó feldolgozottnál mentjük, és a következő
+  //    hívás onnan folytatja.
+  async syncOnce(opts: { backfillLimit?: number; maxMessages?: number } = {}): Promise<number> {
     await this.ensureAccount()
     const folders = await this.withClient((c) => this.discoverFolders(c))
+    const budget = { remaining: opts.maxMessages ?? Number.POSITIVE_INFINITY }
     let total = 0
-    for (const folder of folders) total += await this.syncFolder(folder, overrideLimit)
+    for (const folder of folders) {
+      if (budget.remaining <= 0) break
+      total += await this.syncFolder(folder, opts.backfillLimit, budget)
+    }
     return total
   }
 
-  private async syncFolder(folder: string, overrideLimit?: number): Promise<number> {
+  private async syncFolder(
+    folder: string,
+    overrideLimit?: number,
+    budget: { remaining: number } = { remaining: Number.POSITIVE_INFINITY },
+  ): Promise<number> {
     const accountId = await this.ensureAccount()
     return this.withClient(async (client) => {
       const lock = await client.getMailboxLock(folder)
@@ -171,6 +183,9 @@ export class EmailSyncService {
           }
           if (ok) { maxProcessedUid = Math.max(maxProcessedUid, uid); processed++ }
           else if (firstFailedUid === null) firstFailedUid = uid
+          // Hívásonkénti korlát (Vercel 60 mp): a kurzort a lentebb mentett
+          // maxProcessedUid-nál hagyjuk, a következő hívás onnan folytatja.
+          if (--budget.remaining <= 0) break
         }
 
         // A kurzort nem visszük az első hibás UID elé — a dedup miatt a

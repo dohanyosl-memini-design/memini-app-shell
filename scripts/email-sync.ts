@@ -27,7 +27,7 @@ async function main() {
   const service = new EmailSyncService(prisma, config, log)
   try {
     log('Szinkron indul', { host: config.host, user: config.user, mode: config.authMode, backfill: backfill ?? config.initialSyncLimit })
-    const count = await service.syncOnce(backfill)
+    const count = await service.syncOnce({ backfillLimit: backfill })
     log('Szinkron kész', { újFeldolgozott: count })
   } catch (e) {
     log('Szinkron hiba', { err: e instanceof Error ? e.message : String(e) })

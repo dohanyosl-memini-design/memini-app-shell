@@ -1,5 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // A levél-szinkron szerveroldali csomagjait ne bundle-özze a webpack —
+  // futásidőben töltődjenek (imapflow/mailparser ESM-es htmlparser2-t húznak).
+  experimental: {
+    serverComponentsExternalPackages: ['imapflow', 'mailparser', 'sanitize-html'],
+  },
   images: {
     remotePatterns: [
       {
