@@ -9,15 +9,14 @@ import {
 } from '@/components/email/emailTypes'
 
 const FILTERS: { key: string; label: string }[] = [
+  { key: 'inbox', label: 'Bejövő' },
   { key: 'unanswered', label: 'Válaszra vár' },
-  { key: 'inbox', label: 'Beszélgetések' },
-  { key: 'answered', label: 'Válaszolt' },
   { key: 'automated', label: 'Automata / hírlevél' },
   { key: 'spam', label: 'Spam' },
 ]
 
 export default function EmailsPage() {
-  const [filter, setFilter] = useState('unanswered')
+  const [filter, setFilter] = useState('inbox')
   const [search, setSearch] = useState('')
   const [threads, setThreads] = useState<ThreadListItem[]>([])
   const [unanswered, setUnanswered] = useState(0)
@@ -46,7 +45,7 @@ export default function EmailsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Levelek</h1>
           <p className="text-slate-500 text-sm">
-            {unanswered} szál vár válaszra
+            Bejövő postafiók · {unanswered} vár válaszra
           </p>
         </div>
       </div>
