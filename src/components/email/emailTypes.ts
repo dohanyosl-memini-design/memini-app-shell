@@ -8,6 +8,7 @@ export interface ThreadListItem {
   messageCount: number
   snippet: string
   lastDirection: string | null
+  sender: string
   company: { id: string; name: string } | null
   contact: { id: string; name: string } | null
   hasAgentDraft: boolean

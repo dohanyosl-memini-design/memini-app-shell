@@ -102,7 +102,7 @@ export default function EmailsPage() {
                 >
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-sm text-slate-900 dark:text-white truncate">
-                      {t.company?.name || t.contact?.name || 'Ismeretlen feladó'}
+                      {t.sender}
                     </span>
                     <span className="ml-auto text-[11px] text-slate-400 tabular-nums whitespace-nowrap">
                       {fmtWhen(t.lastMessageAt)}
