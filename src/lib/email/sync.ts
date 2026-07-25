@@ -160,10 +160,25 @@ export class EmailSyncService {
   //    ha elérjük, a kurzort az utolsó feldolgozottnál mentjük, és a következő
   //    hívás onnan folytatja.
   async syncOnce(
-    opts: { backfillLimit?: number; maxMessages?: number; maxSeconds?: number } = {},
+    opts: {
+      backfillLimit?: number
+      maxMessages?: number
+      maxSeconds?: number
+      restart?: boolean
+    } = {},
   ): Promise<number> {
     await this.ensureAccount()
     const folders = await this.withClient((c) => this.discoverFolders(c))
+    // "Kezdd elölről": a kurzort a mappa elejére állítjuk, hogy a RÉGI levelek
+    // is bejöjjenek (a kurzor magától sosem megy visszafelé). A dedup miatt
+    // biztonságos: a már beolvasott levelek kimaradnak, duplikátum nem lesz.
+    if (opts.restart) {
+      const accountId = await this.ensureAccount()
+      await this.prisma.emailFolderState.updateMany({
+        where: { accountId }, data: { lastSeenUid: BigInt(0) },
+      })
+      this.log('Kurzor visszaállítva a mappák elejére (teljes behúzás)')
+    }
     const budget = { remaining: opts.maxMessages ?? Number.POSITIVE_INFINITY }
     // Óra-alapú határidő: a szinkron ELŐBB áll meg magától, mint hogy a Vercel
     // levágja (504). A kurzort menti, a következő hívás onnan folytatja.

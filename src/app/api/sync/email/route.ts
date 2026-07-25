@@ -47,7 +47,13 @@ async function run(request: NextRequest) {
       return NextResponse.json({ ok: true, folders })
     }
 
-    const processed = await service.syncOnce({ backfillLimit: backfill, maxMessages: limit, maxSeconds })
+    // ?restart=1 — a kurzort a mappák elejére állítja, hogy a RÉGI levelek is
+    // bejöjjenek (a dedup miatt duplikátum nem lesz). Egyszer kell, utána a
+    // normál hívások folytatják, amíg végig nem ér.
+    const restart = !!searchParams.get('restart')
+    const processed = await service.syncOnce({
+      backfillLimit: backfill, maxMessages: limit, maxSeconds, restart,
+    })
     return NextResponse.json({
       ok: true,
       processed,
