@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Mail, Bot, Loader2, Inbox } from 'lucide-react'
+import { Mail, Bot, Loader2, Inbox, CornerUpRight } from 'lucide-react'
 import EmailConversation from '@/components/email/EmailConversation'
 import {
   REPLY_STATUS, fmtWhen,
@@ -10,6 +10,7 @@ import {
 
 const FILTERS: { key: string; label: string }[] = [
   { key: 'inbox', label: 'Bejövő' },
+  { key: 'sent', label: 'Küldött' },
   { key: 'unanswered', label: 'Válaszra vár' },
   { key: 'automated', label: 'Automata / hírlevél' },
   { key: 'spam', label: 'Spam' },
@@ -102,6 +103,9 @@ export default function EmailsPage() {
                   }`}
                 >
                   <div className="flex items-center gap-2">
+                    {t.lastDirection === 'outbound' && (
+                      <CornerUpRight size={13} className="text-blue-500 shrink-0" aria-label="Utolsó levél tőlünk ment" />
+                    )}
                     <span className="font-semibold text-sm text-slate-900 dark:text-white truncate">
                       {t.sender}
                     </span>

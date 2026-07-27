@@ -15,6 +15,8 @@ export async function GET(request: NextRequest) {
   const statusFilter =
     status === 'unanswered' ? { replyStatus: 'unanswered', category: 'conversation' }
     : status === 'inbox' ? { category: 'conversation' }
+    // Küldött: minden szál, amiben van TŐLÜNK kiment levél.
+    : status === 'sent' ? { emails: { some: { direction: 'outbound' } } }
     : status === 'answered' ? { replyStatus: 'answered', category: 'conversation' }
     : status === 'automated' ? { category: 'automated' }
     : status === 'spam' ? { category: 'spam' }

@@ -28,7 +28,7 @@ const normalizeTaskStatus = (s: string) => (s === 'done' ? 'completed' : s)
 const dealStageEnum = z.enum([...DEAL_STAGE_KEYS, ...LEGACY_STAGE_KEYS] as [string, ...string[]])
 
 function buildServer() {
-  const server = new McpServer({ name: 'memini-crm', version: '1.6.0' })
+  const server = new McpServer({ name: 'memini-crm', version: '1.7.0' })
 
   // ─── SZÁMLÁK ─────────────────────────────────────────────────────────────
 
@@ -2473,16 +2473,18 @@ function buildServer() {
 
   server.tool(
     'list_recent_emails',
-    'A legutóbbi levélszálak időrendben (LEGÚJABB elöl). Erre kérdezz rá, ha "mi jött ma/tegnap". Alapból csak valódi beszélgetés; includeNoise=true az automata/hírlevél leveleket is hozza.',
+    'A legutóbbi levélszálak időrendben (LEGÚJABB elöl). Erre kérdezz rá, ha "mi jött ma/tegnap". Alapból csak valódi beszélgetés; includeNoise=true az automata/hírlevél leveleket is hozza. A direction paraméterrel szűrhető: "outbound" = amit MI küldtünk, "inbound" = ami érkezett.',
     {
       days: z.number().int().min(1).max(90).optional().describe('Csak az elmúlt N nap'),
       limit: z.number().int().min(1).max(100).optional().describe('Alap: 25'),
       includeNoise: z.boolean().optional().describe('true esetén az automata/hírlevél is'),
+      direction: z.enum(['inbound', 'outbound']).optional().describe('Csak bejövő vagy csak kimenő levelet tartalmazó szálak'),
     },
-    async ({ days, limit, includeNoise }) => {
+    async ({ days, limit, includeNoise, direction }) => {
       const where: Record<string, unknown> = {}
       if (!includeNoise) where.category = 'conversation'
       if (days) where.lastMessageAt = { gte: new Date(Date.now() - days * 86400000) }
+      if (direction) where.emails = { some: { direction } }
       const data = await prisma.emailThread.findMany({
         where,
         orderBy: { lastMessageAt: 'desc' },
