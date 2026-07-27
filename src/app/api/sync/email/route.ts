@@ -47,6 +47,30 @@ async function run(request: NextRequest) {
       return NextResponse.json({ ok: true, folders })
     }
 
+    // Diagnosztika: ?status=1 — hol áll a szinkron-kurzor mappánként, és
+    // mennyi levél van bent. Ebből látszik, ha valahol elakadt.
+    if (searchParams.get('status')) {
+      const [states, emailCount, threadCount, newest] = await Promise.all([
+        prisma.emailFolderState.findMany({
+          select: { folderName: true, lastSeenUid: true, uidValidity: true, lastSyncedAt: true },
+        }),
+        prisma.email.count(),
+        prisma.emailThread.count(),
+        prisma.email.findFirst({ orderBy: { sentAt: 'desc' }, select: { sentAt: true, subject: true } }),
+      ])
+      return NextResponse.json({
+        ok: true,
+        cursors: states.map((s) => ({
+          folder: s.folderName,
+          lastSeenUid: Number(s.lastSeenUid),
+          lastSyncedAt: s.lastSyncedAt,
+        })),
+        emailsInDb: emailCount,
+        threadsInDb: threadCount,
+        newestEmail: newest,
+      })
+    }
+
     // ?restart=1 — a kurzort a mappák elejére állítja, hogy a RÉGI levelek is
     // bejöjjenek (a dedup miatt duplikátum nem lesz). Egyszer kell, utána a
     // normál hívások folytatják, amíg végig nem ér.
@@ -58,6 +82,8 @@ async function run(request: NextRequest) {
       ok: true,
       processed,
       capped: processed >= limit, // ha true: van még hátra, a következő hívás folytatja
+      skipped: logs.filter((l) => l.startsWith('Levél kihagyva')).length,
+      emailsInDb: await prisma.email.count(),
       logs,
       warning: secret ? undefined : 'Állíts be CRON_SECRET-et a végpont védelméhez.',
     })

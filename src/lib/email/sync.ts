@@ -220,34 +220,40 @@ export class EmailSyncService {
         }
 
         let processed = 0
-        let maxProcessedUid = stateValid ? Number(state!.lastSeenUid) : startUid - 1
-        let firstFailedUid: number | null = null
+        let failed = 0
+        // A kurzort MINDEN feldolgozott UID után visszük — a hibásakat is
+        // beleértve. Korábban az első hibás levél előtt megállt a kurzor, és
+        // egyetlen "mérgezett" levél ÖRÖKRE blokkolta a szinkront.
+        let cursorUid = stateValid ? Number(state!.lastSeenUid) : startUid - 1
 
         for await (const message of client.fetch(`${startUid}:*`, { uid: true, source: true }, { uid: true })) {
           if (!message.source || !message.uid) continue
           const uid = message.uid
           let ok = false
-          for (let attempt = 1; attempt <= 3 && !ok; attempt++) {
+          let lastErr: unknown
+          for (let attempt = 1; attempt <= 2 && !ok; attempt++) {
             try {
               await this.persistMessage(accountId, folder, uidValidity, uid, message.source)
               ok = true
             } catch (e) {
-              if (attempt < 3) await new Promise((r) => setTimeout(r, 250 * 2 ** (attempt - 1)))
-              else this.log('Üzenet feldolgozása sikertelen', { folder, uid, err: errMsg(e) })
+              lastErr = e
+              if (attempt < 2) await new Promise((r) => setTimeout(r, 250))
             }
           }
-          if (ok) { maxProcessedUid = Math.max(maxProcessedUid, uid); processed++ }
-          else if (firstFailedUid === null) firstFailedUid = uid
+          if (ok) processed++
+          else {
+            failed++
+            // Naplózzuk és ÁTUGORJUK — a szinkron nem akadhat el rajta.
+            this.log('Levél kihagyva (hiba)', { folder, uid, err: errMsg(lastErr).slice(0, 200) })
+          }
+          cursorUid = Math.max(cursorUid, uid)
           // Darabszám- VAGY idő-korlát: a kurzort a lentebb mentett
-          // maxProcessedUid-nál hagyjuk, a következő hívás onnan folytatja.
+          // cursorUid-nál hagyjuk, a következő hívás onnan folytatja.
           if (--budget.remaining <= 0 || Date.now() >= deadline) break
         }
 
-        // A kurzort nem visszük az első hibás UID elé — a dedup miatt a
-        // következő futás biztonságosan újrapróbálja onnan.
-        const advanceTo = firstFailedUid !== null ? firstFailedUid - 1 : maxProcessedUid
-        await this.saveState(accountId, folder, uidValidity, advanceTo)
-        this.log('Mappa szinkronizálva', { folder, processed })
+        await this.saveState(accountId, folder, uidValidity, cursorUid)
+        this.log('Mappa szinkronizálva', { folder, processed, kihagyva: failed })
         return processed
       } finally {
         lock.release()
