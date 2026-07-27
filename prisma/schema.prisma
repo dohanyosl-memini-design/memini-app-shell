@@ -754,7 +754,11 @@ model EmailFolderState {
   account      EmailAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
   folderName   String
   uidValidity  BigInt       @default(0)
+  // Két kurzor: az ÚJ levelek felfelé (lastSeenUid a vízszint), a régi
+  // history pedig LEFELÉ töltődik (backfillUid). Így a friss levél azonnal
+  // bejön, az archívum meg a háttérben szivárog vissza az időben.
   lastSeenUid  BigInt       @default(0)
+  backfillUid  BigInt? // meddig jutottunk visszafelé; null = még nem indult, 0 = kész
   lastSyncedAt DateTime?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt

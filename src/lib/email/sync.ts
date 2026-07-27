@@ -173,29 +173,74 @@ export class EmailSyncService {
     // is bejöjjenek (a kurzor magától sosem megy visszafelé). A dedup miatt
     // biztonságos: a már beolvasott levelek kimaradnak, duplikátum nem lesz.
     if (opts.restart) {
+      // Teljes újraolvasás: a folder-állapotokat töröljük, így a következő
+      // forward-fázis a legutóbbi levelektől indul, a backfill pedig onnan
+      // lefelé végigmegy a teljes historyn. A dedup miatt duplikátum nincs.
       const accountId = await this.ensureAccount()
-      await this.prisma.emailFolderState.updateMany({
-        where: { accountId }, data: { lastSeenUid: BigInt(0) },
-      })
-      this.log('Kurzor visszaállítva a mappák elejére (teljes behúzás)')
+      await this.prisma.emailFolderState.deleteMany({ where: { accountId } })
+      this.log('Szinkron-állapot törölve — legújabbtól indul, history visszafelé')
     }
     const budget = { remaining: opts.maxMessages ?? Number.POSITIVE_INFINITY }
     // Óra-alapú határidő: a szinkron ELŐBB áll meg magától, mint hogy a Vercel
     // levágja (504). A kurzort menti, a következő hívás onnan folytatja.
     const deadline = Date.now() + (opts.maxSeconds ?? 50) * 1000
     let total = 0
+
+    // 1. FÁZIS — ÚJ levelek minden mappában (ez a fontos: a mai posta azonnal
+    //    bejöjjön). Kevés levél, gyors; így az Elküldött sem éhezik ki.
     for (const folder of folders) {
       if (budget.remaining <= 0 || Date.now() >= deadline) break
-      total += await this.syncFolder(folder, opts.backfillLimit, budget, deadline)
+      total += await this.syncForward(folder, budget, deadline)
+    }
+
+    // 2. FÁZIS — a maradék idővel a RÉGI history töltése visszafelé (a
+    //    legújabbtól a legrégebbi felé haladva).
+    for (const folder of folders) {
+      if (budget.remaining <= 0 || Date.now() >= deadline) break
+      total += await this.syncBackfill(folder, budget, deadline)
     }
     return total
   }
 
-  private async syncFolder(
-    folder: string,
-    overrideLimit?: number,
-    budget: { remaining: number } = { remaining: Number.POSITIVE_INFINITY },
-    deadline = Number.POSITIVE_INFINITY,
+  // Egy UID-tartomány feldolgozása. A hibás leveleket naplózza és ÁTUGORJA
+  // (egy "mérgezett" levél nem akaszthatja meg a szinkront).
+  private async processRange(
+    client: ImapFlow, accountId: string, folder: string, uidValidity: bigint,
+    range: string, budget: { remaining: number }, deadline: number,
+    onUid?: (uid: number) => void,
+  ): Promise<{ processed: number; failed: number }> {
+    let processed = 0
+    let failed = 0
+    for await (const message of client.fetch(range, { uid: true, source: true }, { uid: true })) {
+      if (!message.source || !message.uid) continue
+      const uid = message.uid
+      let ok = false
+      let lastErr: unknown
+      for (let attempt = 1; attempt <= 2 && !ok; attempt++) {
+        try {
+          await this.persistMessage(accountId, folder, uidValidity, uid, message.source)
+          ok = true
+        } catch (e) {
+          lastErr = e
+          if (attempt < 2) await new Promise((r) => setTimeout(r, 250))
+        }
+      }
+      if (ok) processed++
+      else {
+        failed++
+        this.log('Levél kihagyva (hiba)', { folder, uid, err: errMsg(lastErr).slice(0, 200) })
+      }
+      onUid?.(uid)
+      if (--budget.remaining <= 0 || Date.now() >= deadline) break
+    }
+    return { processed, failed }
+  }
+
+  // 1. FÁZIS — ÚJ levelek: a vízszint (lastSeenUid) fölötti UID-ek.
+  // Első futásnál a vízszintet a mappa VÉGÉRE állítjuk, és csak a legutóbbi
+  // néhány levelet hozzuk — a régi history a 2. fázis dolga.
+  private async syncForward(
+    folder: string, budget: { remaining: number }, deadline: number,
   ): Promise<number> {
     const accountId = await this.ensureAccount()
     return this.withClient(async (client) => {
@@ -209,51 +254,31 @@ export class EmailSyncService {
         const state = await this.prisma.emailFolderState.findUnique({
           where: { accountId_folderName: { accountId, folderName: folder } },
         })
-        const stateValid = state ? state.uidValidity === uidValidity : false
-        const limit = overrideLimit ?? this.config.initialSyncLimit
-        const initialStart = Math.max(1, uidNext - limit)
-        const startUid = stateValid ? Number(state!.lastSeenUid) + 1 : initialStart
+        const stateValid = !!state && state.uidValidity === uidValidity
+
+        // Első futás (vagy UIDVALIDITY-váltás): a legutóbbi 40 levéltől
+        // indulunk, a backfill-kurzort pedig ez alá tesszük.
+        const firstBatch = 40
+        const startUid = stateValid
+          ? Number(state!.lastSeenUid) + 1
+          : Math.max(1, uidNext - firstBatch)
 
         if (startUid >= uidNext) {
-          await this.saveState(accountId, folder, uidValidity, stateValid ? Number(state!.lastSeenUid) : 0)
+          if (!stateValid) {
+            await this.saveState(accountId, folder, uidValidity, uidNext - 1, startUid - 1)
+          }
           return 0
         }
 
-        let processed = 0
-        let failed = 0
-        // A kurzort MINDEN feldolgozott UID után visszük — a hibásakat is
-        // beleértve. Korábban az első hibás levél előtt megállt a kurzor, és
-        // egyetlen "mérgezett" levél ÖRÖKRE blokkolta a szinkront.
-        let cursorUid = stateValid ? Number(state!.lastSeenUid) : startUid - 1
-
-        for await (const message of client.fetch(`${startUid}:*`, { uid: true, source: true }, { uid: true })) {
-          if (!message.source || !message.uid) continue
-          const uid = message.uid
-          let ok = false
-          let lastErr: unknown
-          for (let attempt = 1; attempt <= 2 && !ok; attempt++) {
-            try {
-              await this.persistMessage(accountId, folder, uidValidity, uid, message.source)
-              ok = true
-            } catch (e) {
-              lastErr = e
-              if (attempt < 2) await new Promise((r) => setTimeout(r, 250))
-            }
-          }
-          if (ok) processed++
-          else {
-            failed++
-            // Naplózzuk és ÁTUGORJUK — a szinkron nem akadhat el rajta.
-            this.log('Levél kihagyva (hiba)', { folder, uid, err: errMsg(lastErr).slice(0, 200) })
-          }
-          cursorUid = Math.max(cursorUid, uid)
-          // Darabszám- VAGY idő-korlát: a kurzort a lentebb mentett
-          // cursorUid-nál hagyjuk, a következő hívás onnan folytatja.
-          if (--budget.remaining <= 0 || Date.now() >= deadline) break
-        }
-
-        await this.saveState(accountId, folder, uidValidity, cursorUid)
-        this.log('Mappa szinkronizálva', { folder, processed, kihagyva: failed })
+        let cursorUid = startUid - 1
+        const { processed, failed } = await this.processRange(
+          client, accountId, folder, uidValidity, `${startUid}:*`, budget, deadline,
+          (uid) => { cursorUid = Math.max(cursorUid, uid) },
+        )
+        // Első futásnál a backfill innen indul lefelé; később marad, ami volt.
+        const backfillFrom = stateValid ? undefined : startUid - 1
+        await this.saveState(accountId, folder, uidValidity, cursorUid, backfillFrom)
+        if (processed || failed) this.log('Új levelek', { folder, processed, kihagyva: failed })
         return processed
       } finally {
         lock.release()
@@ -261,12 +286,59 @@ export class EmailSyncService {
     })
   }
 
-  private async saveState(accountId: string, folder: string, uidValidity: bigint, lastSeenUid: number) {
+  // 2. FÁZIS — RÉGI history LEFELÉ: a backfill-kurzortól visszafelé haladva,
+  // adagonként. Így a friss posta sosem várakozik az archívum mögött.
+  private async syncBackfill(
+    folder: string, budget: { remaining: number }, deadline: number,
+  ): Promise<number> {
+    const accountId = await this.ensureAccount()
+    const state = await this.prisma.emailFolderState.findUnique({
+      where: { accountId_folderName: { accountId, folderName: folder } },
+    })
+    // null = még nem indult (a forward beállítja), 0 = kész, nincs több régi.
+    if (!state || state.backfillUid === null || Number(state.backfillUid) <= 0) return 0
+
+    return this.withClient(async (client) => {
+      const lock = await client.getMailboxLock(folder)
+      try {
+        const mailbox = client.mailbox
+        if (!mailbox || mailbox.uidValidity !== state.uidValidity) return 0
+
+        const top = Number(state.backfillUid)
+        const chunk = Math.max(1, Math.min(budget.remaining, 100))
+        const bottom = Math.max(1, top - chunk + 1)
+
+        const { processed, failed } = await this.processRange(
+          client, accountId, folder, state.uidValidity, `${bottom}:${top}`, budget, deadline,
+        )
+        // A feldolgozott ablak alá lépünk; 0 = a history teljesen bejött.
+        const nextBackfill = bottom <= 1 ? 0 : bottom - 1
+        await this.prisma.emailFolderState.update({
+          where: { accountId_folderName: { accountId, folderName: folder } },
+          data: { backfillUid: BigInt(nextBackfill), lastSyncedAt: new Date() },
+        })
+        if (processed || failed) {
+          this.log('Régi levelek (visszafelé)', { folder, processed, kihagyva: failed, következő: nextBackfill })
+        }
+        return processed
+      } finally {
+        lock.release()
+      }
+    })
+  }
+
+  private async saveState(
+    accountId: string, folder: string, uidValidity: bigint, lastSeenUid: number,
+    backfillUid?: number,
+  ) {
+    const backfill = backfillUid === undefined
+      ? {}
+      : { backfillUid: BigInt(Math.max(0, backfillUid)) }
     await this.prisma.emailFolderState.upsert({
       where: { accountId_folderName: { accountId, folderName: folder } },
-      update: { uidValidity, lastSeenUid: BigInt(Math.max(0, lastSeenUid)), lastSyncedAt: new Date() },
+      update: { uidValidity, lastSeenUid: BigInt(Math.max(0, lastSeenUid)), lastSyncedAt: new Date(), ...backfill },
       create: {
-        accountId, folderName: folder, uidValidity,
+        accountId, folderName: folder, uidValidity, ...backfill,
         lastSeenUid: BigInt(Math.max(0, lastSeenUid)), lastSyncedAt: new Date(),
       },
     })

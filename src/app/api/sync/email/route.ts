@@ -52,7 +52,10 @@ async function run(request: NextRequest) {
     if (searchParams.get('status')) {
       const [states, emailCount, threadCount, newest] = await Promise.all([
         prisma.emailFolderState.findMany({
-          select: { folderName: true, lastSeenUid: true, uidValidity: true, lastSyncedAt: true },
+          select: {
+            folderName: true, lastSeenUid: true, backfillUid: true,
+            uidValidity: true, lastSyncedAt: true,
+          },
         }),
         prisma.email.count(),
         prisma.emailThread.count(),
@@ -62,7 +65,8 @@ async function run(request: NextRequest) {
         ok: true,
         cursors: states.map((s) => ({
           folder: s.folderName,
-          lastSeenUid: Number(s.lastSeenUid),
+          ujLevelekEddig: Number(s.lastSeenUid),          // vízszint: efölött jön az új
+          regiHistoryEddig: s.backfillUid === null ? null : Number(s.backfillUid), // 0 = teljesen bejött
           lastSyncedAt: s.lastSyncedAt,
         })),
         emailsInDb: emailCount,
