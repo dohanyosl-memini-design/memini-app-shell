@@ -104,10 +104,10 @@ export default function EmailsPage() {
                 >
                   <div className="flex items-center gap-2">
                     {t.lastDirection === 'outbound' && (
-                      <CornerUpRight size={13} className="text-blue-500 shrink-0" aria-label="Utolsó levél tőlünk ment" />
+                      <CornerUpRight size={13} className="text-blue-500 shrink-0" aria-label="Tőlünk kiment levél" />
                     )}
                     <span className="font-semibold text-sm text-slate-900 dark:text-white truncate">
-                      {t.sender}
+                      {t.lastDirection === 'outbound' ? `neki: ${t.sender}` : t.sender}
                     </span>
                     <span className="ml-auto text-[11px] text-slate-400 tabular-nums whitespace-nowrap">
                       {fmtWhen(t.lastMessageAt)}

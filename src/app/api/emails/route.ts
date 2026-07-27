@@ -12,11 +12,75 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get('search') || ''
 
   // A "Válaszra vár" CSAK valódi beszélgetés lehet (nem automata/spam).
+  // KÜLDÖTT nézet: valódi "Elküldött mappa" — a MI kiment leveleink,
+  // címzettel és a küldés dátumával (nem a szál utolsó, gyakran bejövő
+  // levelével). Szálanként a legutóbbi kimenőt mutatjuk.
+  if (status === 'sent') {
+    const sentEmails = await prisma.email.findMany({
+      where: {
+        direction: 'outbound',
+        ...(companyId ? { thread: { companyId } } : {}),
+        ...(search ? {
+          OR: [
+            { subject: { contains: search, mode: 'insensitive' } },
+            { snippet: { contains: search, mode: 'insensitive' } },
+          ],
+        } : {}),
+      },
+      orderBy: { sentAt: 'desc' },
+      take: 300,
+      select: {
+        threadId: true, subject: true, snippet: true, sentAt: true,
+        participants: { where: { type: 'to' }, select: { emailAddress: true, displayName: true } },
+        thread: {
+          select: {
+            replyStatus: true, category: true, messageCount: true,
+            company: { select: { id: true, name: true } },
+            contact: { select: { id: true, firstName: true, lastName: true } },
+            drafts: { where: { status: { in: ['draft', 'approved'] } }, select: { source: true } },
+          },
+        },
+      },
+    })
+
+    // Szálanként csak a legutóbbi kimenő (a lista már dátum szerint rendezett).
+    const seen = new Set<string>()
+    const rows = []
+    for (const e of sentEmails) {
+      if (seen.has(e.threadId)) continue
+      seen.add(e.threadId)
+      const to = e.participants[0]
+      rows.push({
+        id: e.threadId,
+        subject: e.subject,
+        replyStatus: e.thread.replyStatus,
+        category: e.thread.category,
+        lastMessageAt: e.sentAt,
+        messageCount: e.thread.messageCount,
+        snippet: e.snippet,
+        lastDirection: 'outbound',
+        sender: e.thread.company?.name
+          || to?.displayName || to?.emailAddress || 'Ismeretlen címzett',
+        company: e.thread.company,
+        contact: e.thread.contact ? {
+          id: e.thread.contact.id,
+          name: `${e.thread.contact.firstName} ${e.thread.contact.lastName}`.trim(),
+        } : null,
+        hasAgentDraft: e.thread.drafts.some(d => d.source === 'agent'),
+        draftCount: e.thread.drafts.length,
+      })
+      if (rows.length >= 100) break
+    }
+
+    const unansweredCount = await prisma.emailThread.count({
+      where: { replyStatus: 'unanswered', category: 'conversation', ...(companyId ? { companyId } : {}) },
+    })
+    return NextResponse.json({ threads: rows, unansweredCount })
+  }
+
   const statusFilter =
     status === 'unanswered' ? { replyStatus: 'unanswered', category: 'conversation' }
     : status === 'inbox' ? { category: 'conversation' }
-    // Küldött: minden szál, amiben van TŐLÜNK kiment levél.
-    : status === 'sent' ? { emails: { some: { direction: 'outbound' } } }
     : status === 'answered' ? { replyStatus: 'answered', category: 'conversation' }
     : status === 'automated' ? { category: 'automated' }
     : status === 'spam' ? { category: 'spam' }
