@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { Plus, Search, ChevronRight, FileText, Building2, User } from 'lucide-react'
+import { Plus, Search, ChevronRight, FileText, Building2, User, Printer, Send, ArrowRightCircle } from 'lucide-react'
 import { format } from 'date-fns'
 import { hu } from 'date-fns/locale'
 import Modal from '@/components/Modal'
@@ -344,6 +344,29 @@ export default function QuotesPage() {
     fetchQuotes()
   }
 
+  // Kiküldöttre jelölés: a státuszt a kiküldés ténye lépteti, és felkerül egy
+  // utánkövető feladat — így nem hal el csendben az ajánlat.
+  async function handleMarkSent(id: string, number: string) {
+    if (!confirm(`A(z) ${number} ajánlatot kiküldöttre jelöli?\n\nA státusz "Kiküldve" lesz, és felkerül egy utánkövető feladat.`)) return
+    const res = await fetch(`/api/quotes/${id}/mark-sent`, { method: 'POST' })
+    const data = await res.json()
+    if (!res.ok) { alert(data.error ?? 'Nem sikerült a jelölés.'); return }
+    if (data.alreadySent) alert(data.message)
+    fetchQuotes()
+  }
+
+  async function handleConvert(id: string, number: string) {
+    if (!confirm(`A(z) ${number} ajánlatból megrendelés készül.\n\nAz ajánlat "Elfogadva" státuszba kerül. Folytatja?`)) return
+    const res = await fetch(`/api/quotes/${id}/convert`, { method: 'POST' })
+    const data = await res.json()
+    if (!res.ok) { alert(data.error ?? 'Nem sikerült az átgörgetés.'); return }
+    if (data.alreadyConverted) { alert(data.message); return }
+    fetchQuotes()
+    if (confirm(`Megrendelés létrehozva: ${data.order.number}\n\nMegnyitja a megrendelést?`)) {
+      window.location.href = '/orders'
+    }
+  }
+
   const filtered = quotes.filter((q) => {
     const term = search.toLowerCase()
     return (
@@ -480,12 +503,40 @@ export default function QuotesPage() {
                       </td>
                       <td className="px-5 py-3 text-right font-semibold text-gray-900 text-sm">{fmtEur(q.total)}</td>
                       <td className="px-5 py-3">
-                        <button
-                          onClick={() => handleDelete(q.id)}
-                          className="text-gray-300 hover:text-red-500 transition-colors text-lg leading-none"
-                        >
-                          ×
-                        </button>
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => window.open(`/quotes/${q.id}/print`, '_blank')}
+                            title="Nyomtatás / PDF"
+                            className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                          >
+                            <Printer size={15} />
+                          </button>
+                          {q.status === 'draft' && (
+                            <button
+                              onClick={() => handleMarkSent(q.id, q.number)}
+                              title="Kiküldöttre jelölés (+ utánkövető feladat)"
+                              className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            >
+                              <Send size={15} />
+                            </button>
+                          )}
+                          {(q.status === 'sent' || q.status === 'accepted') && (
+                            <button
+                              onClick={() => handleConvert(q.id, q.number)}
+                              title="Átgörgetés megrendelésre"
+                              className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                            >
+                              <ArrowRightCircle size={15} />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDelete(q.id)}
+                            title="Törlés"
+                            className="p-1.5 text-gray-300 hover:text-red-500 transition-colors text-lg leading-none"
+                          >
+                            ×
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
