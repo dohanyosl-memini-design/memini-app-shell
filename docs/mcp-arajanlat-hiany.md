@@ -3,6 +3,14 @@
 Állapotfelmérés dátuma: 2026-07-30
 Vizsgált MCP szerver: `src/app/api/mcp/route.ts` (`memini-crm` v1.7.0, 95 tool)
 
+> **MEGOLDVA (2026-07-30).** A hiány be van kötve: az MCP szerver v1.8.0-ban
+> 101 tool-t ad, köztük a `list_quotes`, `get_quote`, `create_quote`,
+> `update_quote`, `update_quote_status` és `convert_quote_to_order` tool-okat,
+> és a `create_order` már elfogad `quoteId`-t. Az alábbi hiányleírást a
+> változás előtti állapot dokumentálásaként hagytuk meg; a „mit nem lát"
+> szakasz **már nem érvényes**. Ami továbbra sem létezik: az árajánlat
+> nyomtatási nézete (4. pont utolsó bekezdése) és a `create_delivery_note`.
+
 ## A rövid válasz
 
 Az ügynök következtetése helyes volt, a *magyarázata* viszont nem.
