@@ -11,6 +11,7 @@ interface QuoteItem {
   unitPrice: number
   vatRate: number
   total: number
+  isDiscount: boolean
 }
 
 interface Quote {
@@ -24,6 +25,11 @@ interface Quote {
   vatAmount: number
   total: number
   notes: string | null
+  billingName: string | null
+  billingAddress: string | null
+  billingZip: string | null
+  billingCity: string | null
+  billingCountry: string | null
   contact: { firstName: string; lastName: string } | null
   company: {
     name: string; address: string | null; zip: string | null; city: string | null
@@ -67,23 +73,34 @@ export default function QuotePrintPage() {
     return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', ...S }}>Az ajánlat nem található.</div>
   }
 
+  // A kedvezmény-sorok a számla mintájára külön, az összesítő blokkban
+  // jelennek meg, nem a termék-tételek között.
+  const productItems = quote.items.filter(i => !i.isDiscount)
+  const discountItems = quote.items.filter(i => i.isDiscount)
+  const hasDiscounts = discountItems.length > 0
+  const productSubtotal = productItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+  const discountTotal = discountItems.reduce((s, i) => s + Math.abs(i.unitPrice), 0)
+
   const chunks: QuoteItem[][] = []
-  for (let i = 0; i < quote.items.length; i += ITEMS_PER_PAGE) {
-    chunks.push(quote.items.slice(i, i + ITEMS_PER_PAGE))
+  for (let i = 0; i < productItems.length; i += ITEMS_PER_PAGE) {
+    chunks.push(productItems.slice(i, i + ITEMS_PER_PAGE))
   }
   if (chunks.length === 0) chunks.push([])
 
   // Az áfa-sor az adatból jön, nem beégetve: ha több kulcs is szerepel a
   // tételek között, kulcsonként külön sorban jelenik meg.
   const vatGroups = Array.from(
-    quote.items.reduce((map, item) => {
+    productItems.reduce((map, item) => {
       const net = item.quantity * item.unitPrice
       map.set(item.vatRate, (map.get(item.vatRate) ?? 0) + net * (item.vatRate / 100))
       return map
     }, new Map<number, number>()),
   ).sort((a, b) => a[0] - b[0])
 
-  const name = quote.company?.name || null
+  const name = quote.billingName || quote.company?.name || null
+  const address = quote.billingAddress || quote.company?.address || null
+  const zip = quote.billingZip || quote.company?.zip || null
+  const city = quote.billingCity || quote.company?.city || null
 
   return (
     <>
@@ -238,10 +255,8 @@ export default function QuotePrintPage() {
                     <p>{quote.contact.firstName} {quote.contact.lastName}</p>
                   )}
                   <div style={{ marginTop: '8px' }}>
-                    {quote.company?.address && <p>{quote.company.address}</p>}
-                    {(quote.company?.zip || quote.company?.city) && (
-                      <p>{[quote.company?.zip, quote.company?.city].filter(Boolean).join(' ')}</p>
-                    )}
+                    {address && <p>{address}</p>}
+                    {(zip || city) && <p>{[zip, city].filter(Boolean).join(' ')}</p>}
                     {quote.company?.phone && <p>Tel.: {quote.company.phone}</p>}
                     {quote.company?.email && <p>E-Mail: {quote.company.email}</p>}
                   </div>
@@ -316,9 +331,22 @@ export default function QuotePrintPage() {
                         })}
                         {isLast && (
                           <>
+                            {hasDiscounts && (
+                              <tr>
+                                <td colSpan={3} style={{ textAlign: 'right', fontWeight: 700 }}>Summe Netto</td>
+                                <td style={{ textAlign: 'right' }}>{fmtDE(productSubtotal)}</td>
+                              </tr>
+                            )}
+                            {discountItems.map(item => (
+                              <tr key={item.id}>
+                                <td colSpan={2} style={{ fontStyle: 'italic', fontWeight: 700 }}>{item.description}</td>
+                                <td style={{ textAlign: 'center' }}>1</td>
+                                <td style={{ textAlign: 'right' }}>{fmtDE(Math.abs(item.unitPrice))}</td>
+                              </tr>
+                            ))}
                             <tr>
                               <td colSpan={3} style={{ textAlign: 'right', fontWeight: 700 }}>Summe Netto</td>
-                              <td style={{ textAlign: 'right' }}>{fmtDE(quote.subtotal)}</td>
+                              <td style={{ textAlign: 'right' }}>{fmtDE(hasDiscounts ? productSubtotal - discountTotal : quote.subtotal)}</td>
                             </tr>
                             {vatGroups.map(([rate, amount]) => (
                               <tr key={rate}>
