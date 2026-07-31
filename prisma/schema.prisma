@@ -435,11 +435,20 @@ model Quote {
   contact    Contact?    @relation(fields: [contactId], references: [id])
   companyId  String?
   company    Company?    @relation(fields: [companyId], references: [id])
+  // Címzett — a számlához hasonlóan felülírható, ha eltér a cég törzsadatától.
+  billingName    String?
+  billingAddress String?
+  billingZip     String?
+  billingCity    String?
+  billingCountry String?
   items      QuoteItem[]
   subtotal   Float       @default(0)
   vatAmount  Float       @default(0)
   total      Float       @default(0)
   currency   String      @default("EUR")
+  // Mikor ment ki a partnernek. A státusz önmagában kézzel is állítható, ez
+  // viszont csak a tényleges kiküldéskor íródik — erre épül a lejárat-figyelés.
+  sentAt     DateTime?
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
 }
@@ -451,6 +460,8 @@ model QuoteItem {
   unitPrice   Float
   vatRate     Float    @default(19)
   total       Float
+  // Kedvezmény-sor (Rabatt): negatív egységárral, a számlatételek mintájára.
+  isDiscount  Boolean  @default(false)
   quoteId     String
   quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   productId   String?

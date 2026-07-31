@@ -16,6 +16,9 @@ import { logPieceCreated, logPieceDiff, logPieceEvent } from '@/lib/contentEvent
 import { ingestImageFromUrl, deleteContentImage, setPrimaryImage } from '@/lib/imageProcessing'
 import { parseDueInput } from '@/lib/datetime'
 import { buildFocus } from '@/lib/focus'
+import { convertQuoteToOrder, nextOrderNumber, nextQuoteNumber } from '@/lib/quoteToOrder'
+import { markQuoteSent } from '@/lib/quoteSend'
+import { priceForQuantity, checkItemsAgainstPriceList, type PriceDeviation } from '@/lib/pricing'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,8 +30,11 @@ const normalizeTaskStatus = (s: string) => (s === 'done' ? 'completed' : s)
 // (a régi kulcsokat a handler normalizeStage-dzsel konvertálja — visszafelé kompatibilis).
 const dealStageEnum = z.enum([...DEAL_STAGE_KEYS, ...LEGACY_STAGE_KEYS] as [string, ...string[]])
 
+// Árajánlat-státuszok — ugyanaz a szótár, mint a /quotes felületen (QUOTE_STATUS).
+const QUOTE_STATUSES = ['draft', 'sent', 'accepted', 'rejected', 'expired'] as const
+
 function buildServer() {
-  const server = new McpServer({ name: 'memini-crm', version: '1.7.0' })
+  const server = new McpServer({ name: 'memini-crm', version: '1.9.0' })
 
   // ─── SZÁMLÁK ─────────────────────────────────────────────────────────────
 
@@ -695,6 +701,7 @@ function buildServer() {
       deliveryAddress: z.string().optional(),
       deliveryDate:    z.string().optional().describe('Kívánt szállítási dátum YYYY-MM-DD'),
       shippingMethod:  z.string().optional(),
+      quoteId:         z.string().optional().describe('Ha a megrendelés egy elfogadott árajánlatból származik, az árajánlat ID-ja — így a kettő össze lesz kapcsolva. Ajánlatból induláshoz inkább a convert_quote_to_order tool-t használd.'),
       items: z.array(z.object({
         description: z.string(),
         quantity:    z.number().positive(),
@@ -708,18 +715,9 @@ function buildServer() {
       const vatAmount = body.items.reduce((s, i) => s + i.quantity * i.unitPrice * (i.vatRate / 100), 0)
       const total = subtotal + vatAmount
 
-      const year = new Date().getFullYear()
-      const prefix = `MR-${year}-`
-      const last = await prisma.order.findFirst({
-        where: { number: { startsWith: prefix } },
-        orderBy: { number: 'desc' },
-      })
-      const next = last ? parseInt(last.number.split('-')[2]) + 1 : 1
-      const number = `${prefix}${String(next).padStart(3, '0')}`
-
       const order = await prisma.order.create({
         data: {
-          number,
+          number:          await nextOrderNumber(),
           date:            body.date ? new Date(body.date) : new Date(),
           status:          'pending',
           notes:           body.notes || null,
@@ -730,6 +728,7 @@ function buildServer() {
           shippingMethod:  body.shippingMethod || null,
           contactId:       body.contactId || null,
           companyId:       body.companyId || null,
+          quoteId:         body.quoteId || null,
           currency:        'EUR',
           subtotal,
           vatAmount,
@@ -822,6 +821,290 @@ function buildServer() {
       }
       const data = await prisma.order.update({ where: { id }, data: { status } })
       return { content: [{ type: 'text', text: `Megrendelés státusza frissítve: ${data.number} → ${status}` }] }
+    }
+  )
+
+  // ─── ÁRAJÁNLATOK (Angebot) ───────────────────────────────────────────────
+  //
+  // Az árajánlat NEM könyvelési objektum. Ha a partner ajánlatot kér, ezeket a
+  // tool-okat kell használni — soha nem szabad helyette számlatervezetet
+  // (create_invoice) vagy vevői megrendelést (create_order) kiállítani.
+
+  server.tool(
+    'list_quotes',
+    'Árajánlatok (Angebot) listázása. Ezzel lehet megnézni, hogy egy partnernek adtunk-e már ajánlatot és mit. Státuszok: draft (tervezet), sent (kiküldve), accepted (elfogadva), rejected (elutasítva), expired (lejárt).',
+    {
+      companyId: z.string().optional().describe('Szűrés cégre'),
+      contactId: z.string().optional().describe('Szűrés kapcsolattartóra'),
+      status:    z.enum(QUOTE_STATUSES).optional().describe('Szűrés státuszra'),
+    },
+    async ({ companyId, contactId, status }) => {
+      const data = await prisma.quote.findMany({
+        where: {
+          ...(companyId ? { companyId } : {}),
+          ...(contactId ? { contactId } : {}),
+          ...(status ? { status } : {}),
+        },
+        include: {
+          contact: { select: { firstName: true, lastName: true } },
+          company: { select: { name: true } },
+          items: { include: { product: { select: { name: true, sku: true } } } },
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'get_quote',
+    'Egy árajánlat teljes adatainak lekérése azonosító alapján.',
+    { id: z.string().describe('Árajánlat ID') },
+    async ({ id }) => {
+      const data = await prisma.quote.findUnique({
+        where: { id },
+        include: { contact: true, company: true, items: { include: { product: true } } },
+      })
+      if (!data) return { content: [{ type: 'text', text: 'Árajánlat nem található.' }] }
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'create_quote',
+    'Új ÁRAJÁNLAT (Angebot) létrehozása "draft" (tervezet) státuszban, automatikus sorszámozással (AJ-ÉV-sorszám). Ezt kell használni, ha egy partner árajánlatot kér. Az összegeket a szerver számolja a tételekből. Az ajánlat nem könyvelési objektum: nem érinti a számlázást és a készletet. FONTOS: az egységárat előbb a get_quote_price tool-lal kérdezd le, mert az árlistában mennyiségi sávok vannak — az alapár csak a legkisebb sávra érvényes. Ha az általad megadott ár eltér a listaártól, a válasz figyelmeztetést tartalmaz (az ajánlat ettől még létrejön: az egyedi ár megengedett, csak látszódnia kell).',
+    {
+      companyId:  z.string().optional().describe('Cég ID'),
+      contactId:  z.string().optional().describe('Kapcsolattartó ID'),
+      date:       z.string().optional().describe('Ajánlat dátuma YYYY-MM-DD, alapértelmezett: ma'),
+      validUntil: z.string().optional().describe('Érvényességi határidő YYYY-MM-DD (pl. 30 nap)'),
+      notes:      z.string().optional().describe('Megjegyzés / feltételek (megjelenik az ajánlaton)'),
+      items: z.array(z.object({
+        description: z.string(),
+        quantity:    z.number().positive(),
+        unitPrice:   z.number().describe('Nettó egységár EUR-ban'),
+        vatRate:     z.number().default(19),
+        productId:   z.string().optional(),
+      })).min(1).describe('Ajánlott tételek, legalább egy szükséges'),
+    },
+    async (body) => {
+      const subtotal = body.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+      const vatAmount = body.items.reduce((s, i) => s + i.quantity * i.unitPrice * (i.vatRate / 100), 0)
+
+      const quote = await prisma.quote.create({
+        data: {
+          number:     await nextQuoteNumber(),
+          date:       body.date ? new Date(body.date) : new Date(),
+          validUntil: body.validUntil ? new Date(body.validUntil) : null,
+          status:     'draft',
+          notes:      body.notes || null,
+          contactId:  body.contactId || null,
+          companyId:  body.companyId || null,
+          currency:   'EUR',
+          subtotal,
+          vatAmount,
+          total:      subtotal + vatAmount,
+          items: {
+            create: body.items.map(i => ({
+              description: i.description,
+              quantity:    i.quantity,
+              unitPrice:   i.unitPrice,
+              vatRate:     i.vatRate,
+              total:       i.quantity * i.unitPrice * (1 + i.vatRate / 100),
+              productId:   i.productId || null,
+            })),
+          },
+        },
+        include: { contact: true, company: true, items: true },
+      })
+
+      const deviations = await checkItemsAgainstPriceList(body.items)
+      const warning = deviations.length === 0 ? '' : [
+        '',
+        '⚠️ FIGYELEM — az alábbi tételek ára eltér az árlistától:',
+        ...deviations.map((d: PriceDeviation) =>
+          `  • ${d.description} (${d.quantity} db): megadva ${d.givenUnitPrice.toFixed(2)} €, ` +
+          `listaár ${d.listUnitPrice.toFixed(2)} € a ${d.tierQty} darabos sávban — ` +
+          `eltérés ${d.differenceEur > 0 ? '+' : ''}${d.differenceEur.toFixed(2)} € (${d.differencePercent > 0 ? '+' : ''}${d.differencePercent}%)`),
+        'Az ajánlat létrejött. Ha ez nem szándékos egyedi ár, javítsd az update_quote tool-lal, és szólj Lászlónak.',
+      ].join('\n')
+
+      return { content: [{ type: 'text', text: `Árajánlat létrehozva: ${quote.number}${warning}\n${JSON.stringify(quote, null, 2)}` }] }
+    }
+  )
+
+  server.tool(
+    'update_quote',
+    'Meglévő árajánlat módosítása. Csak a megadott mezők frissülnek. FIGYELEM: ha megadod az "items" tömböt, az LECSERÉLI az összes meglévő tételt — ezért mindig a teljes tétellistát add át, ne csak a módosítandót, különben a kimaradó tételek elvesznek. A tételek megadása nélkül a többi mező biztonságosan frissíthető.',
+    {
+      id:         z.string().describe('Árajánlat ID'),
+      companyId:  z.string().optional(),
+      contactId:  z.string().optional(),
+      date:       z.string().optional().describe('YYYY-MM-DD'),
+      validUntil: z.string().optional().describe('Érvényességi határidő YYYY-MM-DD'),
+      notes:      z.string().optional(),
+      items: z.array(z.object({
+        description: z.string(),
+        quantity:    z.number().positive(),
+        unitPrice:   z.number(),
+        vatRate:     z.number().default(19),
+        productId:   z.string().optional(),
+      })).optional().describe('Ha megadod, lecseréli az ÖSSZES meglévő tételt — a teljes listát add át'),
+    },
+    async ({ id, items, ...fields }) => {
+      const updateData: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(fields)) {
+        if (v === undefined) continue
+        updateData[k] = (k === 'date' || k === 'validUntil') ? new Date(v as string) : v
+      }
+
+      if (items && items.length > 0) {
+        const subtotal = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+        const vatAmount = items.reduce((s, i) => s + i.quantity * i.unitPrice * (i.vatRate / 100), 0)
+        updateData.subtotal = subtotal
+        updateData.vatAmount = vatAmount
+        updateData.total = subtotal + vatAmount
+        await prisma.quoteItem.deleteMany({ where: { quoteId: id } })
+        updateData.items = {
+          create: items.map(i => ({
+            description: i.description,
+            quantity:    i.quantity,
+            unitPrice:   i.unitPrice,
+            vatRate:     i.vatRate,
+            total:       i.quantity * i.unitPrice * (1 + i.vatRate / 100),
+            productId:   i.productId || null,
+          })),
+        }
+      }
+
+      const data = await prisma.quote.update({
+        where: { id },
+        data: updateData,
+        include: { contact: true, company: true, items: true },
+      })
+      return { content: [{ type: 'text', text: `Árajánlat frissítve: ${data.number}\n${JSON.stringify(data, null, 2)}` }] }
+    }
+  )
+
+  server.tool(
+    'update_quote_status',
+    'Árajánlat státuszának módosítása. Érvényes státuszok (TELJES LISTA): draft (tervezet) → sent (kiküldve) → accepted (elfogadva) vagy rejected (elutasítva); expired (lejárt), ha letelt az érvényesség.',
+    {
+      id:     z.string().describe('Árajánlat ID'),
+      status: z.enum(QUOTE_STATUSES).describe('Érvényes értékek: draft, sent, accepted, rejected, expired'),
+    },
+    async ({ id, status }) => {
+      const data = await prisma.quote.update({ where: { id }, data: { status } })
+      return { content: [{ type: 'text', text: `Árajánlat státusza frissítve: ${data.number} → ${status}` }] }
+    }
+  )
+
+  server.tool(
+    'convert_quote_to_order',
+    'Elfogadott árajánlatból vevői megrendelés létrehozása: átveszi az ajánlat tételeit, összekapcsolja a kettőt (Order.quoteId), és az ajánlatot "accepted" státuszra állítja. A megrendelés "pending" státuszban, MR-ÉV-sorszám számmal jön létre. Csak akkor használd, ha a partner tényleg megrendelte az ajánlatot.',
+    {
+      quoteId:         z.string().describe('Az átalakítandó árajánlat ID-ja'),
+      deliveryDate:    z.string().optional().describe('Kívánt szállítási dátum YYYY-MM-DD'),
+      deliveryAddress: z.string().optional(),
+      shippingMethod:  z.string().optional(),
+      customerRef:     z.string().optional().describe('Ügyfél saját rendelésszáma'),
+      notes:           z.string().optional().describe('Megjegyzés a megrendelőlapra; alapértelmezetten az ajánlat megjegyzése'),
+    },
+    async ({ quoteId, ...options }) => {
+      const result = await convertQuoteToOrder(quoteId, options)
+
+      if (!result.ok) {
+        if (result.reason === 'not_found') {
+          return { content: [{ type: 'text', text: 'Árajánlat nem található.' }] }
+        }
+        if (result.reason === 'no_items') {
+          return { content: [{ type: 'text', text: `A(z) ${result.quoteNumber} árajánlatnak nincs tétele, így nem alakítható megrendeléssé.` }] }
+        }
+        return {
+          content: [{
+            type: 'text',
+            text: `A(z) ${result.quoteNumber} árajánlatból MÁR készült megrendelés: ${result.orderNumber} (ID: ${result.orderId}). Nem hoztam létre másodikat.`,
+          }],
+        }
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `Megrendelés létrehozva a(z) ${result.quoteNumber} árajánlatból: ${result.order.number} (az ajánlat státusza: accepted)\n${JSON.stringify(result.order, null, 2)}`,
+        }],
+      }
+    }
+  )
+
+  server.tool(
+    'get_quote_price',
+    'Az ÉRVÉNYES nettó egységár lekérése egy hordozóból adott darabszámnál. MINDIG ezt használd árajánlat vagy megrendelés készítése előtt — az árlistában mennyiségi sávok vannak, tehát ugyanaz a termék 500 darabnál olcsóbb, mint 50-nél. Az árlista alapára (basePrice) a legkisebb sávra érvényes, nem minden mennyiségre.',
+    {
+      hordozo:  z.string().optional().describe('Hordozó kódja, pl. ko_aquarel_normal (lásd list_carriers / get_pricelist)'),
+      search:   z.string().optional().describe('Vagy név-töredék, ha a kódot nem tudod, pl. "Aquarelle nagy"'),
+      quantity: z.number().positive().describe('A rendelni kívánt darabszám'),
+    },
+    async ({ hordozo, search, quantity }) => {
+      const entries = await prisma.priceListEntry.findMany({
+        where: {
+          active: true,
+          ...(hordozo ? { hordozo } : {}),
+          ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
+        },
+        orderBy: { sortOrder: 'asc' },
+      })
+
+      if (entries.length === 0) {
+        return { content: [{ type: 'text', text: 'Nincs találat az árlistában. Nézd meg a get_pricelist vagy list_carriers kimenetét.' }] }
+      }
+
+      const priced = entries.map(e => {
+        const p = priceForQuantity(e.basePrice, e.tiers, quantity)
+        return {
+          hordozo:        e.hordozo,
+          name:           e.name,
+          quantity,
+          basePrice:      e.basePrice,
+          appliedTierQty: p.tierQty,
+          discountPercent: p.discountPercent,
+          unitPrice:      p.unitPrice,
+          lineTotalNet:   Math.round(p.unitPrice * quantity * 100) / 100,
+        }
+      })
+
+      return { content: [{ type: 'text', text: JSON.stringify(priced, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'mark_quote_sent',
+    'Az árajánlat kiküldöttre jelölése, MIUTÁN ténylegesen elment a partnernek. Státuszt "sent"-re állítja, rögzíti a kiküldés időpontját, és felvesz egy utánkövető feladatot, hogy az ajánlat ne haljon el válasz nélkül. Ne használd olyan ajánlatra, ami még nem ment ki.',
+    {
+      id:            z.string().describe('Árajánlat ID'),
+      followUpDays:  z.number().positive().optional().describe('Hány nap múlva kérdezzünk rá (alapértelmezett: 7). Ha az ajánlat hamarabb lejár, a lejárat dátuma lesz.'),
+    },
+    async ({ id, followUpDays }) => {
+      const result = await markQuoteSent(id, 'agent', followUpDays)
+
+      if (!result.ok) {
+        if (result.reason === 'not_found') {
+          return { content: [{ type: 'text', text: 'Árajánlat nem található.' }] }
+        }
+        return {
+          content: [{
+            type: 'text',
+            text: `A(z) ${result.quoteNumber} ajánlat már ki lett küldve (${result.sentAt.toISOString().slice(0, 10)}). Nem jelöltem újra.`,
+          }],
+        }
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `A(z) ${result.quoteNumber} ajánlat kiküldöttre jelölve. Utánkövető feladat felvéve ${result.followUpAt.toISOString().slice(0, 10)} határidővel (feladat ID: ${result.taskId}).`,
+        }],
+      }
     }
   )
 
