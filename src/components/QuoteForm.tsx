@@ -102,17 +102,26 @@ export default function QuoteForm({ onSave, onCancel, quote }: { onSave: () => v
   )
 
   useEffect(() => {
-    Promise.all([
-      fetch('/api/contacts').then(r => r.json()),
-      fetch('/api/companies').then(r => r.json()),
-      fetch('/api/products').then(r => r.json()),
-      fetch('/api/pricelist').then(r => r.json()),
-      fetch('/api/carriers').then(r => r.json()),
-      fetch('/api/quotes/next-number').then(r => r.json()),
-    ]).then(([c, co, p, pl, ca, nn]) => {
-      setAllContacts(c); setCompanies(co); setProducts(p); setPricelist(pl); setCarriers(ca)
-      if (!quote) setForm(f => ({ ...f, quoteNumber: nn.number }))
-    })
+    // A törzsadatok betöltése független egymástól: ha az egyik végpont hibázik,
+    // a többi lista (pl. a cégválasztó) akkor is feltöltődjön.
+    const load = async (url: string) => {
+      const r = await fetch(url)
+      if (!r.ok) throw new Error(`${url} → ${r.status}`)
+      return r.json()
+    }
+    const set = (fn: (v: never[]) => void) => (data: unknown) => fn(Array.isArray(data) ? data as never[] : [])
+
+    load('/api/contacts').then(set(setAllContacts)).catch(() => {})
+    load('/api/companies').then(set(setCompanies)).catch(() => {})
+    load('/api/products').then(set(setProducts)).catch(() => {})
+    load('/api/pricelist').then(set(setPricelist)).catch(() => {})
+    load('/api/carriers').then(set(setCarriers)).catch(() => {})
+
+    if (!quote) {
+      load('/api/quotes/next-number')
+        .then(nn => setForm(f => ({ ...f, quoteNumber: nn.number })))
+        .catch(() => {}) // a szám kézzel is beírható, ha a generálás elakad
+    }
   }, [quote])
 
   // A kiválasztott cég korábbi rendelései — ezekből lesz a "korábban rendelt" csoport

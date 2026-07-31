@@ -13,6 +13,9 @@ export async function nextOrderNumber() {
   const last = await prisma.order.findFirst({
     where: { number: { startsWith: prefix } },
     orderBy: { number: 'desc' },
+    // Csak a number oszlopot olvassuk: így a lekérdezés nem függ a tábla többi
+    // (esetleg még nem migrált) oszlopától.
+    select: { number: true },
   })
   const next = last ? parseInt(last.number.split('-')[2]) + 1 : 1
   return `${prefix}${String(next).padStart(3, '0')}`
@@ -23,6 +26,7 @@ export async function nextQuoteNumber() {
   const last = await prisma.quote.findFirst({
     where: { number: { startsWith: prefix } },
     orderBy: { number: 'desc' },
+    select: { number: true },
   })
   const next = last ? parseInt(last.number.split('-')[2]) + 1 : 1
   return `${prefix}${String(next).padStart(3, '0')}`
