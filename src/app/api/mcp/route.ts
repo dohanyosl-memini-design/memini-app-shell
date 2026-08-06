@@ -3079,6 +3079,69 @@ function buildServer() {
   )
 
   server.tool(
+    'log_setback',
+    'Kudarc rögzítése: ami félrement, nem jött össze, elutasításba vagy zsákutcába futott. NEM ugyanaz, mint a tanulság — a kudarc a nyers esemény (elvesztett partner, visszautasított ajánlat, félrement kampány, elrontott szállítás), a tanulság pedig a belőle leszűrt szabály. Előbb a kudarcot rögzítsd, a tanulságot külön (log_learning), amikor már látod. Így később megkérdezhető, hogy "hasonló helyzetben mi ment már félre".',
+    {
+      title:       z.string().describe('Mi ment félre — röviden'),
+      description: z.string().describe('Mi történt pontosan'),
+      cause:       z.string().optional().describe('Mi okozta, amennyire látjuk'),
+      cost:        z.string().optional().describe('Mibe került — idő, pénz, elvesztett partner, jó hírnév'),
+      differently: z.string().optional().describe('Mit csinálnánk másképp legközelebb'),
+      ...brainLinks,
+      ...brainMeta,
+    },
+    async (i) => {
+      const note = await createBrainNote({
+        kind:    'setback',
+        title:   i.title,
+        content: i.description,
+        details: { cause: i.cause, cost: i.cost, differently: i.differently },
+        companyId: i.companyId, contactId: i.contactId, dealId: i.dealId,
+        orderId: i.orderId, taskId: i.taskId,
+        eventDate: i.eventDate, importance: i.importance, confidence: i.confidence,
+      })
+      return { content: [{ type: 'text', text: describeBrainNote(note) }] }
+    }
+  )
+
+  server.tool(
+    'get_setbacks',
+    'Kudarcok listája — mi ment félre. Az "unlearnedOnly" opcióval csak azok jönnek, amikből még NEM vontunk le tanulságot: ezeket érdemes átnézni, mert bennük van a fel nem használt tapasztalat. Ha egy kudarcból megszületett a tanulság, jelöld az update_brain_note-tal status: "lesson_drawn" értékre.',
+    {
+      companyId:     z.string().optional().describe('Csak ehhez a partnerhez tartozók'),
+      unlearnedOnly: z.boolean().optional().describe('Csak amikből még nincs tanulság (status: recorded)'),
+      limit:         z.number().int().min(1).max(100).optional().describe('Alapértelmezett: 30'),
+    },
+    async ({ companyId, unlearnedOnly, limit }) => {
+      const data = await prisma.brainNote.findMany({
+        where: {
+          kind: 'setback',
+          ...(companyId ? { companyId } : {}),
+          ...(unlearnedOnly ? { status: 'recorded' } : {}),
+        },
+        include: { company: { select: { id: true, name: true } } },
+        orderBy: [{ importance: 'desc' }, { eventDate: 'desc' }],
+        take: limit ?? 30,
+      })
+      if (data.length === 0) {
+        return { content: [{ type: 'text', text: unlearnedOnly ? '✅ Nincs feldolgozatlan kudarc.' : 'Nincs rögzített kudarc.' }] }
+      }
+      const lines = data.map(n => {
+        const d = n.details as { cause?: string; cost?: string; differently?: string }
+        const who = n.company?.name ? ` | ${n.company.name}` : ''
+        const when = n.eventDate ? ` | ${n.eventDate.toISOString().slice(0, 10)}` : ''
+        const status = n.status === 'recorded' ? ' | ⚠️ még nincs belőle tanulság' : ' | tanulság levonva'
+        return `🩹 ${n.title}${who}${when}${status}\n    ${n.content}`
+          + (d.cause ? `\n    Ok: ${d.cause}` : '')
+          + (d.cost ? `\n    Ára: ${d.cost}` : '')
+          + (d.differently ? `\n    Másképp: ${d.differently}` : '')
+          + `\n    ID: ${n.id}`
+      })
+      return { content: [{ type: 'text', text: `${data.length} kudarc:\n\n${lines.join('\n\n')}` }] }
+    }
+  )
+
+  server.tool(
     'close_open_loop',
     'Nyitott ügy lezárása az eredmény rögzítésével.',
     {
