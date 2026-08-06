@@ -10,6 +10,11 @@ import { computeReorderDue, reorderCallTaskTitle, FULFILLED_ORDER_STATUSES } fro
 import { buildGoalTree } from '@/lib/goalProgress'
 import { GOAL_LEVELS, GOAL_METRICS } from '@/lib/goalConstants'
 import { logTaskCreated, logTaskDiff, logTaskEvent } from '@/lib/taskEvents'
+import { searchKnowledge, type KnowledgeScope } from '@/lib/knowledgeSearch'
+import {
+  createBrainNote, describeBrainNote, BRAIN_KINDS, BRAIN_STATUSES,
+  BRAIN_KIND_LABEL, BRAIN_STATUS_LABEL, type BrainKind,
+} from '@/lib/brain'
 import { buildMarketingTree } from '@/lib/marketingTree'
 import { ARC_LEVELS, CHANNEL_KEYS, LANGUAGES } from '@/lib/marketingConstants'
 import { logPieceCreated, logPieceDiff, logPieceEvent } from '@/lib/contentEvents'
@@ -257,6 +262,7 @@ function buildServer() {
           company: true,
           invoices: { take: 5, orderBy: { date: 'desc' } },
           memories: { include: { type: true }, orderBy: { createdAt: 'desc' } },
+          brainNotes: { orderBy: [{ importance: 'desc' }, { eventDate: 'desc' }], take: 20 },
         },
       })
       if (!data) return { content: [{ type: 'text', text: 'Kapcsolat nem található.' }] }
@@ -323,6 +329,7 @@ function buildServer() {
           contacts: true,
           invoices: { take: 5, orderBy: { date: 'desc' } },
           memories: { include: { type: true }, orderBy: { createdAt: 'desc' } },
+          brainNotes: { orderBy: [{ importance: 'desc' }, { eventDate: 'desc' }], take: 20 },
         },
       })
       if (!data) return { content: [{ type: 'text', text: 'Cég nem található.' }] }
@@ -2893,6 +2900,297 @@ function buildServer() {
           ),
         }],
       }
+    }
+  )
+
+  // ─── MEMINI BRAIN — DÖNTÉS, TANULSÁG, ÖTLET, NYITOTT ÜGY ─────────────────
+
+  const brainLinks = {
+    companyId: z.string().optional().describe('Kapcsolódó cég ID'),
+    contactId: z.string().optional().describe('Kapcsolódó kapcsolattartó ID'),
+    dealId:    z.string().optional().describe('Kapcsolódó deal ID'),
+    orderId:   z.string().optional().describe('Kapcsolódó megrendelés ID'),
+    taskId:    z.string().optional().describe('Kapcsolódó feladat ID'),
+  }
+
+  const brainMeta = {
+    eventDate:  z.string().optional().describe('Mikor történt, YYYY-MM-DD (alapértelmezett: ma)'),
+    importance: z.number().int().min(1).max(3).optional().describe('1 = alacsony, 2 = normál, 3 = magas'),
+    confidence: z.enum(['certain', 'assumed']).optional()
+      .describe('"assumed" = következtetés, nem megerősített tény. Bizonytalan állítást SOHA ne rögzíts "certain"-ként.'),
+  }
+
+  server.tool(
+    'log_decision',
+    'Meghozott döntés rögzítése az INDOKÁVAL együtt. A "reason" a legfontosabb mező: fél év múlva a döntésre emlékezni fogsz, az érvelésre nem. Használd, amikor a munka során döntés születik — árazás, partnerfeltétel, termékirány, stratégia.',
+    {
+      title:          z.string().describe('A döntés rövid megnevezése'),
+      reason:         z.string().describe('MIÉRT született így — az érvelés, nem a döntés megismétlése'),
+      description:    z.string().optional().describe('Részletek, kontextus'),
+      alternatives:   z.string().optional().describe('Milyen alternatívákat vetettünk el és miért'),
+      expectedResult: z.string().optional().describe('Mit várunk tőle'),
+      participants:   z.string().optional().describe('Kik hozták / vettek részt benne'),
+      reviewDate:     z.string().optional().describe('Mikor nézzük felül, YYYY-MM-DD'),
+      ...brainLinks,
+      ...brainMeta,
+    },
+    async (i) => {
+      const note = await createBrainNote({
+        kind:    'decision',
+        title:   i.title,
+        content: i.description || i.title,
+        details: {
+          reason:         i.reason,
+          alternatives:   i.alternatives,
+          expectedResult: i.expectedResult,
+          participants:   i.participants,
+        },
+        dueDate: i.reviewDate,
+        companyId: i.companyId, contactId: i.contactId, dealId: i.dealId,
+        orderId: i.orderId, taskId: i.taskId,
+        eventDate: i.eventDate, importance: i.importance, confidence: i.confidence,
+      })
+      return { content: [{ type: 'text', text: describeBrainNote(note) }] }
+    }
+  )
+
+  server.tool(
+    'log_learning',
+    'Tanulság rögzítése: mi vált be, mi nem, és mit kezdjünk vele legközelebb. A "reusableRule" a lényeg — az újra alkalmazható szabály, amit egy hasonló helyzetben elő kell venni.',
+    {
+      title:        z.string().describe('A tanulság rövid megnevezése'),
+      description:  z.string().describe('Mi történt, miből jött a felismerés'),
+      reusableRule: z.string().describe('Az újra alkalmazható szabály — mit csináljunk legközelebb hasonló helyzetben'),
+      worked:       z.string().optional().describe('Mi működött jól'),
+      didntWork:    z.string().optional().describe('Mi nem működött'),
+      ...brainLinks,
+      ...brainMeta,
+    },
+    async (i) => {
+      const note = await createBrainNote({
+        kind:    'learning',
+        title:   i.title,
+        content: i.description,
+        details: { reusableRule: i.reusableRule, worked: i.worked, didntWork: i.didntWork },
+        companyId: i.companyId, contactId: i.contactId, dealId: i.dealId,
+        orderId: i.orderId, taskId: i.taskId,
+        eventDate: i.eventDate, importance: i.importance, confidence: i.confidence,
+      })
+      return { content: [{ type: 'text', text: describeBrainNote(note) }] }
+    }
+  )
+
+  server.tool(
+    'log_idea',
+    'Ötlet rögzítése — külön kezelve a döntéstől és a feladattól. Az ötlet még nem elhatározás: van üzleti célja, kockázata és következő vizsgálati lépése.',
+    {
+      title:         z.string().describe('Az ötlet rövid megnevezése'),
+      description:   z.string().describe('Miről szól'),
+      businessValue: z.string().optional().describe('Milyen üzleti lehetőséget rejt'),
+      risk:          z.string().optional().describe('Fő kockázat'),
+      nextStep:      z.string().optional().describe('Következő vizsgálati lépés'),
+      origin:        z.string().optional().describe('Honnan jött (partner, esemény, beszélgetés)'),
+      status:        z.enum(['new', 'exploring', 'accepted', 'rejected', 'parked']).optional()
+        .describe('Alapértelmezett: new'),
+      ...brainLinks,
+      ...brainMeta,
+    },
+    async (i) => {
+      const note = await createBrainNote({
+        kind:    'idea',
+        title:   i.title,
+        content: i.description,
+        details: { businessValue: i.businessValue, risk: i.risk, nextStep: i.nextStep, origin: i.origin },
+        status:  i.status,
+        companyId: i.companyId, contactId: i.contactId, dealId: i.dealId,
+        orderId: i.orderId, taskId: i.taskId,
+        eventDate: i.eventDate, importance: i.importance, confidence: i.confidence,
+      })
+      return { content: [{ type: 'text', text: describeBrainNote(note) }] }
+    }
+  )
+
+  server.tool(
+    'log_open_loop',
+    'Elvarratlan szál rögzítése: függőben lévő ügy, amire vissza kell térni. NEM ugyanaz, mint a feladat (create_task) — a feladat konkrét teendő határidővel, a nyitott ügy egy le nem zárt szál (válaszra várunk, ígéretet tettünk, döntés függőben).',
+    {
+      title:       z.string().describe('Mi a nyitott ügy'),
+      nextAction:  z.string().describe('Mi a következő lépés'),
+      description: z.string().optional().describe('Részletek, előzmény'),
+      blocker:     z.string().optional().describe('Mi akadályozza / mire várunk'),
+      dueDate:     z.string().optional().describe('Mikorra kell rendezni, YYYY-MM-DD'),
+      ...brainLinks,
+      ...brainMeta,
+    },
+    async (i) => {
+      const note = await createBrainNote({
+        kind:    'open_loop',
+        title:   i.title,
+        content: i.description || i.title,
+        details: { nextAction: i.nextAction, blocker: i.blocker },
+        dueDate: i.dueDate,
+        companyId: i.companyId, contactId: i.contactId, dealId: i.dealId,
+        orderId: i.orderId, taskId: i.taskId,
+        eventDate: i.eventDate, importance: i.importance, confidence: i.confidence,
+      })
+      return { content: [{ type: 'text', text: describeBrainNote(note) }] }
+    }
+  )
+
+  server.tool(
+    'close_open_loop',
+    'Nyitott ügy lezárása az eredmény rögzítésével.',
+    {
+      id:      z.string().describe('A nyitott ügy ID-ja'),
+      outcome: z.string().describe('Mi lett a vége'),
+    },
+    async ({ id, outcome }) => {
+      const existing = await prisma.brainNote.findUnique({ where: { id }, select: { kind: true, details: true, title: true } })
+      if (!existing) return { content: [{ type: 'text', text: 'Bejegyzés nem található.' }] }
+      const details = { ...(existing.details as Record<string, unknown>), outcome }
+      await prisma.brainNote.update({
+        where: { id },
+        data: { status: 'closed', closedAt: new Date(), details },
+      })
+      return { content: [{ type: 'text', text: `Nyitott ügy lezárva: ${existing.title} — ${outcome}` }] }
+    }
+  )
+
+  server.tool(
+    'update_brain_note',
+    'Meglévő Brain-bejegyzés módosítása (döntés, tanulság, ötlet, nyitott ügy). Csak a megadott mezők frissülnek. A "details" mezői összefésülődnek a meglévőkkel.',
+    {
+      id:         z.string().describe('Bejegyzés ID'),
+      title:      z.string().optional(),
+      content:    z.string().optional(),
+      status:     z.string().optional().describe('Típusfüggő — döntés: active/superseded/reverted, ötlet: new/exploring/accepted/rejected/parked, nyitott ügy: open/closed, tanulság: active/archived'),
+      importance: z.number().int().min(1).max(3).optional(),
+      dueDate:    z.string().optional().describe('YYYY-MM-DD, vagy üres string a törléshez'),
+      details:    z.record(z.string(), z.string()).optional().describe('Típusspecifikus mezők, pl. { "reason": "..." } — a meglévőkhöz fésülődik'),
+    },
+    async ({ id, title, content, status, importance, dueDate, details }) => {
+      const existing = await prisma.brainNote.findUnique({ where: { id } })
+      if (!existing) return { content: [{ type: 'text', text: 'Bejegyzés nem található.' }] }
+
+      const allowed = BRAIN_STATUSES[existing.kind as BrainKind]
+      if (status && allowed && !allowed.includes(status)) {
+        return { content: [{ type: 'text', text: `Érvénytelen státusz "${status}" ehhez a típushoz (${existing.kind}). Érvényes: ${allowed.join(', ')}` }] }
+      }
+
+      const upd: Record<string, unknown> = {}
+      if (title      !== undefined) upd.title      = title
+      if (content    !== undefined) upd.content    = content
+      if (status     !== undefined) upd.status     = status
+      if (importance !== undefined) upd.importance = importance
+      if (dueDate    !== undefined) upd.dueDate    = dueDate ? new Date(dueDate) : null
+      if (details) upd.details = { ...(existing.details as Record<string, unknown>), ...details }
+      if (status === 'closed') upd.closedAt = new Date()
+
+      const note = await prisma.brainNote.update({
+        where: { id }, data: upd,
+        include: { company: { select: { name: true } } },
+      })
+      return { content: [{ type: 'text', text: `Frissítve — ${describeBrainNote(note)}` }] }
+    }
+  )
+
+  server.tool(
+    'list_brain_notes',
+    'Brain-bejegyzések listázása szűrve: típus, cég, státusz szerint. Kereséshez használd inkább a search_knowledge tool-t.',
+    {
+      kind:      z.enum(BRAIN_KINDS).optional().describe('decision | learning | idea | open_loop'),
+      companyId: z.string().optional(),
+      contactId: z.string().optional(),
+      status:    z.string().optional(),
+      limit:     z.number().int().min(1).max(100).optional().describe('Alapértelmezett: 30'),
+    },
+    async ({ kind, companyId, contactId, status, limit }) => {
+      const data = await prisma.brainNote.findMany({
+        where: {
+          ...(kind ? { kind } : {}),
+          ...(companyId ? { companyId } : {}),
+          ...(contactId ? { contactId } : {}),
+          ...(status ? { status } : {}),
+        },
+        include: { company: { select: { id: true, name: true } } },
+        orderBy: [{ importance: 'desc' }, { eventDate: 'desc' }],
+        take: limit ?? 30,
+      })
+      if (data.length === 0) return { content: [{ type: 'text', text: 'Nincs találat.' }] }
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'get_open_loops',
+    'Nyitott, le nem zárt ügyek — a lejárt határidejűek elöl. Beszélgetés elején érdemes megnézni: ezek a szálak várnak rendezésre.',
+    {
+      companyId:   z.string().optional().describe('Csak ehhez a céghez tartozók'),
+      overdueOnly: z.boolean().optional().describe('Csak a lejárt határidejűek'),
+    },
+    async ({ companyId, overdueOnly }) => {
+      const data = await prisma.brainNote.findMany({
+        where: {
+          kind:   'open_loop',
+          status: 'open',
+          ...(companyId ? { companyId } : {}),
+          ...(overdueOnly ? { dueDate: { lt: new Date() } } : {}),
+        },
+        include: { company: { select: { id: true, name: true } } },
+        orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
+      })
+      if (data.length === 0) return { content: [{ type: 'text', text: '✅ Nincs nyitott ügy.' }] }
+
+      const now = Date.now()
+      const lines = data.map(n => {
+        const details = n.details as { nextAction?: string; blocker?: string }
+        const overdue = n.dueDate && n.dueDate.getTime() < now
+        const due = n.dueDate ? ` | határidő: ${n.dueDate.toISOString().slice(0, 10)}${overdue ? ' ⚠️ LEJÁRT' : ''}` : ''
+        const who = n.company?.name ? ` | ${n.company.name}` : ''
+        const next = details.nextAction ? `\n    → ${details.nextAction}` : ''
+        const blocker = details.blocker ? `\n    ⛔ ${details.blocker}` : ''
+        return `• ${n.title}${who}${due}${next}${blocker}\n    ID: ${n.id}`
+      })
+      return { content: [{ type: 'text', text: `${data.length} nyitott ügy:\n\n${lines.join('\n')}` }] }
+    }
+  )
+
+  server.tool(
+    'search_knowledge',
+    'Keresés a cég teljes tudásában: Brain-bejegyzések (döntések és indokaik, tanulságok, ötletek, nyitott ügyek), memóriák, aktivitások és levelek. Kulcsszóra és kifejezésre is keres: idézőjelben pontos kifejezés ("éves vállalás"), mínusszal kizárás (-minta), "or" a vagy-kapcsolathoz. Ezzel válaszolhatók az olyan kérdések, mint "miért vezettük be ezt az ármodellt?" vagy "mit ígértünk ennek a partnernek?".',
+    {
+      query:     z.string().optional().describe('Keresőkifejezés. Elhagyva: szűrt listázás időrendben.'),
+      scopes:    z.array(z.enum(['brain', 'memory', 'activity', 'email'])).optional()
+        .describe('Hol keressen (alapértelmezett: mindenhol)'),
+      kind:      z.string().optional().describe('Szűkítés típusra — brain: decision/learning/idea/open_loop, activity: call/email/meeting/…, email: inbound/outbound'),
+      companyId: z.string().optional(),
+      contactId: z.string().optional(),
+      status:    z.string().optional().describe('Brain-bejegyzés státusza'),
+      from:      z.string().optional().describe('Ettől a naptól, YYYY-MM-DD'),
+      to:        z.string().optional().describe('Eddig a napig, YYYY-MM-DD'),
+      limit:     z.number().int().min(1).max(100).optional().describe('Alapértelmezett: 25'),
+    },
+    async (o) => {
+      const hits = await searchKnowledge({
+        ...o,
+        scopes: o.scopes as KnowledgeScope[] | undefined,
+      })
+      if (hits.length === 0) {
+        return { content: [{ type: 'text', text: `Nincs találat${o.query ? ` erre: "${o.query}"` : ''}.` }] }
+      }
+      const SCOPE_LABEL: Record<string, string> = {
+        brain: 'Tudás', memory: 'Memória', activity: 'Aktivitás', email: 'Levél',
+      }
+      const lines = hits.map(h => {
+        const kind = BRAIN_KIND_LABEL[h.kind as BrainKind] ?? h.kind
+        const date = h.date ? h.date.slice(0, 10) : '—'
+        const who = h.companyName ? ` | ${h.companyName}` : ''
+        const status = h.status ? ` | ${BRAIN_STATUS_LABEL[h.status] ?? h.status}` : ''
+        // Memóriánál a cím a tartalom eleje — ne írjuk ki kétszer.
+        const title = h.scope === 'memory' ? '' : `\n  ${h.title}`
+        return `[${SCOPE_LABEL[h.scope] ?? h.scope}${kind ? ` / ${kind}` : ''}] ${date}${who}${status}${title}\n  ${h.snippet}\n  ID: ${h.id}`
+      })
+      return { content: [{ type: 'text', text: `${hits.length} találat:\n\n${lines.join('\n\n')}` }] }
     }
   )
 
