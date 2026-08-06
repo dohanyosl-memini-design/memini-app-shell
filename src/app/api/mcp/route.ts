@@ -41,8 +41,50 @@ const dealStageEnum = z.enum([...DEAL_STAGE_KEYS, ...LEGACY_STAGE_KEYS] as [stri
 // Árajánlat-státuszok — ugyanaz a szótár, mint a /quotes felületen (QUOTE_STATUS).
 const QUOTE_STATUSES = ['draft', 'sent', 'accepted', 'rejected', 'expired'] as const
 
+// Tételcserés frissítések: a megadott tételsor LECSERÉLI a meglévőt, tehát
+// adatvesztéssel járhat — ezeket akkor is romboló műveletnek jelöljük, ha
+// nincs "delete" a nevükben.
+const DESTRUCTIVE_TOOLS = new Set(['update_order', 'update_quote'])
+
+/**
+ * MCP tool-annotációk a tool neve alapján.
+ *
+ * A kliens ebből tudja eldönteni, mit futtathat külön rákérdezés nélkül.
+ * Enélkül minden tool egyformán gyanús neki, és mindenre engedélyt kér.
+ *
+ *   olvasó (list_/get_/search_/find_) — ártalmatlan, nem módosít semmit
+ *   író                              — módosít, de nyomon követhető: a
+ *                                      felületen látszik a bejegyzés forrása
+ *                                      és ideje, és javítható
+ *   romboló (delete_*, tételcsere)   — adatvesztéssel járhat, maradjon
+ *                                      engedélyköteles
+ */
+function annotationsFor(name: string) {
+  const readOnly = /^(list|get|search|find)_/.test(name)
+  const destructive = /^delete_/.test(name) || DESTRUCTIVE_TOOLS.has(name)
+  return {
+    readOnlyHint:    readOnly,
+    destructiveHint: destructive,
+    idempotentHint:  readOnly,
+    openWorldHint:   false,
+  }
+}
+
 function buildServer() {
-  const server = new McpServer({ name: 'memini-crm', version: '1.9.0' })
+  const server = new McpServer({ name: 'memini-crm', version: '2.0.0' })
+
+  // Az annotációt egy helyen fűzzük hozzá minden regisztrációhoz, hogy ne
+  // kelljen több mint száz toolnál kézzel karbantartani — és ne is lehessen
+  // elfelejteni egy újnál. A hívási forma változatlan marad, így a kezelők
+  // típusai továbbra is a zod-sémából jönnek.
+  const baseTool = server.tool.bind(server) as (...args: unknown[]) => unknown
+  server.tool = ((...args: unknown[]) => {
+    const [name, description, schema, cb] = args
+    if (args.length === 4 && typeof name === 'string') {
+      return baseTool(name, description, schema, annotationsFor(name), cb)
+    }
+    return baseTool(...args)
+  }) as typeof server.tool
 
   // ─── SZÁMLÁK ─────────────────────────────────────────────────────────────
 
