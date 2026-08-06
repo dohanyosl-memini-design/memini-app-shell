@@ -12,6 +12,7 @@ import { GOAL_LEVELS, GOAL_METRICS } from '@/lib/goalConstants'
 import { logTaskCreated, logTaskDiff, logTaskEvent } from '@/lib/taskEvents'
 import { searchKnowledge, type KnowledgeScope } from '@/lib/knowledgeSearch'
 import { collectDailyFacts } from '@/lib/dailyFacts'
+import { computePendingReplies } from '@/lib/pendingReplies'
 import { saveJournal, getJournal, listJournals, type EmailDigestItem } from '@/lib/dailyJournal'
 import { localDay, isValidDay } from '@/lib/localDay'
 import {
@@ -613,13 +614,14 @@ function buildServer() {
 
   server.tool(
     'list_reorder_due',
-    'Esedékes reorder lista: won partnerek, akiknek az utolsó teljesített (kiszállított/átadott) rendelése régen (alapból 9+ hónapja) volt, legrégebbi elöl. Tartalmazza a reorder-arány KPI-t (established partnerek reorder %-a, cél 55%+) és a nov–jan szezon-előtti "szezon-hívás" jelöléseket.',
+    'Esedékes reorder lista: won partnerek, akiknek az utolsó teljesített (kiszállított/átadott) rendelése régen (alapból 9+ hónapja) volt, legrégebbi elöl. Tartalmazza a reorder-arány KPI-t és a nov–jan szezon-előtti "szezon-hívás" jelöléseket. FONTOS: nézd meg a "reliability" mezőt — ha reliable=false, a lista won partnerek vagy teljesített rendelési előzmény híján NEM megbízható, és a "0 esedékes" adathiányt jelent, nem tényleges állapotot.',
     {
       thresholdMonths: z.number().int().min(1).max(36).optional().describe('Esedékességi küszöb hónapban (alapértelmezett: 9)'),
     },
     async ({ thresholdMonths }) => {
       const data = await computeReorderDue({ thresholdMonths })
-      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+      const warning = data.reliability.reliable ? '' : `⚠️ FIGYELEM: ${data.reliability.reason}\n\n`
+      return { content: [{ type: 'text', text: `${warning}${JSON.stringify(data, null, 2)}` }] }
     }
   )
 
@@ -2779,30 +2781,24 @@ function buildServer() {
 
   server.tool(
     'list_unanswered_emails',
-    'Válaszra váró VALÓDI beszélgetések — a proaktív munka fő jelzése. Csak emberi levelek, amikre érdemes válaszolni (az automatikus/hírlevél/spam levelek KI vannak zárva). A legutóbbi levél a partnertől jött, és még nincs rá válasz. Opcionálisan cégre szűrhető.',
+    'Válaszra váró beszélgetések, PRIORITÁS szerint bontva. A "priority" lista a napi vezérlőlista: partnerhez kötött ÉS friss (3 hónapon belüli) szálak — ezekkel érdemes foglalkozni. Az "other" a többi unanswered szál: partner nélküli vagy elévült — ezek gyakran zaj (a levélosztályozó csak fejlécből dolgozik, így hírlevél is bekerülhet), külön nézd át. A counts megmutatja, mennyi esik melyik csoportba. Opcionálisan cégre szűrhető.',
     {
       companyId: z.string().optional(),
+      includeOther: z.boolean().optional().describe('Az elévült / partner nélküli szálak is (alap: false — csak a prioritás)'),
       limit: z.number().int().min(1).max(100).optional().describe('Alap: 25'),
     },
-    async ({ companyId, limit }) => {
-      const data = await prisma.emailThread.findMany({
-        where: { replyStatus: 'unanswered', category: 'conversation', ...(companyId ? { companyId } : {}) },
-        orderBy: { lastMessageAt: 'desc' },
-        take: limit ?? 25,
-        select: {
-          id: true, subject: true, lastMessageAt: true, messageCount: true,
-          company: { select: { id: true, name: true } },
-          contact: { select: { id: true, firstName: true, lastName: true } },
-          emails: {
-            orderBy: { sentAt: 'desc' }, take: 1,
-            select: {
-              direction: true, snippet: true, sentAt: true,
-              participants: { select: { type: true, emailAddress: true, displayName: true } },
-            },
-          },
-        },
-      })
-      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    async ({ companyId, includeOther, limit }) => {
+      const pending = await computePendingReplies({ companyId })
+      const cap = limit ?? 25
+      const result = {
+        counts: pending.counts,
+        priority: pending.priority.slice(0, cap),
+        ...(includeOther ? { other: pending.other.slice(0, cap) } : {}),
+        note: includeOther
+          ? undefined
+          : `${pending.counts.total} unanswered szálból ${pending.counts.priority} a partnerhez kötött friss (priority). A többi (${pending.counts.total - pending.counts.priority}) partner nélküli vagy 3 hónapnál régebbi — includeOther: true ha az is kell.`,
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
     }
   )
 

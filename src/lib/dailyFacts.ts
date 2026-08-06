@@ -1,5 +1,6 @@
 import { prisma } from './prisma'
 import { localDay, localDayBounds } from './localDay'
+import { computePendingReplies } from './pendingReplies'
 
 /**
  * A nap TÉNYEI — kódból, determinisztikusan. Ez a réteg soha nem értelmez és
@@ -109,12 +110,10 @@ export async function collectDailyFacts(o: DailyFactsOptions = {}) {
       take: LIMIT,
     }),
     prisma.email.count({ where: { sentAt: window, direction: 'outbound', category: { not: 'spam' } } }),
-    prisma.emailThread.findMany({
-      where: { replyStatus: 'unanswered', category: 'conversation' },
-      select: { id: true, subject: true, lastMessageAt: true, company: { select: { id: true, name: true } } },
-      orderBy: { lastMessageAt: 'asc' },
-      take: LIMIT,
-    }),
+    // A "válaszra vár" listát prioritásra bontjuk: a napi vezérlőlistába csak a
+    // partnerhez kötött, friss szálak kellenek — a partner nélküli / elévült
+    // szálak (gyakran zaj) külön számként jelennek meg, nem a fő listában.
+    computePendingReplies({}, prisma),
     prisma.stockMovement.findMany({
       where: { createdAt: window },
       select: { id: true, type: true, quantity: true, product: { select: { name: true, sku: true } } },
@@ -189,11 +188,18 @@ export async function collectDailyFacts(o: DailyFactsOptions = {}) {
         company: e.thread.company,
       })),
       kikuldottLevelekSzama: emailsOut,
-      valaszraVaroSzalak: threadsWaiting,
+      // Csak a partnerhez kötött, friss szálak — ez a napi vezérlőlista.
+      valaszraVaroSzalak: threadsWaiting.priority,
+      // A partner nélküli / elévült szálak összesítve, hogy tudni lehessen,
+      // mennyi zaj van a nyers "unanswered" listában (napi listába nem kell).
+      valaszraVaroEgyeb: {
+        partnerNelkuliVagyElevult: threadsWaiting.counts.total - threadsWaiting.counts.priority,
+        reszletek: threadsWaiting.counts,
+      },
       // Üres lista nem feltétlenül azt jelenti, hogy nem jött levél — lehet,
       // hogy a CRM levélszinkronja nem fut. Ilyenkor az ügynök a saját
       // postafiók-hozzáféréséből dolgozzon.
-      levelSzinkronAktiv: emailsIn.length > 0 || emailsOut > 0 || threadsWaiting.length > 0,
+      levelSzinkronAktiv: emailsIn.length > 0 || emailsOut > 0 || threadsWaiting.counts.total > 0,
     },
     raktar: {
       keszletmozgasok: stockMoves,

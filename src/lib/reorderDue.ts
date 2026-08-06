@@ -35,10 +35,20 @@ export interface ReorderRate {
   label: string                  // "X/Y partner = Z%"
 }
 
+export interface ReorderReliability {
+  reliable: boolean
+  reason: string | null   // ha nem megbízható: miért
+}
+
 export interface ReorderDueResult {
   generatedAt: string
   thresholdMonths: number
   fulfilledStatuses: string[]
+  // Megbízhatóság: a reorder-lista won partnerekből és teljesített rendelési
+  // előzményből dolgozik. Ha ezek nincsenek feltöltve, a "0 esedékes" nem azt
+  // jelenti, hogy nincs teendő, hanem hogy a lista nem számítható. Ez a mező
+  // teszi egyértelművé, hogy melyikről van szó.
+  reliability: ReorderReliability
   reorderRate: ReorderRate
   season: {
     inWindow: boolean            // nov 1 – jan 31
@@ -178,10 +188,23 @@ export async function computeReorderDue(
     ? Math.round((reorderedEstablished / establishedPartners) * 1000) / 10
     : null
 
+  // A lista akkor megbízható, ha van legalább egy won partner, ÉS közülük
+  // legalább egynek van teljesített rendelése (különben nincs miből reordert
+  // számolni — a 0 az adathiányt tükrözi, nem a valóságot).
+  const partnersWithFulfilled = partnerIds.length - partnersWithoutFulfilledOrders
+  const reliability: ReorderReliability =
+    partnersWithFulfilled > 0
+      ? { reliable: true, reason: null }
+      : {
+          reliable: false,
+          reason: `${partnerIds.length} won partner van, de egyiküknek sincs teljesített (kiszállított/átadott) rendelése a rendszerben. A reorder-lista rendelési előzmény nélkül nem számítható — a "0 esedékes" adathiányt jelent, nem azt, hogy nincs teendő.`,
+        }
+
   return {
     generatedAt: now.toISOString(),
     thresholdMonths,
     fulfilledStatuses: FULFILLED_ORDER_STATUSES,
+    reliability,
     reorderRate: {
       reorderedEstablished,
       establishedPartners,
@@ -212,6 +235,10 @@ function emptyResult(now: Date, thresholdMonths: number): ReorderDueResult {
     generatedAt: now.toISOString(),
     thresholdMonths,
     fulfilledStatuses: FULFILLED_ORDER_STATUSES,
+    reliability: {
+      reliable: false,
+      reason: 'Nincs won státuszú partner a rendszerben. Reorder-lista won partnerek és teljesített rendelési előzmény nélkül nem készíthető — a "0 esedékes" adathiányt jelent, nem tényleges állapotot.',
+    },
     reorderRate: {
       reorderedEstablished: 0, establishedPartners: 0, ratePct: null,
       targetPct: REORDER_RATE_TARGET_PCT, meetsTarget: false,
