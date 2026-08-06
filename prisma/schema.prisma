@@ -629,6 +629,31 @@ model ArthurReport {
   createdAt DateTime @default(now())
 }
 
+// Memini Brain — a nap rövid távú memóriája. Egy nap = egy rekord, amihez
+// Arthur mind a négy napi futása HOZZÁÍR (nem felülír): a 12:00/16:00-s
+// állapotmentések a lastSavedAt vízjel alapján csak az azóta történteket
+// dolgozzák fel, a 20:30-as futás pedig lezárja a napot.
+//
+// Ami tartós tudás, azt a záró futás átemeli a hosszú távú memóriába
+// (MemoryEntry / BrainNote) — a napló maga megmarad a nap krónikájának.
+model DailyJournal {
+  id           String    @id @default(cuid())
+  date         DateTime  @unique @db.Date // a helyi (Europe/Budapest) nap, amiről szól
+  narrative    String?   @db.Text // a nap krónikája, futásonként hozzáfűzve
+  emailDigest  Json      @default("[]") // [{ from, subject, gist, action, companyId }] — levélszöveg NEM
+  emailSource  String? // agent | crm — a levelek az ügynök postafiókjából vagy a CRM-ből jöttek-e
+  priorities   Json      @default("[]") // a következő nap fő fókuszai
+  facts        Json      @default("{}") // determinisztikus ténypillanatkép (kódból, nem AI-tól)
+  checkpoints  Json      @default("[]") // [{ at, label, note }] — a napközi mentések nyoma
+  lastSavedAt  DateTime? // vízjel: eddig dolgozta fel a napot
+  closedAt     DateTime? // a záró futás időpontja
+  editedByUser Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([date])
+}
+
 model Supplier {
   id             String          @id @default(cuid())
   name           String

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Brain, Search, Plus, X, Trash2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { hu } from 'date-fns/locale'
+import JournalTimeline from '@/components/JournalTimeline'
 
 interface KnowledgeHit {
   scope: 'brain' | 'memory' | 'activity' | 'email'
@@ -60,6 +61,7 @@ export default function BrainPage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [companies, setCompanies] = useState<Company[]>([])
+  const [view, setView] = useState<'knowledge' | 'journal'>('knowledge')
 
   const [form, setForm] = useState({
     kind: 'decision', title: '', content: '', reason: '', nextAction: '',
@@ -128,14 +130,38 @@ export default function BrainPage() {
             A cég tudása egy helyen: döntések és indokaik, tanulságok, ötletek, nyitott ügyek — plusz a memóriák, aktivitások és levelek.
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(v => !v)}
-          className="flex items-center gap-2 px-3 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-        >
-          <Plus size={15} /> Új bejegyzés
-        </button>
+        {view === 'knowledge' && (
+          <button
+            onClick={() => setShowForm(v => !v)}
+            className="flex items-center gap-2 px-3 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            <Plus size={15} /> Új bejegyzés
+          </button>
+        )}
       </div>
 
+      {/* Nézetváltó: hosszú távú tudás vs. napi napló */}
+      <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 mb-4">
+        {([
+          ['knowledge', '🧠 Tudás'],
+          ['journal',   '📓 Napi napló'],
+        ] as const).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setView(key)}
+            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+              view === key ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'journal' && <JournalTimeline />}
+
+      {view === 'knowledge' && (
+      <>
       {/* Kereső */}
       <div className="bg-white rounded-xl border border-gray-200 p-3 mb-4">
         <div className="flex items-center gap-2">
@@ -332,6 +358,8 @@ export default function BrainPage() {
             )
           })}
         </div>
+      )}
+      </>
       )}
     </div>
   )

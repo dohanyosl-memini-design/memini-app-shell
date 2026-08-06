@@ -11,6 +11,9 @@ import { buildGoalTree } from '@/lib/goalProgress'
 import { GOAL_LEVELS, GOAL_METRICS } from '@/lib/goalConstants'
 import { logTaskCreated, logTaskDiff, logTaskEvent } from '@/lib/taskEvents'
 import { searchKnowledge, type KnowledgeScope } from '@/lib/knowledgeSearch'
+import { collectDailyFacts } from '@/lib/dailyFacts'
+import { saveJournal, getJournal, listJournals, type EmailDigestItem } from '@/lib/dailyJournal'
+import { localDay, isValidDay } from '@/lib/localDay'
 import {
   createBrainNote, describeBrainNote, BRAIN_KINDS, BRAIN_STATUSES,
   BRAIN_KIND_LABEL, BRAIN_STATUS_LABEL, type BrainKind,
@@ -3191,6 +3194,126 @@ function buildServer() {
         return `[${SCOPE_LABEL[h.scope] ?? h.scope}${kind ? ` / ${kind}` : ''}] ${date}${who}${status}${title}\n  ${h.snippet}\n  ID: ${h.id}`
       })
       return { content: [{ type: 'text', text: `${hits.length} találat:\n\n${lines.join('\n\n')}` }] }
+    }
+  )
+
+  // ─── NAPI NAPLÓ — A NAP RÖVID TÁVÚ MEMÓRIÁJA ─────────────────────────────
+
+  server.tool(
+    'get_daily_facts',
+    'A nap TÉNYEI a CRM-ből, determinisztikusan (nem AI-tól): új és módosult rendelések, számlák, ajánlatok, mozdult dealek, elvégzett/új/lejárt feladatok, aktivitások, beérkezett levelek és válaszra váró szálak, készletmozgás, új partnerek, plusz a ma már rögzített tudás és a nyitott ügyek. Ezt hívd meg ELŐSZÖR minden napi futásnál, és csak erre támaszkodj — számot, rendelésszámot, dátumot soha ne találj ki. A "since" megadásával csak a legutóbbi mentésed óta történtek jönnek (a napi napló lastSavedAt mezője adja).',
+    {
+      day:   z.string().optional().describe('YYYY-MM-DD (helyi nap), alapértelmezett: ma'),
+      since: z.string().optional().describe('ISO időbélyeg — csak az ez utáni események. Napközi állapotmentésnél a napló lastSavedAt értéke.'),
+    },
+    async ({ day, since }) => {
+      if (day && !isValidDay(day)) {
+        return { content: [{ type: 'text', text: `Érvénytelen dátum: "${day}". Formátum: YYYY-MM-DD` }] }
+      }
+      const facts = await collectDailyFacts({ day, since })
+      const hint = facts.kommunikacio.levelSzinkronAktiv
+        ? ''
+        : '\n\nMEGJEGYZÉS: a CRM levélszinkronja nem adott vissza semmit erre az időszakra. Ha van saját postafiók-hozzáférésed, onnan dolgozz, és a naplóba emailSource: "agent" jelöléssel mentsd.'
+      return { content: [{ type: 'text', text: `${JSON.stringify(facts, null, 2)}${hint}` }] }
+    }
+  )
+
+  server.tool(
+    'save_daily_journal',
+    'A napi napló írása. A nap során többször is hívható — a szöveg HOZZÁFŰZŐDIK a meglévőhöz, nem írja felül (a 16:00-s mentés nem törli a 12:00-s munkáját). Egy nap egy rekord, ismételt futás nem duplikál. A záró futás a closeDay: true-val zárja le a napot. Levelek szövegét NE mentsd — csak ki írt, miről, és mi a teendő.',
+    {
+      day:           z.string().optional().describe('YYYY-MM-DD, alapértelmezett: ma'),
+      narrative:     z.string().optional().describe('Mi történt — a nap krónikája. Ha nem történt semmi, két sor is elég; ne tölts vattával.'),
+      narrativeMode: z.enum(['append', 'replace']).optional().describe('append (alapértelmezett) = hozzáfűz, replace = felülírja az egészet'),
+      emailDigest: z.array(z.object({
+        from:      z.string().optional().describe('Ki írt'),
+        subject:   z.string().optional(),
+        gist:      z.string().optional().describe('Miről szól — 1-2 mondat, NEM a levél szövege'),
+        action:    z.string().optional().describe('Mi a teendő belőle'),
+        companyId: z.string().optional().describe('Melyik partnerhez tartozik'),
+      })).optional().describe('A nap érdemi levelei kivonatolva'),
+      emailSource: z.enum(['agent', 'crm']).optional().describe('A levelek a saját postafiókodból (agent) vagy a CRM szinkronjából (crm) jöttek'),
+      priorities:  z.array(z.string()).optional().describe('A következő nap fő fókuszai (max 3) — a záró futásnál'),
+      facts:       z.record(z.string(), z.unknown()).optional().describe('A get_daily_facts pillanatképe, ha el akarod tárolni a naplóval'),
+      checkpointLabel: z.string().optional().describe('Ennek a futásnak a neve, pl. "12:00 állapotmentés"'),
+      checkpointNote:  z.string().optional().describe('Rövid megjegyzés a futásról'),
+      closeDay:    z.boolean().optional().describe('true = a nap lezárása (a 20:30-as futásnál)'),
+    },
+    async (i) => {
+      if (i.day && !isValidDay(i.day)) {
+        return { content: [{ type: 'text', text: `Érvénytelen dátum: "${i.day}". Formátum: YYYY-MM-DD` }] }
+      }
+      const journal = await saveJournal({
+        day:           i.day,
+        narrative:     i.narrative,
+        narrativeMode: i.narrativeMode,
+        emailDigest:   i.emailDigest as EmailDigestItem[] | undefined,
+        emailSource:   i.emailSource,
+        priorities:    i.priorities,
+        facts:         i.facts,
+        checkpoint:    i.checkpointLabel ? { label: i.checkpointLabel, note: i.checkpointNote } : undefined,
+        closeDay:      i.closeDay,
+      })
+      const digest = (journal.emailDigest as unknown[]).length
+      const marks = (journal.checkpoints as unknown[]).length
+      const state = journal.closedAt ? 'LEZÁRVA' : 'nyitott'
+      return {
+        content: [{
+          type: 'text',
+          text: `Napló mentve — ${i.day ?? localDay()} (${state})\n`
+              + `Mentések száma: ${marks} | Levélkivonatok: ${digest}\n`
+              + `Következő futásnál használd: since = "${journal.lastSavedAt?.toISOString()}"`,
+        }],
+      }
+    }
+  )
+
+  server.tool(
+    'get_daily_journal',
+    'Napi napló olvasása — egy napra vagy időszakra. A reggeli futásnál ezzel kérd le a tegnapi napot, hogy tudd, hol tartottunk. A visszaadott lastSavedAt a napközi állapotmentések vízjele: azt add át a get_daily_facts "since" paraméterének.',
+    {
+      day:   z.string().optional().describe('YYYY-MM-DD — egyetlen nap'),
+      from:  z.string().optional().describe('Időszak kezdete YYYY-MM-DD'),
+      to:    z.string().optional().describe('Időszak vége YYYY-MM-DD'),
+      limit: z.number().int().min(1).max(120).optional().describe('Alapértelmezett: 30'),
+    },
+    async ({ day, from, to, limit }) => {
+      if (day) {
+        if (!isValidDay(day)) return { content: [{ type: 'text', text: `Érvénytelen dátum: "${day}".` }] }
+        const j = await getJournal(day)
+        if (!j) return { content: [{ type: 'text', text: `Nincs napló ${day} napra.` }] }
+        return { content: [{ type: 'text', text: JSON.stringify(j, null, 2) }] }
+      }
+      const rows = await listJournals({ from, to, limit })
+      if (rows.length === 0) return { content: [{ type: 'text', text: 'Nincs napló ebben az időszakban.' }] }
+      return { content: [{ type: 'text', text: JSON.stringify(rows, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'save_executive_summary',
+    'Vezetői összefoglaló eltárolása, hogy ne csak a beszélgetésben létezzen — a CRM Arthur-jelentések oldalán jelenik meg. A reggeli futás ezzel menti a napi helyzetképet.',
+    {
+      summary: z.string().describe('Az összefoglaló szövege'),
+      title:   z.string().optional().describe('Cím, alapértelmezett: "Vezetői összefoglaló – <dátum>"'),
+      type:    z.enum(['daily', 'weekly', 'monthly', 'adhoc']).optional().describe('Alapértelmezett: daily'),
+      drafts:  z.array(z.object({
+        to:      z.string().describe('Címzett / cég'),
+        subject: z.string(),
+        body:    z.string(),
+      })).optional().describe('Javasolt e-mail-piszkozatok'),
+    },
+    async ({ summary, title, type, drafts }) => {
+      const today = localDay()
+      const report = await prisma.arthurReport.create({
+        data: {
+          type:    type ?? 'daily',
+          title:   title ?? `Vezetői összefoglaló – ${today}`,
+          summary,
+          drafts:  (drafts ?? []) as object[],
+        },
+      })
+      return { content: [{ type: 'text', text: `Összefoglaló mentve: ${report.title} (ID: ${report.id})` }] }
     }
   )
 
