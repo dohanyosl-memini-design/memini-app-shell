@@ -128,27 +128,9 @@ Válaszolj PONTOSAN ebben a JSON formátumban:
     parsed = { summary: text, tasks: [], drafts: [] }
   }
 
+  // A feladatjavaslatok Arthurhoz kerültek: ő a postafiókot is látja, így nem
+  // keletkezik két, egymásról nem tudó teendőlista. A jelentés marad.
   const createdTasks: string[] = []
-  if (parsed.tasks && parsed.tasks.length > 0) {
-    for (const task of parsed.tasks) {
-      const dueDate = task.dueDays
-        ? new Date(Date.now() + task.dueDays * 24 * 60 * 60 * 1000)
-        : in7days
-
-      const created = await prisma.task.create({
-        data: {
-          title: task.title,
-          description: task.description || null,
-          priority: task.priority || 'medium',
-          dueDate,
-          status: 'pending',
-          taskType: 'arthur',
-          companyId: task.companyId || null,
-        },
-      })
-      createdTasks.push(created.title)
-    }
-  }
 
   await prisma.arthurReport.create({
     data: {
