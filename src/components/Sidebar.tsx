@@ -10,7 +10,7 @@ import {
   CheckSquare, BarChart3, Package, FileText, Wallet,
   ClipboardList, ShoppingCart, LogOut, Euro, Menu, X,
   GitMerge, BookOpen, Calculator, HelpCircle, Shield,
-  Sun, Moon, Bot, Factory, RefreshCw, CalendarDays, Megaphone, Mail,
+  Sun, Moon, Bot, Factory, RefreshCw, CalendarDays, Megaphone, Mail, Brain,
 } from 'lucide-react'
 import { useTheme } from '@/components/ThemeProvider'
 
@@ -21,6 +21,7 @@ const navGroups = [
       { href: '/', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/naptar', label: 'Naptár', icon: CalendarDays },
       { href: '/tasks', label: 'Feladatok', icon: CheckSquare },
+      { href: '/brain', label: 'Memini Brain', icon: Brain },
       { href: '/marketing', label: 'Marketing', icon: Megaphone },
     ],
   },

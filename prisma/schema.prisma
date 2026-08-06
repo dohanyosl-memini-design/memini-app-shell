@@ -40,6 +40,7 @@ model Contact {
   orders            Order[]
   deliveryNotes     DeliveryNote[]
   memories          MemoryEntry[]
+  brainNotes        BrainNote[]
   emailThreads      EmailThread[]
   emailParticipants EmailParticipant[]
   emailDrafts       EmailDraft[]
@@ -77,6 +78,7 @@ model Company {
   tasks             Task[]
   deliveryNotes     DeliveryNote[]
   memories          MemoryEntry[]
+  brainNotes        BrainNote[]
   emailThreads      EmailThread[]
   emailParticipants EmailParticipant[]
   emailDrafts       EmailDraft[]
@@ -98,6 +100,7 @@ model Deal {
   company     Company?   @relation(fields: [companyId], references: [id])
   tasks       Task[]
   activities  Activity[]
+  brainNotes  BrainNote[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 }
@@ -710,6 +713,48 @@ model MemoryEntry {
   source    String          @default("user")
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
+}
+
+// Memini Brain — a cég hosszú távú tudása: döntések (és az INDOKUK), tanulságok,
+// ötletek, elvarratlan szálak. Egy tábla, `kind` megkülönböztetővel: a négy típus
+// mezőinek nagy része közös, a típusspecifikus rész a `details` JSON-ban van
+// (a sémát az MCP tool-ok zod-validációja adja típusonként).
+model BrainNote {
+  id           String    @id @default(cuid())
+  kind         String // decision | learning | idea | open_loop
+  title        String
+  content      String    @db.Text
+  details      Json      @default("{}")
+  // decision:  { reason, alternatives, expectedResult, actualResult, participants }
+  // learning:  { reusableRule, worked, didntWork }
+  // idea:      { businessValue, risk, nextStep, origin }
+  // open_loop: { nextAction, blocker, owner }
+  status       String    @default("open")
+  importance   Int       @default(2) // 1 = alacsony, 2 = normál, 3 = magas
+
+  companyId    String?
+  company      Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contactId    String?
+  contact      Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  dealId       String?
+  deal         Deal?     @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  orderId      String?
+  taskId       String?
+
+  source       String    @default("mcp") // user | mcp | journal
+  confidence   String    @default("certain") // certain | assumed — az AI feltételezését jelöli
+  editedByUser Boolean   @default(false)
+
+  eventDate    DateTime? // mikor történt (nem mikor rögzítettük)
+  dueDate      DateTime? // nyitott ügy határideje / döntés felülvizsgálata
+  closedAt     DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([kind, status])
+  @@index([companyId])
+  @@index([eventDate])
+  @@index([dueDate])
 }
 
 model TemplateType {
