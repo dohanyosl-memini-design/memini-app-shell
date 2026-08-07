@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
 // Melyik adatbázishoz kapcsolódik ez az app? Csak a SZOLGÁLTATÓT és a
 // hosztnevet mutatja — felhasználónév/jelszó SOHA nem kerül a válaszba.
 export async function GET() {
+  const denied = await requireAdmin()
+  if (denied) return denied
+
   const raw = process.env.DATABASE_URL ?? ''
   let host = '(nincs DATABASE_URL)'
   let database = '?'

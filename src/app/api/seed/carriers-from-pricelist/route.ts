@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,6 +44,9 @@ function toGroup(name: string): string {
 }
 
 export async function POST() {
+  const denied = await requireAdmin()
+  if (denied) return denied
+
   const entries = await prisma.priceListEntry.findMany({
     orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
   })

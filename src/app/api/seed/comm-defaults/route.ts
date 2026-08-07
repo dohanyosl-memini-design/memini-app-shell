@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST() {
+  const denied = await requireAdmin()
+  if (denied) return denied
+
   // Default MemoryEntryTypes
   const memoryTypes = [
     { label: 'Szülinap', icon: '🎂', color: 'pink', isSystem: true, order: 1 },

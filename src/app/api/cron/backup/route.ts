@@ -21,8 +21,12 @@ export async function GET(request: NextRequest) {
   const today = format(new Date(), 'yyyy-MM-dd')
   const filename = `backups/memini-backup-${today}.json`
 
+  // FONTOS: a mentés a TELJES adatbázist tartalmazza (cégek, számlák, levelek,
+  // jelszó-hashek), ezért 'private' — csak a BLOB_READ_WRITE_TOKEN birtokában
+  // érhető el, nem egy kitalálható nyilvános URL-en. A napi másolatot amúgy is
+  // e-mailben kapod meg (lása lentebb), a blob csak archív tároló.
   const blob = await put(filename, json, {
-    access: 'public',
+    access: 'private',
     contentType: 'application/json',
     addRandomSuffix: false,
   })

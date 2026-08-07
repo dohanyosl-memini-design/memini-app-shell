@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -55,6 +56,9 @@ function mapDealStage(hsStage: string): string {
 }
 
 export async function GET(req: NextRequest) {
+  const denied = await requireAdmin()
+  if (denied) return denied
+
   const token = req.nextUrl.searchParams.get('token') ?? process.env.HUBSPOT_TOKEN
   if (!token) return NextResponse.json({ error: 'token hiányzik' }, { status: 400 })
 

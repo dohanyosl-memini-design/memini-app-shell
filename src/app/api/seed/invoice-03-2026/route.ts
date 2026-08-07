@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
 // One-time seed route: creates invoice 03/2026 (Milchpilz Lindau)
 // Safe to call multiple times – checks for existing invoice first
 export async function GET() {
+  const denied = await requireAdmin()
+  if (denied) return denied
+
   const existing = await prisma.invoice.findFirst({ where: { number: '03/2026' } })
   if (existing) {
     return NextResponse.json({ ok: true, message: 'Invoice 03/2026 already exists', id: existing.id })
