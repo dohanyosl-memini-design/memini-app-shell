@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { LEGACY_STAGE_MAP } from '@/lib/dealStages'
+import { requireAdmin } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,6 +9,9 @@ export const dynamic = 'force-dynamic'
 // GET               → dry-run: megmutatja, hány dealt érintene
 // GET ?apply=true   → ténylegesen átírja a szakaszokat
 export async function GET(req: NextRequest) {
+  const denied = await requireAdmin()
+  if (denied) return denied
+
   const apply = req.nextUrl.searchParams.get('apply') === 'true'
 
   const results: Record<string, number> = {}

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -154,6 +155,9 @@ const PRODUCTS = [
 ]
 
 export async function GET() {
+  const denied = await requireAdmin()
+  if (denied) return denied
+
   const results: { sku: string; status: string }[] = []
 
   for (const p of PRODUCTS) {

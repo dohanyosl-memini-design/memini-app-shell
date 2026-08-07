@@ -3512,21 +3512,37 @@ function buildServer() {
   return server
 }
 
+function unauthorized(message: string): Response {
+  return new Response(JSON.stringify({ error: message }), {
+    status: 401,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
 function checkAuth(request: NextRequest): Response | null {
   const secret = process.env.MCP_SECRET
-  if (!secret) return null
+  // ZÁRVA BUKÁS: ha nincs kulcs beállítva, TAGADUNK — nem nyitunk meg mindent.
+  // Korábban a hiányzó kulcs mindenkit beengedett; egy elgépelt vagy törölt
+  // Vercel-env így teljesen nyitottá tette a 120+ tool-os felületet.
+  if (!secret) {
+    return unauthorized('MCP hozzáférés letiltva: a szerveren nincs MCP_SECRET beállítva.')
+  }
   // Kulcs elfogadása fejlécből (x-api-key / Authorization: Bearer) VAGY query-ből (?key=).
   // A query-paraméter azért kell, mert egyes MCP-kliensek (pl. ChatGPT-app connector)
   // nem küldenek egyedi fejlécet.
   const bearer = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
   const key = request.headers.get('x-api-key') || bearer || request.nextUrl.searchParams.get('key')
-  if (key !== secret) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    })
+  if (!key || key.length !== secret.length || !timingSafeEqual(key, secret)) {
+    return unauthorized('Unauthorized')
   }
   return null
+}
+
+/** Konstans idejű összehasonlítás — ne áruljuk el a kulcsot a válaszidőből. */
+function timingSafeEqual(a: string, b: string): boolean {
+  let diff = 0
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return diff === 0
 }
 
 export async function POST(request: NextRequest) {

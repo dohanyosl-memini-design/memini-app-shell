@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
 // One-time seed route: creates invoice 01/2026 (Evang. Gesamtkirchengemeinde Ulm)
 // Safe to call multiple times – checks for existing invoice first
 export async function GET() {
+  const denied = await requireAdmin()
+  if (denied) return denied
+
   // Check if already exists
   const existing = await prisma.invoice.findFirst({ where: { number: '01/2026' } })
   if (existing) {
