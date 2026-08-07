@@ -80,6 +80,9 @@ Zárd le a mai napot a naplóban.
 1. get_daily_journal (mai nap) → lastSavedAt.
 2. get_daily_facts a mai napra, since = lastSavedAt — a délután óta történtek.
 3. get_open_loops — mi maradt nyitva.
+4. get_setbacks unlearnedOnly: true — van-e olyan korábbi kudarc, amiből a mai
+   tapasztalat alapján már levonható a tanulság (ilyenkor log_learning, és a
+   kudarc státusza update_brain_note-tal "lesson_drawn").
 
 Zárd le: save_daily_journal
 - narrative: a nap rövid összegzése (append)
@@ -94,6 +97,9 @@ KIEMELÉS a hosszú távú memóriába — csak a BIZTOSAT, automatikusan:
 - döntés, ami ma megszületett és indokolt → log_decision (reason kötelező)
 - általánosítható tanulság → log_learning (reusableRule)
 - elvarratlan szál → log_open_loop (nextAction, és dueDate ha van)
+- ami félrement aznap (elutasítás, csúszás, zsákutca) → log_setback, okkal és
+  azzal, hogy mit csinálnánk másképp. Ne szépítsd és ne hagyd ki: a kudarcból
+  lesz később a tanulság, és csak akkor kereshető vissza, ha rögzítve van.
 
 Amiben BIZONYTALAN vagy (következtetés, nem megerősített): NE írd be tényként.
 Vagy hagyd a napló szövegében, vagy jelöld confidence: "assumed".
