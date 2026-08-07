@@ -100,6 +100,12 @@ KIEMELÉS a hosszú távú memóriába — csak a BIZTOSAT, automatikusan:
 - ami félrement aznap (elutasítás, csúszás, zsákutca) → log_setback, okkal és
   azzal, hogy mit csinálnánk másképp. Ne szépítsd és ne hagyd ki: a kudarcból
   lesz később a tanulság, és csak akkor kereshető vissza, ha rögzítve van.
+- amit a helyzet feltár (nyíló ajtó, piaci rés, váratlan érdeklődés) →
+  log_opportunity. FONTOS: egy esemény lehet EGYSZERRE kudarc és lehetőség —
+  egy elutasítás, ami egy nagyobb szegmenshez terel, mindkettő. Ilyenkor
+  rögzítsd MINDKÉT oldalt: a fájót log_setback-kel, a nyílót log_opportunity-vel.
+  Ne rögzíts tisztán pozitív, nagy lehetőséget kudarcként — ha a mérleg pozitív,
+  az lehetőség.
 
 Amiben BIZONYTALAN vagy (következtetés, nem megerősített): NE írd be tényként.
 Vagy hagyd a napló szövegében, vagy jelöld confidence: "assumed".
