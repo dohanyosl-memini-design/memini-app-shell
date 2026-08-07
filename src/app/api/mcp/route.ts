@@ -17,7 +17,7 @@ import { saveJournal, getJournal, listJournals, type EmailDigestItem } from '@/l
 import { localDay, isValidDay } from '@/lib/localDay'
 import {
   createBrainNote, describeBrainNote, BRAIN_KINDS, BRAIN_STATUSES,
-  BRAIN_KIND_LABEL, BRAIN_STATUS_LABEL, type BrainKind,
+  BRAIN_KIND_LABEL, BRAIN_STATUS_LABEL, BRAIN_DEFAULT_STATUS, type BrainKind,
 } from '@/lib/brain'
 import { buildMarketingTree } from '@/lib/marketingTree'
 import { ARC_LEVELS, CHANNEL_KEYS, LANGUAGES } from '@/lib/marketingConstants'
@@ -3138,6 +3138,97 @@ function buildServer() {
           + `\n    ID: ${n.id}`
       })
       return { content: [{ type: 'text', text: `${data.length} kudarc:\n\n${lines.join('\n\n')}` }] }
+    }
+  )
+
+  server.tool(
+    'log_opportunity',
+    'Lehetőség rögzítése: amit a HELYZET tár fel — nyíló ajtó, piaci rés, váratlan érdeklődés, egy elutasításból megnyíló nagyobb szegmens. NEM ötlet (azt MI találjuk ki) és NEM kudarc (bár gyakran egy kudarc párja: az elutasítás, ami jobb irányba terelt). Ha egy esemény egyszerre kudarc és lehetőség, rögzítsd MINDKETTŐT — a fájó oldalt log_setback-kel, a nyíló oldalt ezzel.',
+    {
+      title:       z.string().describe('Mi a lehetőség — röviden'),
+      description: z.string().describe('Miből fakad, mit rejt'),
+      value:       z.string().optional().describe('Mekkora üzleti lehetőség — nagyságrend, ha látható'),
+      nextStep:    z.string().optional().describe('Mi a következő lépés a kiaknázásához'),
+      origin:      z.string().optional().describe('Honnan jött (elutasítás, beszélgetés, piaci megfigyelés)'),
+      ...brainLinks,
+      ...brainMeta,
+    },
+    async (i) => {
+      const note = await createBrainNote({
+        kind:    'opportunity',
+        title:   i.title,
+        content: i.description,
+        details: { value: i.value, nextStep: i.nextStep, origin: i.origin },
+        companyId: i.companyId, contactId: i.contactId, dealId: i.dealId,
+        orderId: i.orderId, taskId: i.taskId,
+        eventDate: i.eventDate, importance: i.importance, confidence: i.confidence,
+      })
+      return { content: [{ type: 'text', text: describeBrainNote(note) }] }
+    }
+  )
+
+  server.tool(
+    'get_opportunities',
+    'Feltárt lehetőségek listája. Az "openOnly" opcióval csak azok jönnek, amiket még nem ragadtunk meg és nem is szalasztottunk el (status: spotted vagy pursuing) — ezekkel érdemes foglalkozni. A státuszt az update_brain_note-tal léptetheted: spotted → pursuing → captured / missed.',
+    {
+      companyId: z.string().optional().describe('Csak ehhez a partnerhez tartozók'),
+      openOnly:  z.boolean().optional().describe('Csak a még nyitott lehetőségek (spotted / pursuing)'),
+      limit:     z.number().int().min(1).max(100).optional().describe('Alapértelmezett: 30'),
+    },
+    async ({ companyId, openOnly, limit }) => {
+      const data = await prisma.brainNote.findMany({
+        where: {
+          kind: 'opportunity',
+          ...(companyId ? { companyId } : {}),
+          ...(openOnly ? { status: { in: ['spotted', 'pursuing'] } } : {}),
+        },
+        include: { company: { select: { id: true, name: true } } },
+        orderBy: [{ importance: 'desc' }, { eventDate: 'desc' }],
+        take: limit ?? 30,
+      })
+      if (data.length === 0) {
+        return { content: [{ type: 'text', text: openOnly ? 'Nincs nyitott lehetőség.' : 'Nincs rögzített lehetőség.' }] }
+      }
+      const lines = data.map(n => {
+        const d = n.details as { value?: string; nextStep?: string; origin?: string }
+        const who = n.company?.name ? ` | ${n.company.name}` : ''
+        const status = BRAIN_STATUS_LABEL[n.status] ?? n.status
+        return `🚀 ${n.title}${who} | ${status}\n    ${n.content}`
+          + (d.value ? `\n    Érték: ${d.value}` : '')
+          + (d.nextStep ? `\n    Következő lépés: ${d.nextStep}` : '')
+          + (d.origin ? `\n    Eredet: ${d.origin}` : '')
+          + `\n    ID: ${n.id}`
+      })
+      return { content: [{ type: 'text', text: `${data.length} lehetőség:\n\n${lines.join('\n\n')}` }] }
+    }
+  )
+
+  server.tool(
+    'reclassify_brain_note',
+    'Brain-bejegyzés ÁTSOROLÁSA másik típusba — ha kiderül, hogy egy bejegyzés valójában más kategóriába tartozik (pl. amit kudarcként rögzítettünk, valójában lehetőség). A cím és a tartalom megmarad; a státusz az új típus alapértelmezettjére áll, a régi típus-specifikus details-mezők törlődnek (mert az új típushoz nem illenek). Ha csak a szöveget javítanád, arra az update_brain_note való.',
+    {
+      id:      z.string().describe('A bejegyzés ID-ja'),
+      newKind: z.enum(BRAIN_KINDS).describe('Az új típus: decision | learning | idea | open_loop | setback | opportunity'),
+    },
+    async ({ id, newKind }) => {
+      const existing = await prisma.brainNote.findUnique({ where: { id }, select: { kind: true, title: true } })
+      if (!existing) return { content: [{ type: 'text', text: 'Bejegyzés nem található.' }] }
+      if (existing.kind === newKind) {
+        return { content: [{ type: 'text', text: `A bejegyzés már "${BRAIN_KIND_LABEL[newKind as BrainKind]}" típusú.` }] }
+      }
+      const note = await prisma.brainNote.update({
+        where: { id },
+        data: {
+          kind: newKind,
+          status: BRAIN_DEFAULT_STATUS[newKind as BrainKind],
+          details: {}, // a régi típus mezői nem illenek az újhoz
+          closedAt: null,
+        },
+        include: { company: { select: { name: true } } },
+      })
+      const from = BRAIN_KIND_LABEL[existing.kind as BrainKind] ?? existing.kind
+      const to = BRAIN_KIND_LABEL[newKind as BrainKind]
+      return { content: [{ type: 'text', text: `Átsorolva: "${note.title}" — ${from} → ${to}. A típus-specifikus mezőket (indok, ok, stb.) az update_brain_note-tal töltsd fel újra, ha kellenek.` }] }
     }
   )
 

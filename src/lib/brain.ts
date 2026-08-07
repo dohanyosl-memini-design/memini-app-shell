@@ -2,32 +2,40 @@ import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 
 /**
- * Memini Brain — az öt tudástípus és a hozzájuk tartozó életciklus.
+ * Memini Brain — a hat tudástípus és a hozzájuk tartozó életciklus.
  *
- * A "setback" (kudarc) szándékosan külön áll a tanulságtól: a kudarc a NYERS
- * esemény, ami félrement ("a Tourist-Info elutasított, mert vizuálisan nem
- * győztük meg"), a tanulság pedig a belőle leszűrt, újra alkalmazható szabály.
- * A kettő párban jár — a kudarcból lesz a tanulság —, de csak akkor tudunk
- * rákérdezni, hogy "mi ment már félre hasonló helyzetben", ha a kudarc
- * önmagában is kereshető marad.
+ * A "setback" (kudarc) és az "opportunity" (lehetőség) egy fontos felismerés
+ * ikerpárja: ugyanaz az esemény gyakran mindkettő. Az elutasítás, ami egy
+ * nagyobb szegmenshez terelt, kudarc IS meg lehetőség IS. Ezért mindkettő
+ * külön típus:
+ *   - kudarc     = a nyers negatív esemény (elutasítás, csúszás, zsákutca)
+ *   - lehetőség  = amit a HELYZET tár fel (rés, váratlan érdeklődés, nyíló ajtó)
+ *   - ötlet      = amit MI találunk ki
+ *   - tanulság   = a leszűrt, újra alkalmazható szabály
+ *
+ * A megkülönböztetés nem szőrszálhasogatás: külön kereshető, „mely lehetőségeket
+ * tártunk fel, és mi lett velük", és a kudarcnak van pozitív ikerpárja, hogy
+ * ne csak a fájó oldal rögzüljön.
  */
-export const BRAIN_KINDS = ['decision', 'learning', 'idea', 'open_loop', 'setback'] as const
+export const BRAIN_KINDS = ['decision', 'learning', 'idea', 'open_loop', 'setback', 'opportunity'] as const
 export type BrainKind = (typeof BRAIN_KINDS)[number]
 
 export const BRAIN_KIND_LABEL: Record<BrainKind, string> = {
-  decision:  'Döntés',
-  learning:  'Tanulság',
-  idea:      'Ötlet',
-  open_loop: 'Nyitott ügy',
-  setback:   'Kudarc',
+  decision:    'Döntés',
+  learning:    'Tanulság',
+  idea:        'Ötlet',
+  open_loop:   'Nyitott ügy',
+  setback:     'Kudarc',
+  opportunity: 'Lehetőség',
 }
 
 export const BRAIN_KIND_ICON: Record<BrainKind, string> = {
-  decision:  '⚖️',
-  learning:  '🎓',
-  idea:      '💡',
-  open_loop: '🔗',
-  setback:   '🩹',
+  decision:    '⚖️',
+  learning:    '🎓',
+  idea:        '💡',
+  open_loop:   '🔗',
+  setback:     '🩹',
+  opportunity: '🚀',
 }
 
 /** Típusonként más az életciklus — a döntés nem "lezárul", hanem felülíródik. */
@@ -39,14 +47,17 @@ export const BRAIN_STATUSES: Record<BrainKind, string[]> = {
   // A kudarc addig "nyers", amíg nem vontunk le belőle tanulságot — így
   // lekérdezhető, mi az, ami fájt, de még nem tanultunk belőle.
   setback:   ['recorded', 'lesson_drawn'],
+  // A lehetőség a felismeréstől a kiaknázásig (vagy elszalasztásig) tart.
+  opportunity: ['spotted', 'pursuing', 'captured', 'missed'],
 }
 
 export const BRAIN_DEFAULT_STATUS: Record<BrainKind, string> = {
-  decision:  'active',
-  learning:  'active',
-  idea:      'new',
-  open_loop: 'open',
-  setback:   'recorded',
+  decision:    'active',
+  learning:    'active',
+  idea:        'new',
+  open_loop:   'open',
+  setback:     'recorded',
+  opportunity: 'spotted',
 }
 
 export const BRAIN_STATUS_LABEL: Record<string, string> = {
@@ -63,6 +74,10 @@ export const BRAIN_STATUS_LABEL: Record<string, string> = {
   closed:       'lezárva',
   recorded:     'rögzítve',
   lesson_drawn: 'tanulság levonva',
+  spotted:      'felismerve',
+  pursuing:     'kiaknázás alatt',
+  captured:     'megragadva',
+  missed:       'elszalasztva',
 }
 
 export interface BrainNoteInput {

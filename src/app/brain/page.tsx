@@ -34,6 +34,7 @@ const KIND_META: Record<string, { label: string; icon: string }> = {
   idea:      { label: 'Ötlet',       icon: '💡' },
   open_loop: { label: 'Nyitott ügy', icon: '🔗' },
   setback:   { label: 'Kudarc',      icon: '🩹' },
+  opportunity: { label: 'Lehetőség', icon: '🚀' },
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -41,6 +42,7 @@ const STATUS_LABEL: Record<string, string> = {
   new: 'új', exploring: 'vizsgálat alatt', accepted: 'elfogadva', rejected: 'elvetve', parked: 'későbbre téve',
   open: 'nyitott', closed: 'lezárva',
   recorded: 'rögzítve', lesson_drawn: 'tanulság levonva',
+  spotted: 'felismerve', pursuing: 'kiaknázás alatt', captured: 'megragadva', missed: 'elszalasztva',
 }
 
 /** A ts_headline `**...**` közé teszi a talált szavakat — itt lesz belőle kiemelés. */
@@ -68,7 +70,7 @@ export default function BrainPage() {
 
   const [form, setForm] = useState({
     kind: 'decision', title: '', content: '', reason: '', nextAction: '',
-    reusableRule: '', cause: '', companyId: '',
+    reusableRule: '', cause: '', value: '', companyId: '',
   })
 
   const runSearch = useCallback(async () => {
@@ -99,6 +101,7 @@ export default function BrainPage() {
     if (form.kind === 'learning'  && form.reusableRule) details.reusableRule = form.reusableRule
     if (form.kind === 'open_loop' && form.nextAction)   details.nextAction = form.nextAction
     if (form.kind === 'setback'   && form.cause)        details.cause = form.cause
+    if (form.kind === 'opportunity' && form.value)      details.value = form.value
 
     await fetch('/api/brain', {
       method: 'POST',
@@ -111,7 +114,7 @@ export default function BrainPage() {
         companyId: form.companyId || undefined,
       }),
     })
-    setForm(f => ({ ...f, title: '', content: '', reason: '', nextAction: '', reusableRule: '', cause: '' }))
+    setForm(f => ({ ...f, title: '', content: '', reason: '', nextAction: '', reusableRule: '', cause: '', value: '' }))
     setShowForm(false)
     runSearch()
   }
@@ -131,7 +134,7 @@ export default function BrainPage() {
             Memini Brain
           </h1>
           <p className="text-gray-500 mt-1">
-            A cég tudása egy helyen: döntések és indokaik, tanulságok, kudarcok, ötletek, nyitott ügyek — plusz a memóriák, aktivitások és levelek.
+            A cég tudása egy helyen: döntések és indokaik, tanulságok, kudarcok, lehetőségek, ötletek, nyitott ügyek — plusz a memóriák, aktivitások és levelek.
           </p>
         </div>
         {view === 'knowledge' && (
@@ -207,6 +210,7 @@ export default function BrainPage() {
             <option value="idea">💡 Ötlet</option>
             <option value="open_loop">🔗 Nyitott ügy</option>
             <option value="setback">🩹 Kudarc</option>
+            <option value="opportunity">🚀 Lehetőség</option>
           </select>
         </div>
         <p className="text-xs text-gray-400 mt-2 px-1">
@@ -230,6 +234,8 @@ export default function BrainPage() {
                 <option value="idea">💡 Ötlet</option>
                 <option value="open_loop">🔗 Nyitott ügy</option>
                 <option value="setback">🩹 Kudarc</option>
+                <option value="opportunity">🚀 Lehetőség</option>
+            <option value="opportunity">🚀 Lehetőség</option>
               </select>
             </div>
             <div className="md:col-span-2">
@@ -305,6 +311,17 @@ export default function BrainPage() {
                 onChange={e => setForm(f => ({ ...f, cause: e.target.value }))}
                 placeholder="Amennyire látjuk — ebből lesz később a tanulság"
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm resize-none"
+              />
+            </div>
+          )}
+          {form.kind === 'opportunity' && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Mekkora lehetőség?</label>
+              <input
+                value={form.value}
+                onChange={e => setForm(f => ({ ...f, value: e.target.value }))}
+                placeholder="Nagyságrend, ha látható — pl. intézményi szegmens, éves keret"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
               />
             </div>
           )}
