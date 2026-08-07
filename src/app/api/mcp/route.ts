@@ -12,6 +12,7 @@ import { GOAL_LEVELS, GOAL_METRICS } from '@/lib/goalConstants'
 import { logTaskCreated, logTaskDiff, logTaskEvent } from '@/lib/taskEvents'
 import { searchKnowledge, type KnowledgeScope } from '@/lib/knowledgeSearch'
 import { collectDailyFacts } from '@/lib/dailyFacts'
+import { computePendingReplies } from '@/lib/pendingReplies'
 import { saveJournal, getJournal, listJournals, type EmailDigestItem } from '@/lib/dailyJournal'
 import { localDay, isValidDay } from '@/lib/localDay'
 import {
@@ -613,13 +614,14 @@ function buildServer() {
 
   server.tool(
     'list_reorder_due',
-    'Esedékes reorder lista: won partnerek, akiknek az utolsó teljesített (kiszállított/átadott) rendelése régen (alapból 9+ hónapja) volt, legrégebbi elöl. Tartalmazza a reorder-arány KPI-t (established partnerek reorder %-a, cél 55%+) és a nov–jan szezon-előtti "szezon-hívás" jelöléseket.',
+    'Esedékes reorder lista: won partnerek, akiknek az utolsó teljesített (kiszállított/átadott) rendelése régen (alapból 9+ hónapja) volt, legrégebbi elöl. Tartalmazza a reorder-arány KPI-t és a nov–jan szezon-előtti "szezon-hívás" jelöléseket. FONTOS: nézd meg a "reliability" mezőt — ha reliable=false, a lista won partnerek vagy teljesített rendelési előzmény híján NEM megbízható, és a "0 esedékes" adathiányt jelent, nem tényleges állapotot.',
     {
       thresholdMonths: z.number().int().min(1).max(36).optional().describe('Esedékességi küszöb hónapban (alapértelmezett: 9)'),
     },
     async ({ thresholdMonths }) => {
       const data = await computeReorderDue({ thresholdMonths })
-      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+      const warning = data.reliability.reliable ? '' : `⚠️ FIGYELEM: ${data.reliability.reason}\n\n`
+      return { content: [{ type: 'text', text: `${warning}${JSON.stringify(data, null, 2)}` }] }
     }
   )
 
@@ -2779,30 +2781,24 @@ function buildServer() {
 
   server.tool(
     'list_unanswered_emails',
-    'Válaszra váró VALÓDI beszélgetések — a proaktív munka fő jelzése. Csak emberi levelek, amikre érdemes válaszolni (az automatikus/hírlevél/spam levelek KI vannak zárva). A legutóbbi levél a partnertől jött, és még nincs rá válasz. Opcionálisan cégre szűrhető.',
+    'Válaszra váró beszélgetések, PRIORITÁS szerint bontva. A "priority" lista a napi vezérlőlista: partnerhez kötött ÉS friss (3 hónapon belüli) szálak — ezekkel érdemes foglalkozni. Az "other" a többi unanswered szál: partner nélküli vagy elévült — ezek gyakran zaj (a levélosztályozó csak fejlécből dolgozik, így hírlevél is bekerülhet), külön nézd át. A counts megmutatja, mennyi esik melyik csoportba. Opcionálisan cégre szűrhető.',
     {
       companyId: z.string().optional(),
+      includeOther: z.boolean().optional().describe('Az elévült / partner nélküli szálak is (alap: false — csak a prioritás)'),
       limit: z.number().int().min(1).max(100).optional().describe('Alap: 25'),
     },
-    async ({ companyId, limit }) => {
-      const data = await prisma.emailThread.findMany({
-        where: { replyStatus: 'unanswered', category: 'conversation', ...(companyId ? { companyId } : {}) },
-        orderBy: { lastMessageAt: 'desc' },
-        take: limit ?? 25,
-        select: {
-          id: true, subject: true, lastMessageAt: true, messageCount: true,
-          company: { select: { id: true, name: true } },
-          contact: { select: { id: true, firstName: true, lastName: true } },
-          emails: {
-            orderBy: { sentAt: 'desc' }, take: 1,
-            select: {
-              direction: true, snippet: true, sentAt: true,
-              participants: { select: { type: true, emailAddress: true, displayName: true } },
-            },
-          },
-        },
-      })
-      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    async ({ companyId, includeOther, limit }) => {
+      const pending = await computePendingReplies({ companyId })
+      const cap = limit ?? 25
+      const result = {
+        counts: pending.counts,
+        priority: pending.priority.slice(0, cap),
+        ...(includeOther ? { other: pending.other.slice(0, cap) } : {}),
+        note: includeOther
+          ? undefined
+          : `${pending.counts.total} unanswered szálból ${pending.counts.priority} a partnerhez kötött friss (priority). A többi (${pending.counts.total - pending.counts.priority}) partner nélküli vagy 3 hónapnál régebbi — includeOther: true ha az is kell.`,
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
     }
   )
 
@@ -3079,6 +3075,69 @@ function buildServer() {
         eventDate: i.eventDate, importance: i.importance, confidence: i.confidence,
       })
       return { content: [{ type: 'text', text: describeBrainNote(note) }] }
+    }
+  )
+
+  server.tool(
+    'log_setback',
+    'Kudarc rögzítése: ami félrement, nem jött össze, elutasításba vagy zsákutcába futott. NEM ugyanaz, mint a tanulság — a kudarc a nyers esemény (elvesztett partner, visszautasított ajánlat, félrement kampány, elrontott szállítás), a tanulság pedig a belőle leszűrt szabály. Előbb a kudarcot rögzítsd, a tanulságot külön (log_learning), amikor már látod. Így később megkérdezhető, hogy "hasonló helyzetben mi ment már félre".',
+    {
+      title:       z.string().describe('Mi ment félre — röviden'),
+      description: z.string().describe('Mi történt pontosan'),
+      cause:       z.string().optional().describe('Mi okozta, amennyire látjuk'),
+      cost:        z.string().optional().describe('Mibe került — idő, pénz, elvesztett partner, jó hírnév'),
+      differently: z.string().optional().describe('Mit csinálnánk másképp legközelebb'),
+      ...brainLinks,
+      ...brainMeta,
+    },
+    async (i) => {
+      const note = await createBrainNote({
+        kind:    'setback',
+        title:   i.title,
+        content: i.description,
+        details: { cause: i.cause, cost: i.cost, differently: i.differently },
+        companyId: i.companyId, contactId: i.contactId, dealId: i.dealId,
+        orderId: i.orderId, taskId: i.taskId,
+        eventDate: i.eventDate, importance: i.importance, confidence: i.confidence,
+      })
+      return { content: [{ type: 'text', text: describeBrainNote(note) }] }
+    }
+  )
+
+  server.tool(
+    'get_setbacks',
+    'Kudarcok listája — mi ment félre. Az "unlearnedOnly" opcióval csak azok jönnek, amikből még NEM vontunk le tanulságot: ezeket érdemes átnézni, mert bennük van a fel nem használt tapasztalat. Ha egy kudarcból megszületett a tanulság, jelöld az update_brain_note-tal status: "lesson_drawn" értékre.',
+    {
+      companyId:     z.string().optional().describe('Csak ehhez a partnerhez tartozók'),
+      unlearnedOnly: z.boolean().optional().describe('Csak amikből még nincs tanulság (status: recorded)'),
+      limit:         z.number().int().min(1).max(100).optional().describe('Alapértelmezett: 30'),
+    },
+    async ({ companyId, unlearnedOnly, limit }) => {
+      const data = await prisma.brainNote.findMany({
+        where: {
+          kind: 'setback',
+          ...(companyId ? { companyId } : {}),
+          ...(unlearnedOnly ? { status: 'recorded' } : {}),
+        },
+        include: { company: { select: { id: true, name: true } } },
+        orderBy: [{ importance: 'desc' }, { eventDate: 'desc' }],
+        take: limit ?? 30,
+      })
+      if (data.length === 0) {
+        return { content: [{ type: 'text', text: unlearnedOnly ? '✅ Nincs feldolgozatlan kudarc.' : 'Nincs rögzített kudarc.' }] }
+      }
+      const lines = data.map(n => {
+        const d = n.details as { cause?: string; cost?: string; differently?: string }
+        const who = n.company?.name ? ` | ${n.company.name}` : ''
+        const when = n.eventDate ? ` | ${n.eventDate.toISOString().slice(0, 10)}` : ''
+        const status = n.status === 'recorded' ? ' | ⚠️ még nincs belőle tanulság' : ' | tanulság levonva'
+        return `🩹 ${n.title}${who}${when}${status}\n    ${n.content}`
+          + (d.cause ? `\n    Ok: ${d.cause}` : '')
+          + (d.cost ? `\n    Ára: ${d.cost}` : '')
+          + (d.differently ? `\n    Másképp: ${d.differently}` : '')
+          + `\n    ID: ${n.id}`
+      })
+      return { content: [{ type: 'text', text: `${data.length} kudarc:\n\n${lines.join('\n\n')}` }] }
     }
   )
 

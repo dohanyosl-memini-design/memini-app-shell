@@ -1,8 +1,17 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 
-/** Memini Brain — a négy tudástípus és a hozzájuk tartozó életciklus. */
-export const BRAIN_KINDS = ['decision', 'learning', 'idea', 'open_loop'] as const
+/**
+ * Memini Brain — az öt tudástípus és a hozzájuk tartozó életciklus.
+ *
+ * A "setback" (kudarc) szándékosan külön áll a tanulságtól: a kudarc a NYERS
+ * esemény, ami félrement ("a Tourist-Info elutasított, mert vizuálisan nem
+ * győztük meg"), a tanulság pedig a belőle leszűrt, újra alkalmazható szabály.
+ * A kettő párban jár — a kudarcból lesz a tanulság —, de csak akkor tudunk
+ * rákérdezni, hogy "mi ment már félre hasonló helyzetben", ha a kudarc
+ * önmagában is kereshető marad.
+ */
+export const BRAIN_KINDS = ['decision', 'learning', 'idea', 'open_loop', 'setback'] as const
 export type BrainKind = (typeof BRAIN_KINDS)[number]
 
 export const BRAIN_KIND_LABEL: Record<BrainKind, string> = {
@@ -10,6 +19,7 @@ export const BRAIN_KIND_LABEL: Record<BrainKind, string> = {
   learning:  'Tanulság',
   idea:      'Ötlet',
   open_loop: 'Nyitott ügy',
+  setback:   'Kudarc',
 }
 
 export const BRAIN_KIND_ICON: Record<BrainKind, string> = {
@@ -17,6 +27,7 @@ export const BRAIN_KIND_ICON: Record<BrainKind, string> = {
   learning:  '🎓',
   idea:      '💡',
   open_loop: '🔗',
+  setback:   '🩹',
 }
 
 /** Típusonként más az életciklus — a döntés nem "lezárul", hanem felülíródik. */
@@ -25,6 +36,9 @@ export const BRAIN_STATUSES: Record<BrainKind, string[]> = {
   learning:  ['active', 'archived'],
   idea:      ['new', 'exploring', 'accepted', 'rejected', 'parked'],
   open_loop: ['open', 'closed'],
+  // A kudarc addig "nyers", amíg nem vontunk le belőle tanulságot — így
+  // lekérdezhető, mi az, ami fájt, de még nem tanultunk belőle.
+  setback:   ['recorded', 'lesson_drawn'],
 }
 
 export const BRAIN_DEFAULT_STATUS: Record<BrainKind, string> = {
@@ -32,20 +46,23 @@ export const BRAIN_DEFAULT_STATUS: Record<BrainKind, string> = {
   learning:  'active',
   idea:      'new',
   open_loop: 'open',
+  setback:   'recorded',
 }
 
 export const BRAIN_STATUS_LABEL: Record<string, string> = {
-  active:     'érvényben',
-  superseded: 'felülírva',
-  reverted:   'visszavonva',
-  archived:   'archivált',
-  new:        'új',
-  exploring:  'vizsgálat alatt',
-  accepted:   'elfogadva',
-  rejected:   'elvetve',
-  parked:     'későbbre téve',
-  open:       'nyitott',
-  closed:     'lezárva',
+  active:       'érvényben',
+  superseded:   'felülírva',
+  reverted:     'visszavonva',
+  archived:     'archivált',
+  new:          'új',
+  exploring:    'vizsgálat alatt',
+  accepted:     'elfogadva',
+  rejected:     'elvetve',
+  parked:       'későbbre téve',
+  open:         'nyitott',
+  closed:       'lezárva',
+  recorded:     'rögzítve',
+  lesson_drawn: 'tanulság levonva',
 }
 
 export interface BrainNoteInput {

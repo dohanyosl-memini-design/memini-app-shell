@@ -28,6 +28,7 @@ interface ReorderData {
     label: string
   }
   season: { inWindow: boolean; note: string }
+  reliability: { reliable: boolean; reason: string | null }
   totals: { wonPartners: number; partnersWithoutFulfilledOrders: number; listed: number }
   items: ReorderItem[]
 }
@@ -85,6 +86,17 @@ export default function ReordersPage() {
           <RefreshCw size={15} /> Frissítés
         </button>
       </div>
+
+      {/* Megbízhatósági figyelmeztetés — ha nincs won partner / rendelési előzmény */}
+      {data && !data.reliability.reliable && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 mb-4 flex items-start gap-2">
+          <AlertTriangle size={18} className="text-red-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-red-800">A reorder-lista jelenleg nem megbízható</p>
+            <p className="text-sm text-red-700 mt-0.5">{data.reliability.reason}</p>
+          </div>
+        </div>
+      )}
 
       {/* Reorder-arány KPI */}
       {rate && (
