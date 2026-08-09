@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { promoteToPartnerIfNeeded } from '@/lib/lifecycle'
 
 export const dynamic = 'force-dynamic'
 
@@ -83,6 +84,9 @@ export async function POST(request: NextRequest) {
       items: true,
     },
   })
+
+  // Partnerré az első rendelés tesz — a cég átlép partnerbe, ha még nem az.
+  await promoteToPartnerIfNeeded(order.companyId, 'ui')
 
   return NextResponse.json(order, { status: 201 })
 }

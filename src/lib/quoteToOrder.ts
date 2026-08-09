@@ -7,6 +7,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { promoteToPartnerIfNeeded } from '@/lib/lifecycle'
 
 export async function nextOrderNumber() {
   const prefix = `MR-${new Date().getFullYear()}-`
@@ -117,6 +118,9 @@ export async function convertQuoteToOrder(
 
   const order = await createOrderFromQuote(quote, options)
   await prisma.quote.update({ where: { id: quote.id }, data: { status: 'accepted' } })
+
+  // Partnerré az első rendelés tesz — az ajánlatból született rendelés is számít.
+  await promoteToPartnerIfNeeded(order.companyId, 'ui')
 
   return { ok: true, quoteNumber: quote.number, order }
 }

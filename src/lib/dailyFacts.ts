@@ -41,6 +41,7 @@ export async function collectDailyFacts(o: DailyFactsOptions = {}) {
     dealsTouched, tasksDone, tasksNew, tasksOverdue, activities,
     emailsIn, emailsOut, threadsWaiting, stockMoves, lowStock,
     purchaseOrders, companiesNew, contactsNew, memoriesFiled, brainFiled, openLoops,
+    lifecycleMoves,
   ] = await Promise.all([
     prisma.order.findMany({
       where: { createdAt: window },
@@ -151,6 +152,17 @@ export async function collectDailyFacts(o: DailyFactsOptions = {}) {
       orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
       take: LIMIT,
     }),
+    // Életciklus-mozgások: ki lépett előre, ki került a temetőbe és miért.
+    // A cég létrejöttét (fromState = null) kihagyjuk — az az "új cég" szekció.
+    prisma.lifecycleEvent.findMany({
+      where: { createdAt: window, fromState: { not: null } },
+      select: {
+        id: true, fromState: true, toState: true, reason: true, source: true, actor: true,
+        company: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: LIMIT,
+    }),
   ])
 
   const overdueLoops = openLoops.filter(l => l.dueDate && l.dueDate < now)
@@ -207,6 +219,18 @@ export async function collectDailyFacts(o: DailyFactsOptions = {}) {
       beszerzesiRendelesek: purchaseOrders,
     },
     ujKapcsolatok: { cegek: companiesNew, kapcsolattartok: contactsNew },
+
+    // Életciklus-mozgások ma: ki lépett előre a lead-lépcsőn, ki lett partner,
+    // ki került a temetőbe és milyen indokkal. A 06:00-s vezetői összefoglaló ezt olvassa.
+    eletciklusMozgasok: lifecycleMoves.map(m => ({
+      id: m.id,
+      company: m.company,
+      from: m.fromState,
+      to: m.toState,
+      reason: m.reason,
+      source: m.source, // ui | mcp | auto — az 'mcp' Arthur keze nyoma
+      actor: m.actor,
+    })),
 
     // Mit iktattunk ma a hosszú távú memóriába, és mi van nyitva.
     tudas: {

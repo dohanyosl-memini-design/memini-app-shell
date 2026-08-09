@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { LOST_STATES } from '@/lib/lifecycle'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,7 +63,7 @@ export async function GET(request: NextRequest) {
       select: { id: true, type: true, amount: true, date: true, category: true, description: true },
     }),
     prisma.company.findMany({
-      where: { updatedAt: { lt: days90Ago } },
+      where: { updatedAt: { lt: days90Ago }, lifecycle: { notIn: LOST_STATES } },
       select: { id: true, name: true, classification: true, city: true, partnerType: true },
       orderBy: { name: 'asc' }, take: 8,
     }),
@@ -81,8 +82,8 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' }, take: 5,
       select: { id: true, firstName: true, lastName: true, status: true, createdAt: true, company: { select: { name: true } } },
     }),
-    prisma.company.groupBy({ by: ['partnerType'], _count: true }),
-    prisma.company.groupBy({ by: ['classification'], _count: true }),
+    prisma.company.groupBy({ by: ['partnerType'], _count: true, where: { lifecycle: { notIn: LOST_STATES } } }),
+    prisma.company.groupBy({ by: ['classification'], _count: true, where: { lifecycle: { notIn: LOST_STATES } } }),
     prisma.product.findMany({
       where: { active: true },
       select: { id: true, name: true, sku: true, stock: true, minStock: true, costPrice: true, salesPrice: true },

@@ -19,6 +19,11 @@ import {
   createBrainNote, describeBrainNote, BRAIN_KINDS, BRAIN_STATUSES,
   BRAIN_KIND_LABEL, BRAIN_STATUS_LABEL, BRAIN_DEFAULT_STATUS, type BrainKind,
 } from '@/lib/brain'
+import {
+  transitionCompany, promoteToPartnerIfNeeded, LifecycleError,
+  LIFECYCLE_STATES, LIFECYCLE_LABELS, LEAD_STATES, PARTNER_STATES, LOST_STATES,
+  type LifecycleState,
+} from '@/lib/lifecycle'
 import { buildMarketingTree } from '@/lib/marketingTree'
 import { ARC_LEVELS, CHANNEL_KEYS, LANGUAGES } from '@/lib/marketingConstants'
 import { logPieceCreated, logPieceDiff, logPieceEvent } from '@/lib/contentEvents'
@@ -338,15 +343,31 @@ function buildServer() {
 
   server.tool(
     'list_companies',
-    'Cégek listázása.',
+    'Cégek listázása. Alapból KIHAGYJA az elvesztett (temetőbe rakott) cégeket — a temetőt külön kérd a list_cemetery tool-lal. Szűrhető életciklusra: lifecycle="partner"/"inactive"/"prospect"/"cold_lead"/"interested", vagy view="leads" (a teljes lead-ág) / "partners" (partner+inaktív).',
     {
       search:      z.string().optional(),
       country:     z.string().optional(),
       partnerType: z.string().optional(),
+      lifecycle:   z.enum(LIFECYCLE_STATES).optional().describe('Pontos életciklus-szűrő'),
+      view:        z.enum(['leads', 'partners', 'all']).optional().describe('leads = lead-ág, partners = partner+inaktív, all = minden az elvesztetteken kívül'),
     },
-    async ({ search, country, partnerType }) => {
+    async ({ search, country, partnerType, lifecycle, view }) => {
+      // Az elvesztettek alapból ki vannak zárva; egyik szűrő sem hozza vissza őket
+      // (a temető a list_cemetery-n át érhető el).
+      let lifecycleWhere: Record<string, unknown>
+      if (lifecycle) {
+        lifecycleWhere = { lifecycle }
+      } else if (view === 'leads') {
+        lifecycleWhere = { lifecycle: { in: LEAD_STATES } }
+      } else if (view === 'partners') {
+        lifecycleWhere = { lifecycle: { in: PARTNER_STATES } }
+      } else {
+        lifecycleWhere = { lifecycle: { notIn: LOST_STATES } }
+      }
+
       const data = await prisma.company.findMany({
         where: {
+          ...lifecycleWhere,
           ...(search ? {
             OR: [
               { name: { contains: search } },
@@ -376,6 +397,7 @@ function buildServer() {
           invoices: { take: 5, orderBy: { date: 'desc' } },
           memories: { include: { type: true }, orderBy: { createdAt: 'desc' } },
           brainNotes: { orderBy: [{ importance: 'desc' }, { eventDate: 'desc' }], take: 20 },
+          lifecycleEvents: { orderBy: { createdAt: 'desc' }, take: 10 },
         },
       })
       if (!data) return { content: [{ type: 'text', text: 'Cég nem található.' }] }
@@ -385,7 +407,7 @@ function buildServer() {
 
   server.tool(
     'create_company',
-    'Új cég létrehozása.',
+    'Új cég létrehozása. FONTOS: új cég alapból "prospect" (prospekt) életciklusú — sose kerül a partnerek közé felvételkor. Partnerré az első rendelés tesz. Ha biztosan tudod, hogy már megkerestük, a lifecycle="cold_lead", ha már visszajelzett, "interested".',
     {
       name:           z.string(),
       address:        z.string().optional(),
@@ -396,10 +418,17 @@ function buildServer() {
       email:          z.string().optional(),
       phone:          z.string().optional(),
       customerNumber: z.string().optional(),
+      lifecycle:      z.enum(['prospect', 'cold_lead', 'interested']).optional()
+        .describe('Kezdő életciklus. Alap: prospect. Partnerré NEM lehet itt tenni — ahhoz rendelés kell.'),
     },
-    async (body) => {
-      const data = await prisma.company.create({ data: body })
-      return { content: [{ type: 'text', text: `Cég létrehozva: ${data.name} (${data.id})` }] }
+    async ({ lifecycle, ...body }) => {
+      const data = await prisma.company.create({
+        data: { ...body, lifecycle: lifecycle || 'prospect' },
+      })
+      await prisma.lifecycleEvent.create({
+        data: { companyId: data.id, fromState: null, toState: data.lifecycle, source: 'mcp', actor: 'Arthur' },
+      })
+      return { content: [{ type: 'text', text: `Cég létrehozva: ${data.name} (${data.id}) — ${LIFECYCLE_LABELS[data.lifecycle as LifecycleState] ?? data.lifecycle}` }] }
     }
   )
 
@@ -426,6 +455,108 @@ function buildServer() {
       for (const [k, v] of Object.entries(fields)) if (v !== undefined) upd[k] = v || null
       const data = await prisma.company.update({ where: { id }, data: upd })
       return { content: [{ type: 'text', text: `Cég frissítve: ${data.name}` }] }
+    }
+  )
+
+  // ─── ÉLETCIKLUS (lead → partner → temető) ─────────────────────────────────
+
+  server.tool(
+    'set_company_lifecycle',
+    'Cég életciklus-léptetése. Állapotok: prospect (prospekt) → cold_lead (hideg lead) → interested (érdeklődő) → partner → inactive (inaktív), plusz lost_lead / lost_partner (elvesztett, = temető). Elvesztettbe (lost_*) csak KÖTELEZŐ indokkal lehet lépni — a reason-t a saját szavaiddal, konkrétan írd (mit mondott, mikor, milyen csatornán). Partnerré rendeléssel érdemes tenni (create_order), de kézzel is lehet.',
+    {
+      id:        z.string().describe('Cég ID'),
+      lifecycle: z.enum(LIFECYCLE_STATES).describe('Célállapot'),
+      reason:    z.string().optional().describe('Indok — lost_lead / lost_partner esetén KÖTELEZŐ (min. 10 karakter)'),
+    },
+    async ({ id, lifecycle, reason }) => {
+      try {
+        const result = await transitionCompany({ companyId: id, to: lifecycle, reason, source: 'mcp', actor: 'Arthur' })
+        if (!result.changed) {
+          return { content: [{ type: 'text', text: `A cég már ${LIFECYCLE_LABELS[lifecycle]} állapotban van — nincs teendő.` }] }
+        }
+        return { content: [{ type: 'text', text: `Életciklus frissítve: ${result.company.name} → ${LIFECYCLE_LABELS[lifecycle]}` }] }
+      } catch (e) {
+        if (e instanceof LifecycleError) return { content: [{ type: 'text', text: `Nem sikerült: ${e.message}` }], isError: true }
+        throw e
+      }
+    }
+  )
+
+  server.tool(
+    'move_company_to_cemetery',
+    'Cég temetőbe helyezése (elvesztett). Kényelmi tool: magától eldönti, hogy elvesztett partner (ha valaha rendelt) vagy elvesztett lead. NEM töröl — a cég minden adata megmarad, és a restore_company_from_cemetery visszahozza. Az indok KÖTELEZŐ.',
+    {
+      id:     z.string().describe('Cég ID'),
+      reason: z.string().describe('Miért veszett el — kötelező, min. 10 karakter (mit mondott, mikor, milyen csatornán)'),
+    },
+    async ({ id, reason }) => {
+      const company = await prisma.company.findUnique({ where: { id }, select: { firstOrderDate: true, lifecycle: true } })
+      if (!company) return { content: [{ type: 'text', text: 'Cég nem található.' }], isError: true }
+      const wasPartner = !!company.firstOrderDate || company.lifecycle === 'partner' || company.lifecycle === 'inactive'
+      const target: LifecycleState = wasPartner ? 'lost_partner' : 'lost_lead'
+      try {
+        const result = await transitionCompany({ companyId: id, to: target, reason, source: 'mcp', actor: 'Arthur' })
+        return { content: [{ type: 'text', text: `Temetőbe helyezve: ${result.company.name} → ${LIFECYCLE_LABELS[target]}\nIndok: ${reason}` }] }
+      } catch (e) {
+        if (e instanceof LifecycleError) return { content: [{ type: 'text', text: `Nem sikerült: ${e.message}` }], isError: true }
+        throw e
+      }
+    }
+  )
+
+  server.tool(
+    'restore_company_from_cemetery',
+    'Cég visszahozása a temetőből a megadott aktív állapotba (pl. egy ex-partner visszatér → partner, egy ex-lead újra megkereshető → prospect).',
+    {
+      id:        z.string().describe('Cég ID'),
+      lifecycle: z.enum(['prospect', 'cold_lead', 'interested', 'partner', 'inactive']).describe('Cél aktív állapot'),
+      note:      z.string().optional().describe('Megjegyzés a visszahozásról (a naplóba kerül)'),
+    },
+    async ({ id, lifecycle, note }) => {
+      try {
+        const result = await transitionCompany({ companyId: id, to: lifecycle, reason: note, source: 'mcp', actor: 'Arthur' })
+        return { content: [{ type: 'text', text: `Visszahozva a temetőből: ${result.company.name} → ${LIFECYCLE_LABELS[lifecycle]}` }] }
+      } catch (e) {
+        if (e instanceof LifecycleError) return { content: [{ type: 'text', text: `Nem sikerült: ${e.message}` }], isError: true }
+        throw e
+      }
+    }
+  )
+
+  server.tool(
+    'list_cemetery',
+    'Az elvesztett cégek (temető) listája indokkal és dátummal. type="lost_lead" (sosem lett partner) vagy "lost_partner" (partner volt, elment) szűrhető.',
+    {
+      type:   z.enum(['lost_lead', 'lost_partner']).optional(),
+      search: z.string().optional(),
+    },
+    async ({ type, search }) => {
+      const data = await prisma.company.findMany({
+        where: {
+          lifecycle: type ? type : { in: LOST_STATES },
+          ...(search ? { OR: [{ name: { contains: search } }, { city: { contains: search } }] } : {}),
+        },
+        select: {
+          id: true, name: true, city: true, lifecycle: true, lostReason: true, lostAt: true,
+          firstOrderDate: true, _count: { select: { orders: true } },
+        },
+        orderBy: { lostAt: 'desc' },
+      })
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'get_company_lifecycle_history',
+    'Egy cég teljes életciklus-naplója (minden állapotváltás időrendben, legújabb elöl) — ki/mi léptette, mikor, milyen indokkal.',
+    { id: z.string().describe('Cég ID') },
+    async ({ id }) => {
+      const events = await prisma.lifecycleEvent.findMany({
+        where: { companyId: id },
+        orderBy: { createdAt: 'desc' },
+      })
+      if (events.length === 0) return { content: [{ type: 'text', text: 'Nincs életciklus-esemény ehhez a céghez.' }] }
+      return { content: [{ type: 'text', text: JSON.stringify(events, null, 2) }] }
     }
   )
 
@@ -800,6 +931,11 @@ function buildServer() {
         },
         include: { contact: true, company: true, items: true },
       })
+
+      // Partnerré az első rendelés tesz — ha Arthur rögzít rendelést egy
+      // lead-cégre, az automatikusan átlép partnerbe (naplózva, source: mcp).
+      await promoteToPartnerIfNeeded(order.companyId, 'mcp', 'Arthur')
+
       return { content: [{ type: 'text', text: `Megrendelés létrehozva: ${order.number}\n${JSON.stringify(order, null, 2)}` }] }
     }
   )

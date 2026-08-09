@@ -4,6 +4,7 @@
 
 import { differenceInMonths, format } from 'date-fns'
 import { prisma as defaultPrisma } from './prisma'
+import { LOST_STATES } from './lifecycle'
 
 // "Teljesített" rendelés = kiszállítva vagy átadva (a sale ténylegesen megtörtént).
 // Egy helyen állítható, ha a definíció változna.
@@ -103,9 +104,11 @@ export async function computeReorderDue(
     return emptyResult(now, thresholdMonths)
   }
 
-  // 2. Cégadatok + első kapcsolattartó
+  // 2. Cégadatok + első kapcsolattartó.
+  // A temetőben lévő (elvesztett) cégek NEM jönnek elő utánrendelésre — a lenti
+  // ciklus a companyById-ból dolgozik, így a kihagyottak automatikusan kiesnek.
   const companies = (await prisma.company.findMany({
-    where: { id: { in: partnerIds } },
+    where: { id: { in: partnerIds }, lifecycle: { notIn: LOST_STATES } },
     select: {
       id: true,
       name: true,

@@ -35,6 +35,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       status: body.status,
       notes: body.notes || null,
       companyId: body.companyId || null,
+      // Visszaállítás archívumból: ha restore=true, töröljük az archiválást.
+      ...(body.restore ? { archivedAt: null, archiveReason: null } : {}),
     },
     include: { company: true },
   })
@@ -42,7 +44,21 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   return NextResponse.json(contact)
 }
 
+// A kuka gomb SOHA nem töröl — archivál. Az archivált kapcsolat eltűnik az
+// aktív listákból, de minden kapcsolódó adata (email, aktivitás, számla)
+// megmarad és visszaállítható. Az indok opcionális.
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-  await prisma.contact.delete({ where: { id: params.id } })
-  return NextResponse.json({ success: true })
+  let reason: string | null = null
+  try {
+    const body = await request.json()
+    reason = (body?.reason || '').trim() || null
+  } catch {
+    // üres body — indok nélkül is archiválható
+  }
+
+  const contact = await prisma.contact.update({
+    where: { id: params.id },
+    data: { archivedAt: new Date(), archiveReason: reason },
+  })
+  return NextResponse.json({ success: true, archived: true, id: contact.id })
 }

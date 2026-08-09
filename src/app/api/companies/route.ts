@@ -1,7 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { LEAD_STATES, PARTNER_STATES, LOST_STATES } from '@/lib/lifecycle'
 
 export const dynamic = 'force-dynamic'
+
+// A nézet dönti el, mely életciklus-állapotok látszanak. Alapból a Partner CRM
+// (partner + inaktív) — így a hideg leadek és az elvesztettek nem keverednek ide.
+//   view=partners (alap) | leads | cemetery | all
+function lifecycleFilterForView(view: string, explicit: string) {
+  if (explicit) return { lifecycle: explicit }
+  switch (view) {
+    case 'leads':    return { lifecycle: { in: LEAD_STATES } }
+    case 'cemetery': return { lifecycle: { in: LOST_STATES } }
+    case 'all':      return {}
+    case 'partners':
+    default:         return { lifecycle: { in: PARTNER_STATES } }
+  }
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -11,10 +26,13 @@ export async function GET(request: NextRequest) {
   const country = searchParams.get('country') || ''
   const classification = searchParams.get('classification') || ''
   const language = searchParams.get('language') || ''
+  const view = searchParams.get('view') || 'partners'
+  const lifecycle = searchParams.get('lifecycle') || ''
 
   const [companies, lastActivityRows] = await Promise.all([
     prisma.company.findMany({
       where: {
+        ...lifecycleFilterForView(view, lifecycle),
         ...(search ? {
           OR: [
             { name: { contains: search } },
@@ -75,8 +93,16 @@ export async function POST(request: NextRequest) {
       channel: body.channel || null,
       notes: body.notes || null,
       businessHours: body.businessHours ?? undefined,
+      // Új cég alapból prospekt — sose kerül a partnerek közé felvételkor.
+      // Partnerré az első rendelés (vagy kézi léptetés) tesz.
+      lifecycle: body.lifecycle || 'prospect',
     },
     include: { _count: { select: { contacts: true, deals: true, orders: true } } },
+  })
+
+  // A létrejövés naplózása, hogy a napló az első pillanattól teljes legyen.
+  await prisma.lifecycleEvent.create({
+    data: { companyId: company.id, fromState: null, toState: company.lifecycle, source: 'ui' },
   })
 
   return NextResponse.json({
