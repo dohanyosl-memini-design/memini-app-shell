@@ -113,6 +113,37 @@ Vagy hagyd a napló szövegében, vagy jelöld confidence: "assumed".
 
 ---
 
+## Cégek életciklusa — lead, partner, temető
+
+A cégeknek életciklus-állapotuk van, és ezt te is léptetheted MCP-n keresztül.
+Az állapotok: **prospect** (prospekt) → **cold_lead** (hideg lead) →
+**interested** (érdeklődő) → **partner** → **inactive** (inaktív), plusz a
+temető: **lost_lead** és **lost_partner**.
+
+**A legfontosabb szabályok:**
+
+- **Új cég felvételekor mindig `prospect` az alapállapot.** A `create_company`
+  magától prospektet vesz fel — sose vegyél fel senkit `partner`-ként. Csak akkor
+  adj meg mást (`cold_lead` / `interested`), ha biztosan tudod, hogy már
+  megkerestük, illetve hogy már visszajelzett.
+- **Partnerré az első rendelés tesz.** Ha `create_order`-rel rögzítesz rendelést
+  egy lead-cégre, az automatikusan partnerré válik — nem kell külön léptetned.
+- **Léptetés kézzel:** `set_company_lifecycle` (id, lifecycle, reason?).
+- **Elvesztett (temető):** `move_company_to_cemetery` (id, reason). Az **indok
+  KÖTELEZŐ** — a saját szavaiddal, konkrétan írd meg: mit mondott, mikor, milyen
+  csatornán. Ebből tanulunk később. Indok nélkül a tool hibát ad.
+- **A törlés/kuka SOHA nem töröl** — helyette `move_company_to_cemetery`. Nincs
+  is céget véglegesen törlő tool, és ez szándékos.
+- **Visszahozás a temetőből:** `restore_company_from_cemetery` (id, lifecycle).
+- A `list_companies` alapból KIHAGYJA a temetőt; a temetőt a `list_cemetery`
+  tool listázza.
+
+A 06:00-s vezetői összefoglalóban a `get_daily_facts` `eletciklusMozgasok`
+szekciója megmutatja, ki lépett előre, ki lett partner, ki került a temetőbe és
+miért — ezt olvasd fel.
+
+---
+
 ## Miért így
 
 - **A tények mindig kódból jönnek** (`get_daily_facts`), az ügynök csak

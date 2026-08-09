@@ -46,7 +46,16 @@ export async function GET(request: NextRequest) {
         ...(classification ? { classification } : {}),
         ...(language ? { language } : {}),
       },
-      include: { _count: { select: { contacts: true, deals: true, orders: true } } },
+      include: {
+        _count: { select: { contacts: true, deals: true, orders: true } },
+        // Elsődleges (nem archivált) kapcsolattartó — a lead-kártyák ezt mutatják.
+        contacts: {
+          where: { archivedAt: null },
+          orderBy: { createdAt: 'asc' },
+          take: 1,
+          select: { id: true, firstName: true, lastName: true, email: true, phone: true },
+        },
+      },
       orderBy: [{ classification: 'asc' }, { name: 'asc' }],
     }),
     // Single query for last activity date per company — avoids N+1
