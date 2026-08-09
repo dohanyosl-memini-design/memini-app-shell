@@ -7,6 +7,6 @@ export const config = {
   // futás a bejelentkező oldalra terelődne, és csendben elmaradna (a napi
   // biztonsági mentés is).
   matcher: [
-    '/((?!login|api/auth|api/setup|api/mcp|api/cron|_next/static|_next/image|favicon.ico).*)',
+    '/((?!login|api/auth|api/setup|api/admin/migrate-lifecycle|api/mcp|api/cron|_next/static|_next/image|favicon.ico).*)',
   ],
 }

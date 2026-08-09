@@ -9,9 +9,12 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const search = searchParams.get('search') || ''
   const crmOnly = searchParams.get('crmOnly') === 'true'
+  // Archiváltak alapból rejtve; ?archived=true kifejezetten kéri őket.
+  const archived = searchParams.get('archived') === 'true'
 
   const contacts = await prisma.contact.findMany({
     where: {
+      ...(archived ? { archivedAt: { not: null } } : { archivedAt: null }),
       ...(crmOnly ? { status: { notIn: PIPELINE_ONLY_STATUSES } } : {}),
       ...(search ? {
         OR: [

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { transitionCompany, LifecycleError } from '@/lib/lifecycle'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,6 +15,7 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
       quotes: { orderBy: { createdAt: 'desc' }, take: 10 },
       orders: { orderBy: { createdAt: 'desc' }, take: 10 },
       tasks: { orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }] },
+      lifecycleEvents: { orderBy: { createdAt: 'desc' }, take: 10 },
     },
   })
   if (!company) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -51,7 +53,37 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   return NextResponse.json(company)
 }
 
+// A kuka gomb SOHA nem töröl — a temetőbe rak. Az elvesztett állapotot (és a
+// kötelező indokot) a lifecycle réteg érvényesíti. A törlés helyett a hívó a
+// body-ban megadja az indokot; az ex-partner / ex-lead megkülönböztetést a
+// rendelés-előzményből vezetjük le.
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-  await prisma.company.delete({ where: { id: params.id } })
-  return NextResponse.json({ success: true })
+  let reason = ''
+  try {
+    const body = await request.json()
+    reason = (body?.reason || '').trim()
+  } catch {
+    // üres/hiányzó body — a lifecycle réteg úgyis elutasítja indok nélkül
+  }
+
+  const company = await prisma.company.findUnique({
+    where: { id: params.id },
+    select: { firstOrderDate: true, lifecycle: true },
+  })
+  if (!company) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // Volt-e valaha rendelés → elvesztett partner, különben elvesztett lead.
+  const wasPartner = !!company.firstOrderDate || company.lifecycle === 'partner' || company.lifecycle === 'inactive'
+  const target = wasPartner ? 'lost_partner' : 'lost_lead'
+
+  try {
+    await transitionCompany({ companyId: params.id, to: target, reason, source: 'ui' })
+    return NextResponse.json({ success: true, movedTo: target })
+  } catch (e) {
+    if (e instanceof LifecycleError) {
+      const status = e.code === 'reason_required' ? 400 : e.code === 'not_found' ? 404 : 409
+      return NextResponse.json({ error: e.message, code: e.code }, { status })
+    }
+    throw e
+  }
 }

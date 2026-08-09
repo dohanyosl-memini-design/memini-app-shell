@@ -34,6 +34,11 @@ model Contact {
   status            String             @default("lead")
   notes             String?
   marketingOptOut   Boolean            @default(false) // kampány-etaphoz: leiratkozás (GDPR/UWG)
+  // Archiválás: a kuka gomb SOHA nem töröl, hanem ide állít időbélyeget +
+  // indokot. Az archivált kapcsolat eltűnik az aktív listákból, de minden
+  // kapcsolódó adata (email, aktivitás, számla) megmarad és visszaállítható.
+  archivedAt        DateTime?
+  archiveReason     String?
   companyId         String?
   company           Company?           @relation(fields: [companyId], references: [id])
   deals             Deal[]
@@ -73,6 +78,17 @@ model Company {
   notes             String?
   businessHours     Json?
   lastOrderDate     DateTime?
+  // ── Életciklus ─────────────────────────────────────────────────────────
+  // A partnerkapcsolat alanya a HELYSZÍN (múzeum, vár, kastély, bolt), nem a
+  // benne dolgozó ember — ezért az életciklus a cégen él, nem a kapcsolaton.
+  // Állapotok (lib/lifecycle.ts): prospect | cold_lead | interested | partner
+  //          | inactive | lost_lead | lost_partner
+  lifecycle         String             @default("prospect")
+  lifecycleSince    DateTime           @default(now()) // mióta ebben az állapotban
+  firstOrderDate    DateTime?          // az első rendelés napja — ez tette partnerré
+  lostReason        String?            // csak lost_* állapotban, kötelezően megadva
+  lostAt            DateTime?
+  lifecycleEvents   LifecycleEvent[]
   contacts          Contact[]
   deals             Deal[]
   invoices          Invoice[]
@@ -88,6 +104,27 @@ model Company {
   emailDrafts       EmailDraft[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
+
+  @@index([lifecycle])
+}
+
+// Életciklus-napló: minden állapotváltás egy sor. Ebből jön a temető „miért"-je,
+// a „mennyi idő alatt lett partner" statisztika, és ez a védelmi napló is —
+// Arthur (MCP) olvassa a leveleket, így a legrosszabb, amit egy rosszindulatú
+// levél elérhet, egy visszafordítható, itt naplózott temetőbe-rakás legyen.
+model LifecycleEvent {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fromState String?  // null = a cég létrejötte
+  toState   String
+  reason    String?  // lost_* esetén kötelező
+  source    String   @default("ui") // ui | mcp | auto | migration
+  actor     String?  // felhasználó neve vagy 'Arthur' vagy 'rendszer'
+  createdAt DateTime @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([toState, createdAt])
 }
 
 model Deal {

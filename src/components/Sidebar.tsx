@@ -30,7 +30,7 @@ const navGroups = [
     items: [
       { href: '/contacts', label: 'Ügyfelek', icon: Users },
       { href: '/companies', label: 'Cégek', icon: Building2 },
-      { href: '/leads', label: 'Lead Pipeline', icon: GitMerge },
+      { href: '/leads', label: 'Lead CRM', icon: GitMerge },
       { href: '/deals', label: 'Dealek', icon: TrendingUp },
     ],
   },

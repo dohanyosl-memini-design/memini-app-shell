@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { Plus, Search, Edit2, Trash2, Globe, Phone, Users, ChevronRight, Filter, Mail, Merge, X, LayoutGrid, List, MapPin } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, Globe, Phone, Users, ChevronRight, Filter, Mail, Merge, X, LayoutGrid, List, MapPin, Skull } from 'lucide-react'
 import Modal from '@/components/Modal'
 import CompanyForm from '@/components/CompanyForm'
+import LostReasonModal from '@/components/LostReasonModal'
 
 interface Company {
   id: string
@@ -22,8 +23,24 @@ interface Company {
   language: string | null
   channel: string | null
   notes: string | null
+  lifecycle: string
+  lastOrderDate: string | null
   _count: { contacts: number; deals: number; orders: number }
   activities: { activityDate: string }[]
+}
+
+// A Partner CRM csak partnert + inaktívat mutat. A badge ezt jelzi.
+const LIFECYCLE_BADGE: Record<string, { label: string; color: string }> = {
+  partner:  { label: 'Partner', color: 'bg-green-100 text-green-700 border border-green-300' },
+  inactive: { label: 'Inaktív', color: 'bg-amber-100 text-amber-700 border border-amber-300' },
+}
+
+// Inaktivitási küszöb (hónap) — a felület javasolja az inaktívra léptetést.
+const INACTIVE_SUGGEST_MONTHS = 12
+
+function monthsSince(dateStr: string | null): number | null {
+  if (!dateStr) return null
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24 * 30.4))
 }
 
 type ViewMode = 'grid' | 'list' | 'city'
@@ -95,6 +112,8 @@ export default function CompaniesPage() {
   const [merging, setMerging] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [openCities, setOpenCities] = useState<Set<string>>(new Set())
+  const [cemeteryTarget, setCemeteryTarget] = useState<Company | null>(null)
+  const [cemeteryBusy, setCemeteryBusy] = useState(false)
 
   const [filters, setFilters] = useState({
     partnerType: '',
@@ -145,9 +164,28 @@ export default function CompaniesPage() {
 
   useEffect(() => { fetchCompanies() }, [fetchCompanies])
 
-  async function handleDelete(id: string) {
-    if (!confirm('Biztosan törli ezt a céget?')) return
-    await fetch(`/api/companies/${id}`, { method: 'DELETE' })
+  // A kuka gomb NEM töröl — a kötelező indokot bekérő ablakot nyitja, ami a
+  // céget a temetőbe rakja. A tényleges DELETE hívás a modal megerősítésekor fut.
+  async function moveToCemetery(reason: string) {
+    if (!cemeteryTarget) return
+    setCemeteryBusy(true)
+    await fetch(`/api/companies/${cemeteryTarget.id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    })
+    setCemeteryBusy(false)
+    setCemeteryTarget(null)
+    fetchCompanies()
+  }
+
+  // Inaktívra léptetés egy kattintással (a „rég nem rendelt" javaslatból).
+  async function markInactive(id: string) {
+    await fetch(`/api/companies/${id}/lifecycle`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: 'inactive' }),
+    })
     fetchCompanies()
   }
 
@@ -278,6 +316,14 @@ export default function CompaniesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href="/temeto"
+            className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+            title="Elvesztett leadek és partnerek"
+          >
+            <Skull size={15} />
+            <span className="hidden sm:inline">Temető</span>
+          </Link>
           {viewToggle}
           <button
             onClick={toggleMergeMode}
@@ -495,7 +541,14 @@ export default function CompaniesPage() {
                             <ChevronRight size={14} className="text-gray-300 group-hover:text-blue-400 shrink-0" />
                           </h3>
                         </div>
-                        {company.partnerType && <p className="text-xs text-blue-600 mt-1 font-medium">{company.partnerType}</p>}
+                        <div className="flex items-center gap-1.5 mt-1">
+                          {LIFECYCLE_BADGE[company.lifecycle] && (
+                            <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${LIFECYCLE_BADGE[company.lifecycle].color}`}>
+                              {LIFECYCLE_BADGE[company.lifecycle].label}
+                            </span>
+                          )}
+                          {company.partnerType && <span className="text-xs text-blue-600 font-medium">{company.partnerType}</span>}
+                        </div>
                         {(company.city || company.region) && (
                           <p className="text-xs text-gray-400 mt-0.5">{[company.city, company.region, company.country].filter(Boolean).join(', ')}</p>
                         )}
@@ -506,12 +559,24 @@ export default function CompaniesPage() {
                         <button onClick={() => handleEdit(company)} className="text-gray-400 hover:text-blue-600 transition-colors p-1">
                           <Edit2 size={14} />
                         </button>
-                        <button onClick={() => handleDelete(company.id)} className="text-gray-400 hover:text-red-600 transition-colors p-1">
+                        <button onClick={() => setCemeteryTarget(company)} className="text-gray-400 hover:text-red-600 transition-colors p-1">
                           <Trash2 size={14} />
                         </button>
                       </div>
                     )}
                   </div>
+
+                  {!mergeMode && company.lifecycle === 'partner' && (monthsSince(company.lastOrderDate) ?? 0) >= INACTIVE_SUGGEST_MONTHS && (
+                    <div className="mb-3 flex items-center justify-between gap-2 rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1.5">
+                      <span className="text-xs text-amber-700">{monthsSince(company.lastOrderDate)} hónapja nem rendelt</span>
+                      <button
+                        onClick={() => markInactive(company.id)}
+                        className="text-xs font-medium text-amber-800 hover:underline shrink-0"
+                      >
+                        Inaktív?
+                      </button>
+                    </div>
+                  )}
 
                   <div className="space-y-1.5 mb-3">
                     {company.phone && (
@@ -626,7 +691,7 @@ export default function CompaniesPage() {
                               <button onClick={() => handleEdit(company)} className="text-gray-400 hover:text-blue-600 transition-colors p-1">
                                 <Edit2 size={13} />
                               </button>
-                              <button onClick={() => handleDelete(company.id)} className="text-gray-400 hover:text-red-600 transition-colors p-1">
+                              <button onClick={() => setCemeteryTarget(company)} className="text-gray-400 hover:text-red-600 transition-colors p-1">
                                 <Trash2 size={13} />
                               </button>
                             </div>
@@ -763,6 +828,16 @@ export default function CompaniesPage() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Temetőbe helyezés — kötelező indokkal. A kuka gomb ezt nyitja. */}
+      {cemeteryTarget && (
+        <LostReasonModal
+          entityName={cemeteryTarget.name}
+          busy={cemeteryBusy}
+          onCancel={() => setCemeteryTarget(null)}
+          onConfirm={moveToCemetery}
+        />
       )}
     </div>
   )
