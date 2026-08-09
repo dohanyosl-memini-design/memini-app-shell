@@ -164,11 +164,13 @@ export default function FocusView() {
         </div>
       ) : (
         <>
+          {/* Sorrend: Kiemelt → Ma (napi) → Holnap → Holnapután → Lejárt (alul).
+              A lejárt tennivalók szándékosan legalul, hogy ne ők vigyék a fókuszt. */}
           <Section title="Kiemelt" icon={<Star size={15} className="text-amber-500" fill="currentColor" />} items={focused} accent="text-amber-600" onStar={onStar} onToggleSub={onToggleSub} onComplete={onComplete} />
-          <Section title="Lejárt" icon={<AlertTriangle size={15} className="text-red-500" />} items={byBucket('overdue')} accent="text-red-600" onStar={onStar} onToggleSub={onToggleSub} onComplete={onComplete} />
           <Section title={`Ma · ${dayLabel(0)}`} icon={<span className="w-2 h-2 rounded-full bg-violet-500" />} items={byBucket('today')} onStar={onStar} onToggleSub={onToggleSub} onComplete={onComplete} />
           <Section title={`Holnap · ${dayLabel(1)}`} icon={<span className="w-2 h-2 rounded-full bg-blue-400" />} items={byBucket('day1')} onStar={onStar} onToggleSub={onToggleSub} onComplete={onComplete} />
           <Section title={`Holnapután · ${dayLabel(2)}`} icon={<span className="w-2 h-2 rounded-full bg-gray-300" />} items={byBucket('day2')} onStar={onStar} onToggleSub={onToggleSub} onComplete={onComplete} />
+          <Section title="Lejárt" icon={<AlertTriangle size={15} className="text-red-500" />} items={byBucket('overdue')} accent="text-red-600" onStar={onStar} onToggleSub={onToggleSub} onComplete={onComplete} />
         </>
       )}
     </div>
