@@ -1480,7 +1480,8 @@ function buildServer() {
       dueAfter:  z.string().optional().describe('Határidő ettől, YYYY-MM-DD'),
     },
     async ({ status, priority, contactId, companyId, goalId, dueBefore, dueAfter }) => {
-      const where: Record<string, unknown> = {}
+      // Az archivált (feladat-temetőbe rakott) feladatok nem jönnek elő.
+      const where: Record<string, unknown> = { archivedAt: null }
       if (status) where.status = normalizeTaskStatus(status)
       if (priority) where.priority = priority
       if (contactId) where.contactId = contactId

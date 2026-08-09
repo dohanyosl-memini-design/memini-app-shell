@@ -79,19 +79,19 @@ export async function collectDailyFacts(o: DailyFactsOptions = {}) {
       take: LIMIT,
     }),
     prisma.task.findMany({
-      where: { updatedAt: window, status: 'done' },
+      where: { updatedAt: window, status: 'completed', archivedAt: null },
       select: { id: true, title: true, company: { select: { id: true, name: true } } },
       take: LIMIT,
     }),
     prisma.task.findMany({
-      where: { createdAt: window },
+      where: { createdAt: window, archivedAt: null },
       select: { id: true, title: true, priority: true, dueDate: true },
       take: LIMIT,
     }),
     // A lejárt feladat nem "ma történt", hanem MOST fennálló állapot — ezért
     // nem az ablakra szűrünk, hanem a jelen pillanatra.
     prisma.task.findMany({
-      where: { status: { in: ['pending', 'in_progress'] }, dueDate: { lt: now } },
+      where: { status: { in: ['pending', 'in_progress'] }, dueDate: { lt: now }, archivedAt: null },
       select: { id: true, title: true, dueDate: true, priority: true, company: { select: { id: true, name: true } } },
       orderBy: { dueDate: 'asc' },
       take: LIMIT,
