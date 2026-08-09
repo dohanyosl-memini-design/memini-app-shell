@@ -200,6 +200,10 @@ model Task {
   followUpAt  DateTime? // waiting státusznál: mikor kell újra ránézni
   goalId      String?
   goal        Goal?       @relation(fields: [goalId], references: [id])
+  // Feladat-temető: a kuka gomb SOHA nem töröl, hanem ide állít időbélyeget.
+  // Az archivált feladat eltűnik az aktív listákból, de megmarad és visszahozható.
+  archivedAt  DateTime?
+  archiveReason String?
   assigneeId  String?
   assignee    User?       @relation(fields: [assigneeId], references: [id])
   contactId   String?

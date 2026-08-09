@@ -72,7 +72,7 @@ export async function computeWeeklyTrend(opts: { weeks?: number } = {}): Promise
     prisma.order.findMany({ where: { createdAt: window }, select: { createdAt: true } }),
     prisma.quote.findMany({ where: { sentAt: window }, select: { sentAt: true } }),
     prisma.activity.findMany({ where: { activityDate: window }, select: { activityDate: true } }),
-    prisma.task.findMany({ where: { updatedAt: window, status: 'done' }, select: { updatedAt: true } }),
+    prisma.task.findMany({ where: { updatedAt: window, status: 'completed' }, select: { updatedAt: true } }),
   ])
 
   // Üres vázat készítünk minden hétre, hogy a hiányzó hét is 0-val szerepeljen

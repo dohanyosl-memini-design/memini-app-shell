@@ -18,8 +18,11 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get('status')
   const companyId = searchParams.get('companyId')
   const goalId = searchParams.get('goalId')
+  // Archiváltak (feladat-temető) alapból rejtve; ?archived=true kifejezetten kéri őket.
+  const archived = searchParams.get('archived') === 'true'
 
   const where: Record<string, unknown> = {}
+  where.archivedAt = archived ? { not: null } : null
   if (status && status !== 'all') where.status = status
   if (companyId) where.companyId = companyId
   if (goalId) where.goalId = goalId

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, Edit2, Trash2, LayoutGrid, List, User, Building2, AlertCircle, Calendar, CheckSquare, Compass, Target, Hourglass, Focus, CheckCircle2, Star } from 'lucide-react'
+import { Plus, Edit2, Trash2, LayoutGrid, List, User, Building2, AlertCircle, Calendar, CheckSquare, Compass, Target, Hourglass, Focus, CheckCircle2, Star, Archive } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/Modal'
@@ -318,8 +318,9 @@ export default function TasksPage() {
 
   useEffect(() => { fetchTasks() }, [fetchTasks])
 
+  // Nem töröl — a feladat-temetőbe helyez (visszahozható).
   async function handleDelete(id: string) {
-    if (!confirm('Biztosan törölni szeretné ezt a feladatot?')) return
+    if (!confirm('A feladat a temetőbe kerül (nem törlődik, bármikor visszahozható). Folytatod?')) return
     await fetch(`/api/tasks/${id}`, { method: 'DELETE' })
     fetchTasks()
   }
@@ -459,6 +460,14 @@ export default function TasksPage() {
             </button>
           </div>
           )}
+          <Link
+            href="/feladat-archivum"
+            className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+            title="Mennyország (elvégzett) és temető (archivált) feladatok"
+          >
+            <Archive size={16} />
+            <span className="hidden sm:inline">Archívum</span>
+          </Link>
           {mainView === 'board' && (
           <button
             onClick={() => handleAdd()}

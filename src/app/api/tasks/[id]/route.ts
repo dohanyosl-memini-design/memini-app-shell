@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { logTaskDiff } from '@/lib/taskEvents'
+import { logTaskDiff, logTaskEvent } from '@/lib/taskEvents'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,12 +62,33 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (body.focused !== undefined) data.focused = body.focused
   if (body.status !== undefined) data.status = body.status
   if (body.priority !== undefined) data.priority = body.priority
+  // Visszahozás a feladat-temetőből.
+  if (body.restore) { data.archivedAt = null; data.archiveReason = null }
   const task = await prisma.task.update({ where: { id: params.id }, data, include })
   await logTaskDiff(params.id, body.actor || 'web', before, task)
   return NextResponse.json(task)
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
-  await prisma.task.delete({ where: { id: params.id } })
-  return NextResponse.json({ success: true })
+// A kuka gomb SOHA nem töröl — a feladat-temetőbe rak (archivál). A feladat
+// minden adata és eseménytörténete megmarad, és bármikor visszahozható. Az
+// indok opcionális (egy elavult feladatnál gyakran nincs is mit írni).
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+  let reason: string | null = null
+  try {
+    const body = await request.json()
+    reason = (body?.reason || '').trim() || null
+  } catch {
+    // üres body — indok nélkül is archiválható
+  }
+
+  const before = await prisma.task.findUnique({ where: { id: params.id } })
+  if (!before) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  await prisma.task.update({
+    where: { id: params.id },
+    data: { archivedAt: new Date(), archiveReason: reason },
+  })
+  await logTaskEvent(params.id, 'web', 'archived', 'archivedAt', null, reason)
+
+  return NextResponse.json({ success: true, archived: true })
 }
