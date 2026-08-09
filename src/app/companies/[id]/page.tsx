@@ -12,6 +12,7 @@ import { format, formatDistanceToNow, isPast } from 'date-fns'
 import { hu } from 'date-fns/locale'
 import Modal from '@/components/Modal'
 import CompanyForm from '@/components/CompanyForm'
+import LostReasonModal from '@/components/LostReasonModal'
 import ContactForm from '@/components/ContactForm'
 import TaskForm from '@/components/TaskForm'
 import InvoicePreview from '@/components/InvoicePreview'
@@ -290,6 +291,8 @@ export default function CompanyDetailPage() {
   const [previewInvoiceFull, setPreviewInvoiceFull] = useState<null | Record<string, unknown>>(null)
   const [previewOrderData, setPreviewOrderData] = useState<null | Record<string, unknown>>(null)
   const [autoTaskCreated, setAutoTaskCreated] = useState(false)
+  const [showCemetery, setShowCemetery] = useState(false)
+  const [cemeteryBusy, setCemeteryBusy] = useState(false)
 
   const fetchCompany = useCallback(async () => {
     const res = await fetch(`/api/companies/${id}`)
@@ -338,10 +341,17 @@ export default function CompanyDetailPage() {
     fetchCompany()
   }
 
-  async function handleDeleteCompany() {
-    if (!confirm(`Biztosan törli a(z) ${company?.name} céget?`)) return
-    await fetch(`/api/companies/${id}`, { method: 'DELETE' })
-    router.push('/companies')
+  // A cég nem törlődik — a temetőbe kerül, kötelező indokkal.
+  async function moveToCemetery(reason: string) {
+    setCemeteryBusy(true)
+    await fetch(`/api/companies/${id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    })
+    setCemeteryBusy(false)
+    setShowCemetery(false)
+    router.push('/temeto')
   }
 
   async function handleToggleTask(task: Task) {
@@ -932,13 +942,22 @@ export default function CompanyDetailPage() {
 
       <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">
         <button
-          onClick={handleDeleteCompany}
-          className="flex items-center gap-2 text-sm text-red-500 hover:text-red-700 transition-colors"
+          onClick={() => setShowCemetery(true)}
+          className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 transition-colors"
         >
           <Trash2 size={14} />
-          Cég törlése
+          Temetőbe helyezés
         </button>
       </div>
+
+      {showCemetery && company && (
+        <LostReasonModal
+          entityName={company.name}
+          busy={cemeteryBusy}
+          onCancel={() => setShowCemetery(false)}
+          onConfirm={moveToCemetery}
+        />
+      )}
 
       {showEditModal && (
         <Modal title="Cég szerkesztése" onClose={() => setShowEditModal(false)}>

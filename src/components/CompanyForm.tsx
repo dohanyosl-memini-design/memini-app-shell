@@ -124,9 +124,20 @@ const LANGUAGES = [
   { code: 'MULTI', label: 'Többnyelvű' },
 ]
 
+// A legördülőben csak az AKTÍV állapotok szerepelnek — a temetőbe helyezés a
+// kuka gombon át megy (kötelező indokkal), nem itt.
+const LIFECYCLE_OPTIONS = [
+  { value: 'prospect',   label: 'Prospekt — nem tud rólunk' },
+  { value: 'cold_lead',  label: 'Hideg lead — megkeresve, nincs válasz' },
+  { value: 'interested', label: 'Érdeklődő — visszajelzett' },
+  { value: 'partner',    label: 'Partner — rendelt' },
+  { value: 'inactive',   label: 'Inaktív — partner, de csendes' },
+]
+
 interface Company {
   id: string
   name: string
+  lifecycle?: string | null
   partnerType?: string | null
   industry?: string | null
   website?: string | null
@@ -159,6 +170,7 @@ export default function CompanyForm({ company, onSave, onCancel }: CompanyFormPr
     regular: existingBH?.regular ?? defaultRegular(),
     periods: existingBH?.periods ?? [],
   })
+  const [lifecycle, setLifecycle] = useState(company?.lifecycle || 'prospect')
   const [form, setForm] = useState({
     name: company?.name || '',
     partnerType: company?.partnerType || '',
@@ -195,8 +207,21 @@ export default function CompanyForm({ company, onSave, onCancel }: CompanyFormPr
     await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, businessHours: bh }),
+      // Új cégnél a lifecycle-t a POST is elfogadja; meglévőnél külön, a
+      // védett lifecycle-végponton át állítjuk (naplózással), ezért innen kihagyjuk.
+      body: JSON.stringify({ ...form, businessHours: bh, ...(company ? {} : { lifecycle }) }),
     })
+
+    // Meglévő cég életciklusa csak akkor változik, ha tényleg más lett — így a
+    // lifecycle-napló nem telik meg üres bejegyzésekkel. Az aktív állapotok közti
+    // váltáshoz nem kell indok, ezért a PATCH gond nélkül lefut.
+    if (company && lifecycle !== (company.lifecycle || 'prospect')) {
+      await fetch(`/api/companies/${company.id}/lifecycle`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: lifecycle }),
+      })
+    }
 
     setLoading(false)
     onSave()
@@ -368,6 +393,26 @@ export default function CompanyForm({ company, onSave, onCancel }: CompanyFormPr
       <div>
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">CRM adatok</p>
         <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Életciklus — hol tart a lépcsőn
+            </label>
+            <select
+              value={lifecycle}
+              onChange={(e) => setLifecycle(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {LIFECYCLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              {/* Ha a cég épp a temetőben van, mutatjuk az aktuális állapotot is,
+                  hogy a legördülő ne ugorjon váratlanul másikra. */}
+              {lifecycle && !LIFECYCLE_OPTIONS.some((o) => o.value === lifecycle) && (
+                <option value={lifecycle}>Jelenlegi: {lifecycle}</option>
+              )}
+            </select>
+            <p className="mt-1 text-xs text-gray-400">
+              Közvetlenül a helyes fokra állíthatod. Az „elvesztett" a kuka gombon át megy, indokkal.
+            </p>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Kommunikáció nyelve</label>

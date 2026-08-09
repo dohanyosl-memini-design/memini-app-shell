@@ -51,18 +51,23 @@ export function requiresReason(to: string): boolean {
   return isLostState(to)
 }
 
-// Megengedett átmenetek. A valóság nem mindig előre megy, ezért a
-// visszalépés (pl. interested → cold_lead) is megengedett. A kulcs a
-// forrásállapot, az érték a megengedett célállapotok halmaza.
+// Megengedett átmenetek. Az aktív állapotok között szabadon lehet mozogni
+// (előre és vissza is), mert a felhasználó kézzel bármikor a helyes lépcsőfokra
+// állíthat — nem kell végigkattintania a fokokat. A temetőbe (lost_*) lépés a
+// megfelelő elvesztett állapotot kapja, és mindig kötelező indokkal jár.
+// A kulcs a forrásállapot, az érték a megengedett célállapotok halmaza.
+const ACTIVE: LifecycleState[] = ['prospect', 'cold_lead', 'interested', 'partner', 'inactive']
+const others = (self: LifecycleState) => ACTIVE.filter((s) => s !== self)
+
 const TRANSITIONS: Record<LifecycleState, LifecycleState[]> = {
-  prospect:     ['cold_lead', 'interested', 'partner', 'lost_lead'],
-  cold_lead:    ['prospect', 'interested', 'partner', 'lost_lead'],
-  interested:   ['prospect', 'cold_lead', 'partner', 'lost_lead'],
-  partner:      ['inactive', 'lost_partner'],
-  inactive:     ['partner', 'lost_partner'],
+  prospect:     [...others('prospect'), 'lost_lead'],
+  cold_lead:    [...others('cold_lead'), 'lost_lead'],
+  interested:   [...others('interested'), 'lost_lead'],
+  partner:      [...others('partner'), 'lost_partner'],
+  inactive:     [...others('inactive'), 'lost_partner'],
   // Temetőből visszahozás bármely aktív állapotba.
-  lost_lead:    ['prospect', 'cold_lead', 'interested', 'partner'],
-  lost_partner: ['partner', 'inactive', 'prospect'],
+  lost_lead:    [...ACTIVE],
+  lost_partner: [...ACTIVE],
 }
 
 export function canTransition(from: string, to: string): boolean {
