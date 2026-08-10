@@ -88,6 +88,9 @@ model Company {
   firstOrderDate    DateTime?          // az első rendelés napja — ez tette partnerré
   lostReason        String?            // csak lost_* állapotban, kötelezően megadva
   lostAt            DateTime?
+  // Kézi email-sorozat követése (meleg leadnél). Struktúra: { steps: [{ id,
+  // label, dueAt, sentAt, skipped }] }. Meleg leaddé váláskor sablonból töltődik.
+  emailSequence     Json?
   lifecycleEvents   LifecycleEvent[]
   contacts          Contact[]
   deals             Deal[]

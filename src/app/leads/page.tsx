@@ -4,10 +4,11 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import {
   Plus, Search, X, Building2, Clock, ArrowRight, MapPin, User,
-  CheckCircle, Skull, StickyNote,
+  CheckCircle, Skull, StickyNote, Mail,
 } from 'lucide-react'
 import Modal from '@/components/Modal'
 import LostReasonModal from '@/components/LostReasonModal'
+import { parseSequence, sequenceProgress } from '@/lib/emailSequence'
 
 // ─────────────────────────────────────────────────────────────────────────
 // Lead CRM — kanban a CÉGEK felett (nem a kapcsolatok felett). A lead-életciklus
@@ -32,6 +33,7 @@ interface Company {
   partnerType: string | null
   notes: string | null
   lifecycle: string
+  emailSequence?: unknown
   contacts?: Contact[]
   _count?: { contacts: number; deals: number; orders: number }
   createdAt: string
@@ -55,6 +57,16 @@ const STAGES = [
     color: 'border-blue-300 bg-blue-50',
     dot: 'bg-blue-400',
     badge: 'bg-blue-100 text-blue-700',
+    next: 'warm_lead',
+    nextLabel: 'Meleg lead',
+  },
+  {
+    id: 'warm_lead',
+    label: 'Meleg lead',
+    hint: 'Feliratkozott — fut neki az email-sorozat',
+    color: 'border-orange-300 bg-orange-50',
+    dot: 'bg-orange-400',
+    badge: 'bg-orange-100 text-orange-700',
     next: 'interested',
     nextLabel: 'Érdeklődő',
   },
@@ -107,6 +119,7 @@ function CompanyCard({
   const contact = primaryContact(company)
   const snippet = noteSnippet(company.notes)
   const days = daysSince(company.createdAt)
+  const progress = sequenceProgress(parseSequence(company.emailSequence))
 
   return (
     <div
@@ -137,6 +150,14 @@ function CompanyCard({
         <p className="text-xs text-gray-500 flex items-center gap-1 mb-1 truncate">
           <User size={10} className="shrink-0 text-gray-400" />
           {contact.firstName} {contact.lastName}
+        </p>
+      )}
+      {progress && (
+        <p className="text-xs mb-1 flex items-center gap-1">
+          <Mail size={10} className="shrink-0 text-orange-400" />
+          <span className={progress.sent >= progress.total ? 'text-green-600' : 'text-orange-600'}>
+            Sorozat: {progress.sent}/{progress.total} kiment
+          </span>
         </p>
       )}
       {snippet && <p className="text-xs text-gray-400 italic mb-2 line-clamp-2 leading-relaxed">{snippet}</p>}
@@ -452,7 +473,7 @@ export default function LeadsPage() {
           <p className="text-gray-500">Még nincs lead. Add hozzá az elsőt, vagy Arthur is felveheti őket.</p>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {STAGES.map((stage) => (
             <KanbanColumn
               key={stage.id}

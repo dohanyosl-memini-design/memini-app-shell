@@ -129,6 +129,7 @@ const LANGUAGES = [
 const LIFECYCLE_OPTIONS = [
   { value: 'prospect',   label: 'Prospekt — nem tud rólunk' },
   { value: 'cold_lead',  label: 'Hideg lead — megkeresve, nincs válasz' },
+  { value: 'warm_lead',  label: 'Meleg lead — feliratkozott, sorozatot kap' },
   { value: 'interested', label: 'Érdeklődő — visszajelzett' },
   { value: 'partner',    label: 'Partner — rendelt' },
   { value: 'inactive',   label: 'Inaktív — partner, de csendes' },

@@ -13,6 +13,8 @@ import { hu } from 'date-fns/locale'
 import Modal from '@/components/Modal'
 import CompanyForm from '@/components/CompanyForm'
 import LostReasonModal from '@/components/LostReasonModal'
+import EmailSequencePanel from '@/components/EmailSequencePanel'
+import { parseSequence } from '@/lib/emailSequence'
 import ContactForm from '@/components/ContactForm'
 import TaskForm from '@/components/TaskForm'
 import InvoicePreview from '@/components/InvoicePreview'
@@ -99,6 +101,8 @@ interface Company {
   orders: Order[]
   tasks: Task[]
   createdAt: string
+  lifecycle?: string
+  emailSequence?: unknown
   businessHours?: {
     regular: { day: number; open: string; close: string; closed: boolean }[]
     periods: { label: string; from: string; until: string; days: { day: number; open: string; close: string; closed: boolean }[] }[]
@@ -415,6 +419,11 @@ export default function CompanyDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: company info */}
         <div className="space-y-4">
+          {/* Email-sorozat — lead-állapotban vagy ha már van neki sorozata */}
+          {(['prospect', 'cold_lead', 'warm_lead', 'interested'].includes(company.lifecycle ?? '') ||
+            (parseSequence(company.emailSequence)?.steps.length ?? 0) > 0) && (
+            <EmailSequencePanel companyId={company.id} initial={company.emailSequence} />
+          )}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
             <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 font-bold text-lg mb-4">
               {company.name[0]}
