@@ -78,3 +78,10 @@ export function sequenceProgress(seq: EmailSequence | null): { sent: number; tot
   if (active.length === 0) return null
   return { sent: active.filter((s) => s.sentAt).length, total: active.length }
 }
+
+// A következő kiküldendő lépés (első, ami még nem ment ki és nincs kihagyva).
+// Ez mutatja, „melyik levélnél tart" a lead. null, ha nincs sorozat vagy kész.
+export function nextStep(seq: EmailSequence | null): SequenceStep | null {
+  if (!seq) return null
+  return seq.steps.find((s) => !s.sentAt && !s.skipped) ?? null
+}

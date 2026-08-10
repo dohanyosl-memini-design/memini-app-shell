@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import Modal from '@/components/Modal'
 import LostReasonModal from '@/components/LostReasonModal'
-import { parseSequence, sequenceProgress } from '@/lib/emailSequence'
+import { parseSequence, sequenceProgress, nextStep } from '@/lib/emailSequence'
 
 // ─────────────────────────────────────────────────────────────────────────
 // Lead CRM — kanban a CÉGEK felett (nem a kapcsolatok felett). A lead-életciklus
@@ -119,7 +119,9 @@ function CompanyCard({
   const contact = primaryContact(company)
   const snippet = noteSnippet(company.notes)
   const days = daysSince(company.createdAt)
-  const progress = sequenceProgress(parseSequence(company.emailSequence))
+  const seq = parseSequence(company.emailSequence)
+  const progress = sequenceProgress(seq)
+  const next = nextStep(seq)
 
   return (
     <div
@@ -153,12 +155,19 @@ function CompanyCard({
         </p>
       )}
       {progress && (
-        <p className="text-xs mb-1 flex items-center gap-1">
-          <Mail size={10} className="shrink-0 text-orange-400" />
-          <span className={progress.sent >= progress.total ? 'text-green-600' : 'text-orange-600'}>
-            Sorozat: {progress.sent}/{progress.total} kiment
+        <div className="text-xs mb-1 flex items-start gap-1">
+          <Mail size={10} className="shrink-0 text-orange-400 mt-0.5" />
+          <span className="min-w-0">
+            {next ? (
+              <span className="text-orange-600">
+                <span className="text-gray-400">Köv.:</span> {next.label}
+              </span>
+            ) : (
+              <span className="text-green-600">Sorozat kész</span>
+            )}
+            <span className="text-gray-400"> · {progress.sent}/{progress.total}</span>
           </span>
-        </p>
+        </div>
       )}
       {snippet && <p className="text-xs text-gray-400 italic mb-2 line-clamp-2 leading-relaxed">{snippet}</p>}
 
