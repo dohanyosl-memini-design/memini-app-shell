@@ -31,10 +31,14 @@ function stepId(): string {
   return `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`
 }
 
+// A base budapesti naptári napja + `days` nap, YYYY-MM-DD alakban. Déli UTC-
+// horgonyt használ, hogy a nyári/téli időszámítás váltása se csússzon el.
 function addDays(base: Date, days: number): string {
-  const d = new Date(base)
-  d.setDate(d.getDate() + days)
-  return d.toISOString().slice(0, 10)
+  const bpDay = base.toLocaleDateString('en-CA', { timeZone: 'Europe/Budapest' }) // YYYY-MM-DD
+  const [y, m, d] = bpDay.split('-').map(Number)
+  const anchor = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
+  anchor.setUTCDate(anchor.getUTCDate() + days)
+  return anchor.toISOString().slice(0, 10)
 }
 
 // A sablonból friss sorozatot állít elő, a mai naptól számított esedékességekkel.

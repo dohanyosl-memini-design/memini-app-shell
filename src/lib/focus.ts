@@ -179,22 +179,22 @@ export async function buildFocus(
     })
   }
 
-  // Meleg leadek: leadenként a KÖVETKEZŐ kiküldendő levél, ha esedékes a
-  // Fókusz-ablakban. Így nem 4 elem/lead floodol, hanem egyszerre a soron levő.
+  // Meleg leadek: leadenként a KÖVETKEZŐ kiküldendő levél MINDIG megjelenik a
+  // napi teendők közt („kinek kell írni"), függetlenül a pontos dátumtól. Ha a
+  // dátuma már elmúlt → Lejárt; egyébként (ma, jövő, vagy nincs dátum) → Ma.
   for (const c of warmLeads) {
     const next = nextStep(parseSequence(c.emailSequence))
-    if (!next || !next.dueAt) continue
-    const bucket = bucketFor(next.dueAt, todayStr, days)
-    if (!bucket) continue
+    if (!next) continue
+    const overdue = !!(next.dueAt && next.dueAt < todayStr)
     const contact = c.contacts[0]
     const who = contact ? `${contact.firstName} ${contact.lastName}`.trim() : null
     items.push({
       kind: 'email',
       id: `${c.id}:${next.id}`,
       title: `Levél kiküldése: ${next.label}`,
-      date: new Date(`${next.dueAt}T09:00:00`).toISOString(),
+      date: next.dueAt ? new Date(`${next.dueAt}T09:00:00`).toISOString() : null,
       hasTime: false,
-      bucket,
+      bucket: overdue ? 'overdue' : 'today',
       focused: false,
       status: 'pending',
       href: `/companies/${c.id}`,
