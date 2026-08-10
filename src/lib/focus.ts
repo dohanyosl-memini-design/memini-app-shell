@@ -5,9 +5,10 @@
 
 import { prisma as defaultPrisma } from './prisma'
 import { dueHasTime } from './datetime'
+import { parseSequence, nextStep } from './emailSequence'
 
 export type FocusBucket = 'overdue' | 'today' | 'day1' | 'day2' | 'later'
-export type FocusKind = 'task' | 'subtask' | 'content' | 'followup'
+export type FocusKind = 'task' | 'subtask' | 'content' | 'followup' | 'email'
 
 export interface FocusItem {
   kind: FocusKind
@@ -26,6 +27,8 @@ export interface FocusItem {
   context?: string | null       // deal / cég / lead kontextus rövid szövege
   subDone?: number
   subTotal?: number
+  companyId?: string        // email-lépésnél: melyik cég sorozata
+  stepId?: string           // email-lépésnél: melyik lépést kell kimentnek jelölni
 }
 
 export interface FocusResult {
@@ -59,7 +62,7 @@ export async function buildFocus(
   const windowEnd = new Date(now.getTime() + (days + 1) * 86400000)
   const overdueFrom = new Date(now.getTime() - 120 * 86400000)
 
-  const [tasks, subtasks, contents] = await Promise.all([
+  const [tasks, subtasks, contents, warmLeads] = await Promise.all([
     db.task.findMany({
       where: {
         status: { notIn: ['completed', 'cancelled'] },
@@ -97,6 +100,15 @@ export async function buildFocus(
         ],
       },
       select: { id: true, title: true, channel: true, status: true, scheduledFor: true, focused: true },
+    }),
+    // Meleg leadek — a kézi email-sorozat következő esedékes lépése napi
+    // feladatként megjelenik a Fókuszban („kinek kell ma emailt küldeni").
+    db.company.findMany({
+      where: { lifecycle: 'warm_lead' },
+      select: {
+        id: true, name: true, emailSequence: true,
+        contacts: { where: { archivedAt: null }, orderBy: { createdAt: 'asc' }, take: 1, select: { firstName: true, lastName: true } },
+      },
     }),
   ])
 
@@ -164,6 +176,31 @@ export async function buildFocus(
       status: c.status,
       channel: c.channel,
       href: `/marketing/piece/${c.id}`,
+    })
+  }
+
+  // Meleg leadek: leadenként a KÖVETKEZŐ kiküldendő levél, ha esedékes a
+  // Fókusz-ablakban. Így nem 4 elem/lead floodol, hanem egyszerre a soron levő.
+  for (const c of warmLeads) {
+    const next = nextStep(parseSequence(c.emailSequence))
+    if (!next || !next.dueAt) continue
+    const bucket = bucketFor(next.dueAt, todayStr, days)
+    if (!bucket) continue
+    const contact = c.contacts[0]
+    const who = contact ? `${contact.firstName} ${contact.lastName}`.trim() : null
+    items.push({
+      kind: 'email',
+      id: `${c.id}:${next.id}`,
+      title: `Levél kiküldése: ${next.label}`,
+      date: new Date(`${next.dueAt}T09:00:00`).toISOString(),
+      hasTime: false,
+      bucket,
+      focused: false,
+      status: 'pending',
+      href: `/companies/${c.id}`,
+      context: who ? `${c.name} · ${who}` : c.name,
+      companyId: c.id,
+      stepId: next.id,
     })
   }
 

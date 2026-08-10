@@ -2,14 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Star, CornerDownRight, Hourglass, AlertTriangle, Calendar, CheckSquare, CheckCircle2 } from 'lucide-react'
+import { Star, CornerDownRight, Hourglass, AlertTriangle, Calendar, CheckSquare, CheckCircle2, Mail } from 'lucide-react'
 import { TASK_TYPES } from '@/components/TaskForm'
 import { channelInfo } from '@/lib/marketingConstants'
 import { format } from 'date-fns'
 import { hu } from 'date-fns/locale'
 
 type Bucket = 'overdue' | 'today' | 'day1' | 'day2' | 'later'
-type Kind = 'task' | 'subtask' | 'content' | 'followup'
+type Kind = 'task' | 'subtask' | 'content' | 'followup' | 'email'
 
 interface Item {
   kind: Kind
@@ -28,6 +28,8 @@ interface Item {
   context?: string | null
   subDone?: number
   subTotal?: number
+  companyId?: string
+  stepId?: string
 }
 
 interface FocusResult { generatedAt: string; days: number; today: string; items: Item[] }
@@ -37,6 +39,7 @@ const PRIO_DOT: Record<string, string> = { high: 'bg-red-500', medium: 'bg-amber
 function itemIcon(it: Item) {
   if (it.kind === 'subtask') return <CornerDownRight size={14} className="text-gray-400" />
   if (it.kind === 'followup') return <Hourglass size={14} className="text-amber-500" />
+  if (it.kind === 'email') return <Mail size={14} className="text-orange-500" />
   if (it.kind === 'content') return <span className="text-sm">{channelInfo(it.channel || '')?.icon ?? '📄'}</span>
   const t = TASK_TYPES.find(x => x.value === it.taskType)
   return <span className="text-sm">{t?.icon ?? '✓'}</span>
@@ -76,13 +79,13 @@ function Row({ it, onStar, onToggleSub, onComplete }: { it: Item; onStar: (it: I
       </div>
 
       {time && <span className="text-xs font-medium text-gray-500 shrink-0">{time}</span>}
-      {(it.kind === 'task' || it.kind === 'followup') && (
-        <button onClick={e => { e.stopPropagation(); onComplete(it) }} title="Késznek jelöl"
+      {(it.kind === 'task' || it.kind === 'followup' || it.kind === 'email') && (
+        <button onClick={e => { e.stopPropagation(); onComplete(it) }} title={it.kind === 'email' ? 'Kimentnek jelöl' : 'Késznek jelöl'}
           className="shrink-0 text-gray-300 hover:text-green-600 transition-colors">
           <CheckCircle2 size={17} />
         </button>
       )}
-      {it.kind !== 'subtask' && (
+      {it.kind !== 'subtask' && it.kind !== 'email' && (
         <button onClick={e => { e.stopPropagation(); onStar(it) }} title="Kiemelés"
           className={`shrink-0 transition-colors ${it.focused ? 'text-amber-500' : 'text-gray-300 opacity-0 group-hover:opacity-100 hover:text-amber-500'}`}>
           <Star size={15} fill={it.focused ? 'currentColor' : 'none'} />
@@ -135,7 +138,12 @@ export default function FocusView() {
     load()
   }
   async function onComplete(it: Item) {
-    await fetch(`/api/tasks/${it.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'completed' }) })
+    if (it.kind === 'email' && it.companyId && it.stepId) {
+      // Email-lépés kimentként jelölése a Fókuszból — a lead sorozata frissül.
+      await fetch(`/api/companies/${it.companyId}/sequence`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ markSent: it.stepId }) })
+    } else {
+      await fetch(`/api/tasks/${it.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'completed' }) })
+    }
     load()
   }
 
