@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
 import { createBrainNote } from '@/lib/brain'
+import { buildSequenceFromTemplate, parseSequence } from '@/lib/emailSequence'
 
 // ─────────────────────────────────────────────────────────────────────────
 // A cég-életciklus egyetlen forrása. Se az API, se az MCP nem írja kézzel a
@@ -11,6 +12,7 @@ import { createBrainNote } from '@/lib/brain'
 export const LIFECYCLE_STATES = [
   'prospect',
   'cold_lead',
+  'warm_lead',
   'interested',
   'partner',
   'inactive',
@@ -23,6 +25,7 @@ export type LifecycleState = (typeof LIFECYCLE_STATES)[number]
 export const LIFECYCLE_LABELS: Record<LifecycleState, string> = {
   prospect:     'Prospekt',
   cold_lead:    'Hideg lead',
+  warm_lead:    'Meleg lead',
   interested:   'Érdeklődő',
   partner:      'Partner',
   inactive:     'Inaktív',
@@ -31,7 +34,9 @@ export const LIFECYCLE_LABELS: Record<LifecycleState, string> = {
 }
 
 // A három nézet szűrői. Egy állapot pontosan egy nézethez tartozik.
-export const LEAD_STATES: LifecycleState[] = ['prospect', 'cold_lead', 'interested']
+// Lead-ág melegség szerint: prospekt → hideg → meleg (feliratkozott, sorozatot
+// kap) → érdeklődő (mintát kért).
+export const LEAD_STATES: LifecycleState[] = ['prospect', 'cold_lead', 'warm_lead', 'interested']
 export const PARTNER_STATES: LifecycleState[] = ['partner', 'inactive']
 export const LOST_STATES: LifecycleState[] = ['lost_lead', 'lost_partner']
 
@@ -56,12 +61,13 @@ export function requiresReason(to: string): boolean {
 // állíthat — nem kell végigkattintania a fokokat. A temetőbe (lost_*) lépés a
 // megfelelő elvesztett állapotot kapja, és mindig kötelező indokkal jár.
 // A kulcs a forrásállapot, az érték a megengedett célállapotok halmaza.
-const ACTIVE: LifecycleState[] = ['prospect', 'cold_lead', 'interested', 'partner', 'inactive']
+const ACTIVE: LifecycleState[] = ['prospect', 'cold_lead', 'warm_lead', 'interested', 'partner', 'inactive']
 const others = (self: LifecycleState) => ACTIVE.filter((s) => s !== self)
 
 const TRANSITIONS: Record<LifecycleState, LifecycleState[]> = {
   prospect:     [...others('prospect'), 'lost_lead'],
   cold_lead:    [...others('cold_lead'), 'lost_lead'],
+  warm_lead:    [...others('warm_lead'), 'lost_lead'],
   interested:   [...others('interested'), 'lost_lead'],
   partner:      [...others('partner'), 'lost_partner'],
   inactive:     [...others('inactive'), 'lost_partner'],
@@ -115,7 +121,7 @@ export async function transitionCompany(input: TransitionInput) {
 
   const company = await prisma.company.findUnique({
     where: { id: companyId },
-    select: { id: true, lifecycle: true, name: true },
+    select: { id: true, lifecycle: true, name: true, emailSequence: true },
   })
   if (!company) {
     throw new LifecycleError('not_found', 'Cég nem található.')
@@ -157,6 +163,20 @@ export async function transitionCompany(input: TransitionInput) {
       data: { companyId, fromState: from, toState: to, reason, source, actor },
     }),
   ])
+
+  // Meleg leaddé váláskor a kézi email-sorozat kiosztódik a sablonból — de csak
+  // ha még nincs neki (nem írjuk felül a kézzel szerkesztett sorozatot).
+  if (to === 'warm_lead') {
+    const existing = parseSequence(company.emailSequence)
+    if (!existing || existing.steps.length === 0) {
+      try {
+        await prisma.company.update({
+          where: { id: companyId },
+          data: { emailSequence: buildSequenceFromTemplate() as unknown as Prisma.InputJsonValue },
+        })
+      } catch { /* a sorozat-kiosztás hibája nem érinti a léptetést */ }
+    }
+  }
 
   // Temetőbe kerülés → setback a Brainbe, hogy a heti trendben látszódjon, ha
   // sorozatban veszítünk. Best-effort: soha ne bukjon el rajta a léptetés.
