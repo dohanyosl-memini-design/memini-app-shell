@@ -7,6 +7,33 @@ export const dynamic = 'force-dynamic'
 // A nézet dönti el, mely életciklus-állapotok látszanak. Alapból a Partner CRM
 // (partner + inaktív) — így a hideg leadek és az elvesztettek nem keverednek ide.
 //   view=partners (alap) | leads | cemetery | all
+// Intuitív cégkeresés: betűérzéketlen, több mezőre (a kapcsolattartókra is),
+// szavanként bontva — minden beírt szónak illeszkednie kell valamelyik mezőre.
+function companySearchWhere(search: string) {
+  const tokens = search.trim().split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return {}
+  const ci = (s: string) => ({ contains: s, mode: 'insensitive' as const })
+  return {
+    AND: tokens.map((tok) => ({
+      OR: [
+        { name:           ci(tok) },
+        { city:           ci(tok) },
+        { region:         ci(tok) },
+        { address:        ci(tok) },
+        { zip:            ci(tok) },
+        { email:          ci(tok) },
+        { customerNumber: ci(tok) },
+        { partnerType:    ci(tok) },
+        { contacts: { some: { archivedAt: null, OR: [
+          { firstName: ci(tok) },
+          { lastName:  ci(tok) },
+          { email:     ci(tok) },
+        ] } } },
+      ],
+    })),
+  }
+}
+
 function lifecycleFilterForView(view: string, explicit: string) {
   if (explicit) return { lifecycle: explicit }
   switch (view) {
@@ -33,13 +60,7 @@ export async function GET(request: NextRequest) {
     prisma.company.findMany({
       where: {
         ...lifecycleFilterForView(view, lifecycle),
-        ...(search ? {
-          OR: [
-            { name: { contains: search } },
-            { city: { contains: search } },
-            { email: { contains: search } },
-          ],
-        } : {}),
+        ...companySearchWhere(search),
         ...(partnerType ? { partnerType } : {}),
         ...(region ? { region } : {}),
         ...(country ? { country } : {}),
