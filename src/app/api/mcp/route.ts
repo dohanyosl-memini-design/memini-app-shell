@@ -603,7 +603,16 @@ function buildServer() {
           contact: ct
             ? { id: ct.id, salutation: ct.salutation, firstName: ct.firstName, lastName: ct.lastName, email: ct.email }
             : null,
-          nextEmail: { stepId: next.id, label: next.label, dueAt: next.dueAt, overdue },
+          nextEmail: {
+            stepId: next.id,
+            label: next.label,
+            dueAt: next.dueAt,
+            overdue,
+            // A meglévő piszkozat (ha van) — szerkeszd, ne írd felül vakon.
+            draft: (next.subject || next.body || next.bodyHu)
+              ? { subject: next.subject ?? null, body: next.body ?? null, bodyHu: next.bodyHu ?? null }
+              : null,
+          },
           sequence: (seq?.steps ?? []).map((s) => ({ label: s.label, dueAt: s.dueAt, sent: !!s.sentAt })),
         }
       }).filter((r): r is NonNullable<typeof r> => r !== null)
@@ -636,6 +645,40 @@ function buildServer() {
       const upcoming = nextStep(parseSequence(updated))
       const nextTxt = upcoming ? `A következő levél: „${upcoming.label}" (esedékes: ${upcoming.dueAt ?? '—'}).` : 'Ezzel a sorozat összes levele kiment.'
       return { content: [{ type: 'text', text: `Kimentnek jelölve: „${step.label}" — ${company.name}.\n${nextTxt}` }] }
+    }
+  )
+
+  server.tool(
+    'set_lead_email_draft',
+    'Egy meleg lead sorozat-lépéséhez piszkozatot ír/frissít: a küldendő levelet a cég nyelvén (DE/EN) ÉS a magyar kontroll-fordítást. A felhasználó a szerkesztőben átnézi, kimásolja és a saját rendszeréből küldi (a küldést NEM ez a tool végzi). A megszólítást a kontakt salutation-je (Herr/Frau) alapján válaszd, a nyelvet a cég language mezője alapján. Csak a megadott mezőket írja felül.',
+    {
+      companyId: z.string().describe('Cég ID'),
+      stepId:    z.string().describe('A lépés ID-ja (list_due_lead_emails nextEmail.stepId)'),
+      subject:   z.string().optional().describe('A levél tárgya'),
+      body:      z.string().optional().describe('A küldendő levél a cég nyelvén (DE/EN)'),
+      bodyHu:    z.string().optional().describe('Magyar kontroll-fordítás — ugyanaz a tartalom magyarul'),
+    },
+    async ({ companyId, stepId, subject, body, bodyHu }) => {
+      const company = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true, emailSequence: true } })
+      if (!company) return { content: [{ type: 'text', text: 'Cég nem található.' }], isError: true }
+      const seq = parseSequence(company.emailSequence) ?? { steps: [] }
+      const step = seq.steps.find((s) => s.id === stepId)
+      if (!step) return { content: [{ type: 'text', text: 'A megadott lépés nem található a sorozatban.' }], isError: true }
+
+      const updated = {
+        steps: seq.steps.map((s) => s.id === stepId ? {
+          ...s,
+          ...(subject !== undefined ? { subject: subject || null } : {}),
+          ...(body    !== undefined ? { body:    body    || null } : {}),
+          ...(bodyHu  !== undefined ? { bodyHu:  bodyHu  || null } : {}),
+          draftUpdatedAt: new Date().toISOString(),
+        } : s),
+      }
+      await prisma.company.update({
+        where: { id: companyId },
+        data: { emailSequence: updated as unknown as Prisma.InputJsonValue },
+      })
+      return { content: [{ type: 'text', text: `Piszkozat mentve: „${step.label}" — ${company.name}. A felhasználó a szerkesztőben átnézi és elküldi.` }] }
     }
   )
 

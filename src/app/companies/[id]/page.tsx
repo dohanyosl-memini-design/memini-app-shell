@@ -102,6 +102,7 @@ interface Company {
   tasks: Task[]
   createdAt: string
   lifecycle?: string
+  language?: string | null
   emailSequence?: unknown
   businessHours?: {
     regular: { day: number; open: string; close: string; closed: boolean }[]
@@ -422,7 +423,7 @@ export default function CompanyDetailPage() {
           {/* Email-sorozat — lead-állapotban vagy ha már van neki sorozata */}
           {(['prospect', 'cold_lead', 'warm_lead', 'interested'].includes(company.lifecycle ?? '') ||
             (parseSequence(company.emailSequence)?.steps.length ?? 0) > 0) && (
-            <EmailSequencePanel companyId={company.id} initial={company.emailSequence} />
+            <EmailSequencePanel companyId={company.id} initial={company.emailSequence} language={company.language} />
           )}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
             <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 font-bold text-lg mb-4">

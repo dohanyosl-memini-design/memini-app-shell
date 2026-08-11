@@ -12,6 +12,15 @@ export interface SequenceStep {
   sentAt: string | null
   /** Kihagyott lépés (nem küldjük, de a listában marad átláthatóságért). */
   skipped?: boolean
+  // ── Piszkozat (Arthur írja MCP-n, a szerkesztőben kontrollálod) ──
+  /** Tárgy. */
+  subject?: string | null
+  /** A küldendő levél a cég nyelvén (DE/EN). */
+  body?: string | null
+  /** Magyar kontroll-fordítás — hogy lásd, mit mondasz valójában. */
+  bodyHu?: string | null
+  /** Mikor frissült utoljára a piszkozat (ISO). */
+  draftUpdatedAt?: string | null
 }
 
 export interface EmailSequence {
@@ -64,12 +73,17 @@ export function parseSequence(value: unknown): EmailSequence | null {
     if (!s || typeof s !== 'object') continue
     const o = s as Record<string, unknown>
     if (typeof o.id !== 'string' || typeof o.label !== 'string') continue
+    const str = (v: unknown) => (typeof v === 'string' && v !== '' ? v : null)
     clean.push({
       id: o.id,
       label: o.label,
       dueAt: typeof o.dueAt === 'string' ? o.dueAt : null,
       sentAt: typeof o.sentAt === 'string' ? o.sentAt : null,
       skipped: o.skipped === true ? true : undefined,
+      subject: str(o.subject),
+      body: str(o.body),
+      bodyHu: str(o.bodyHu),
+      draftUpdatedAt: str(o.draftUpdatedAt),
     })
   }
   return { steps: clean }
