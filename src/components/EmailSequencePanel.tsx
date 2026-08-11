@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Mail, Plus, X, Check, RotateCcw, FileText, Copy } from 'lucide-react'
+import { Mail, Plus, X, Check, RotateCcw, FileText, Copy, Settings } from 'lucide-react'
 import Modal from '@/components/Modal'
 import { parseSequence, type SequenceStep } from '@/lib/emailSequence'
 
@@ -94,15 +94,20 @@ export default function EmailSequencePanel({
           )}
           {saving && <span className="text-xs font-normal text-gray-300">mentés…</span>}
         </h3>
-        {steps.length === 0 ? (
-          <button onClick={loadTemplate} className="text-xs font-medium text-orange-600 hover:text-orange-700 inline-flex items-center gap-1">
-            <Plus size={13} /> Sablon betöltése
-          </button>
-        ) : (
-          <button onClick={loadTemplate} title="Sablon visszatöltése (felülírja a mostanit)" className="text-xs text-gray-400 hover:text-gray-600 inline-flex items-center gap-1">
-            <RotateCcw size={12} /> Sablon
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          <a href="/settings#email-sorozat" title="A közös sablon szerkesztése a beállításokban" className="text-xs text-gray-400 hover:text-gray-600 inline-flex items-center gap-1">
+            <Settings size={12} /> Sablon
+          </a>
+          {steps.length === 0 ? (
+            <button onClick={loadTemplate} className="text-xs font-medium text-orange-600 hover:text-orange-700 inline-flex items-center gap-1">
+              <Plus size={13} /> Betöltés
+            </button>
+          ) : (
+            <button onClick={loadTemplate} title="Sablon visszatöltése (felülírja a mostanit)" className="text-xs text-gray-400 hover:text-gray-600 inline-flex items-center gap-1">
+              <RotateCcw size={12} /> Vissza
+            </button>
+          )}
+        </div>
       </div>
 
       {steps.length === 0 ? (
@@ -210,6 +215,21 @@ function LetterEditor({
   return (
     <Modal title={`Levél: ${step.label}`} onClose={onClose} size="xl">
       <div className="space-y-4">
+        {(step.brief || step.sampleBody) && (
+          <div className="rounded-lg bg-orange-50 border border-orange-100 p-3 text-sm">
+            {step.brief && (
+              <p className="text-orange-800"><span className="font-medium">Miről szóljon:</span> {step.brief}</p>
+            )}
+            {step.sampleBody && (
+              <button
+                onClick={() => setBody((b) => b.trim() ? b : (step.sampleBody ?? ''))}
+                className="mt-2 text-xs font-medium text-orange-600 hover:text-orange-700"
+              >
+                ↧ Sablonminta betöltése a küldendő hasábba
+              </button>
+            )}
+          </div>
+        )}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Tárgy</label>
           <input

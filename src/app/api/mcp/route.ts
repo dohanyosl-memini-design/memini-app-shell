@@ -26,6 +26,7 @@ import {
   type LifecycleState,
 } from '@/lib/lifecycle'
 import { parseSequence, nextStep } from '@/lib/emailSequence'
+import { getTemplateSteps } from '@/lib/emailTemplate'
 import { buildMarketingTree } from '@/lib/marketingTree'
 import { ARC_LEVELS, CHANNEL_KEYS, LANGUAGES } from '@/lib/marketingConstants'
 import { logPieceCreated, logPieceDiff, logPieceEvent } from '@/lib/contentEvents'
@@ -565,6 +566,16 @@ function buildServer() {
   // ─── MELEG LEAD EMAIL-SOROZAT (kézi küldés, Arthur segít megírni) ──────────
 
   server.tool(
+    'get_email_sequence_template',
+    'A meleg lead email-sorozat KÖZPONTI sablonja: lépésenként a levél neve, hányadik napra esedékes, a tárgy, a "miről szóljon" útmutató (brief) és a sablon-levélminta. EZ a mérce — a leveleket e szerint kell megírnod, csak személyre szabva a partnerre/helyszínre; ne találj ki új leveleket vagy témákat. A felhasználó a beállításokban szerkeszti ezt.',
+    {},
+    async () => {
+      const steps = await getTemplateSteps()
+      return { content: [{ type: 'text', text: JSON.stringify(steps, null, 2) }] }
+    }
+  )
+
+  server.tool(
     'list_due_lead_emails',
     'A meleg leadek (warm_lead) kézi email-sorozatának SORON KÖVETKEZŐ, még ki nem küldött levele — kinek kell most írni. Alapból csak az esedékeseket adja (ma vagy korábban). A leveleket NEM küldi ki (a küldés kézi), csak megmutatja, mit kell megírni, kinek, milyen megszólítással és nyelven. A megírás után jelöld kimentnek: mark_lead_email_sent.',
     {
@@ -608,9 +619,14 @@ function buildServer() {
             label: next.label,
             dueAt: next.dueAt,
             overdue,
+            // Sablonból örökölt útmutató — EZ SZERINT írd meg a levelet, ne találj
+            // ki újat. Csak személyre szabd a mintát a partnerre/helyszínre.
+            subject: next.subject ?? null,
+            brief: next.brief ?? null,
+            sampleBody: next.sampleBody ?? null,
             // A meglévő piszkozat (ha van) — szerkeszd, ne írd felül vakon.
-            draft: (next.subject || next.body || next.bodyHu)
-              ? { subject: next.subject ?? null, body: next.body ?? null, bodyHu: next.bodyHu ?? null }
+            draft: (next.body || next.bodyHu)
+              ? { body: next.body ?? null, bodyHu: next.bodyHu ?? null }
               : null,
           },
           sequence: (seq?.steps ?? []).map((s) => ({ label: s.label, dueAt: s.dueAt, sent: !!s.sentAt })),

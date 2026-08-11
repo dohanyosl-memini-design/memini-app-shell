@@ -12,6 +12,11 @@ export interface SequenceStep {
   sentAt: string | null
   /** Kihagyott lépés (nem küldjük, de a listában marad átláthatóságért). */
   skipped?: boolean
+  // ── Sablonból örökölt útmutató (a sablonból másolódik, az ügynököt vezeti) ──
+  /** "Miről szóljon" — útmutató az ügynöknek. */
+  brief?: string | null
+  /** Sablon levélminta, amit az ügynök személyre szab. */
+  sampleBody?: string | null
   // ── Piszkozat (Arthur írja MCP-n, a szerkesztőben kontrollálod) ──
   /** Tárgy. */
   subject?: string | null
@@ -27,22 +32,52 @@ export interface EmailSequence {
   steps: SequenceStep[]
 }
 
-// Alap sablon: cím + hány nappal a sorozat indulása után esedékes.
-// Leadenként módosítható; itt csak a kiinduló lépéssor van.
-export const SEQUENCE_TEMPLATE: { label: string; offsetDays: number }[] = [
-  { label: 'Üdvözlő — köszönjük a feliratkozást', offsetDays: 0 },
-  { label: 'Bemutatkozó — kik vagyunk, referenciák', offsetDays: 3 },
-  { label: 'Minta-ajánlat — kérd a 3 egyedi mintát', offsetDays: 7 },
-  { label: 'Emlékeztető — ha nem jött válasz', offsetDays: 14 },
+// Egy sablon-lépés definíciója (a központi sablon eleme).
+export interface TemplateStepDef {
+  label: string
+  offsetDays: number
+  subject?: string | null
+  brief?: string | null
+  sampleBody?: string | null
+}
+
+// Beépített ALAP sablon — ezzel töltődik fel a központi sablon-tábla, amíg a
+// felhasználó a beállításokban át nem írja. A brief magyarul szól az ügynökhöz,
+// a sample a küldendő nyelv (DE) kiinduló mintája, amit az ügynök személyre szab.
+export const DEFAULT_TEMPLATE_STEPS: TemplateStepDef[] = [
+  {
+    label: 'Üdvözlő', offsetDays: 0,
+    subject: 'Willkommen bei Memini',
+    brief: 'Köszönjük a feliratkozást. Röviden: kik vagyunk (egyedi souvenir / hűtőmágnes gyártó múzeumoknak, váraknak, boltoknak), és mit várhat a következő napokban. Meleg, rövid, nem tolakodó.',
+    sampleBody: 'Sehr geehrte/r [Anrede] [Nachname],\n\nvielen Dank für Ihr Interesse an Memini. Wir gestalten individuelle Souvenirs für Museen, Burgen und Geschenkläden. In den nächsten Tagen stellen wir uns kurz vor und zeigen, wie wir für [Ort] arbeiten könnten.\n\nHerzliche Grüße',
+  },
+  {
+    label: 'Bemutatkozó', offsetDays: 3,
+    subject: 'Individuelle Souvenirs für [Ort]',
+    brief: 'Kik vagyunk bővebben, 1-2 referencia, miért érdemes velünk dolgozni. A helyszínre (múzeum/vár/bolt) szabva. Konkrét, de rövid.',
+    sampleBody: 'Sehr geehrte/r [Anrede] [Nachname],\n\nMemini entwirft und produziert individuelle Souvenirs – von Kühlschrankmagneten bis zu besonderen Geschenkartikeln. Für Häuser wie [Ort] gestalten wir Motive, die zu Ihrem Ort passen.\n\nGerne zeigen wir Ihnen Beispiele.\n\nHerzliche Grüße',
+  },
+  {
+    label: 'Minta-ajánlat', offsetDays: 7,
+    subject: '3 kostenlose Musterentwürfe für [Ort]',
+    brief: 'Ajánljuk fel a 3 egyedi, ingyenes mintatervet a helyszínhez. Ez a fő konverziós lépés — világos felhívás a cselekvésre.',
+    sampleBody: 'Sehr geehrte/r [Anrede] [Nachname],\n\ngerne erstellen wir für [Ort] drei individuelle Musterentwürfe – kostenlos und unverbindlich. Sagen Sie uns einfach, welche Motive oder Themen für Sie interessant sind.\n\nHerzliche Grüße',
+  },
+  {
+    label: 'Emlékeztető', offsetDays: 14,
+    subject: 'Kurze Erinnerung – Ihre Musterentwürfe',
+    brief: 'Finom emlékeztető, ha nem jött válasz. Nem nyomulós, csak felajánljuk újra a segítséget / a mintákat.',
+    sampleBody: 'Sehr geehrte/r [Anrede] [Nachname],\n\nich wollte mich kurz melden – falls unser Angebot für individuelle Musterentwürfe für [Ort] interessant ist, bin ich gerne für Sie da.\n\nHerzliche Grüße',
+  },
 ]
 
-function stepId(): string {
+export function stepId(): string {
   return `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`
 }
 
 // A base budapesti naptári napja + `days` nap, YYYY-MM-DD alakban. Déli UTC-
 // horgonyt használ, hogy a nyári/téli időszámítás váltása se csússzon el.
-function addDays(base: Date, days: number): string {
+export function addDays(base: Date, days: number): string {
   const bpDay = base.toLocaleDateString('en-CA', { timeZone: 'Europe/Budapest' }) // YYYY-MM-DD
   const [y, m, d] = bpDay.split('-').map(Number)
   const anchor = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
@@ -50,14 +85,18 @@ function addDays(base: Date, days: number): string {
   return anchor.toISOString().slice(0, 10)
 }
 
-// A sablonból friss sorozatot állít elő, a mai naptól számított esedékességekkel.
-export function buildSequenceFromTemplate(from: Date = new Date()): EmailSequence {
+// Sablon-definíciókból friss sorozatot állít elő (tiszta függvény, prisma nélkül).
+// A brief + minta + tárgy VELE UTAZIK a leadhez, hogy az ügynök lássa, mit írjon.
+export function stepsFromTemplate(defs: TemplateStepDef[], from: Date = new Date()): EmailSequence {
   return {
-    steps: SEQUENCE_TEMPLATE.map((t) => ({
+    steps: defs.map((t) => ({
       id: stepId(),
       label: t.label,
       dueAt: addDays(from, t.offsetDays),
       sentAt: null,
+      subject: t.subject ?? null,
+      brief: t.brief ?? null,
+      sampleBody: t.sampleBody ?? null,
     })),
   }
 }
@@ -81,6 +120,8 @@ export function parseSequence(value: unknown): EmailSequence | null {
       sentAt: typeof o.sentAt === 'string' ? o.sentAt : null,
       skipped: o.skipped === true ? true : undefined,
       subject: str(o.subject),
+      brief: str(o.brief),
+      sampleBody: str(o.sampleBody),
       body: str(o.body),
       bodyHu: str(o.bodyHu),
       draftUpdatedAt: str(o.draftUpdatedAt),
