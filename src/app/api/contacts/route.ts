@@ -16,12 +16,16 @@ export async function GET(request: NextRequest) {
     where: {
       ...(archived ? { archivedAt: { not: null } } : { archivedAt: null }),
       ...(crmOnly ? { status: { notIn: PIPELINE_ONLY_STATUSES } } : {}),
-      ...(search ? {
-        OR: [
-          { firstName: { contains: search } },
-          { lastName: { contains: search } },
-          { email: { contains: search } },
-        ],
+      ...(search.trim() ? {
+        AND: search.trim().split(/\s+/).filter(Boolean).map((tok) => ({
+          OR: [
+            { firstName: { contains: tok, mode: 'insensitive' as const } },
+            { lastName:  { contains: tok, mode: 'insensitive' as const } },
+            { email:     { contains: tok, mode: 'insensitive' as const } },
+            { phone:     { contains: tok, mode: 'insensitive' as const } },
+            { company:   { name: { contains: tok, mode: 'insensitive' as const } } },
+          ],
+        })),
       } : {}),
     },
     include: { company: true },
