@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { z } from 'zod'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getMnbRate } from '@/lib/mnb'
 import { DEAL_STAGE_KEYS, LEGACY_STAGE_KEYS, normalizeStage } from '@/lib/dealStages'
@@ -24,6 +25,7 @@ import {
   LIFECYCLE_STATES, LIFECYCLE_LABELS, LEAD_STATES, PARTNER_STATES, LOST_STATES,
   type LifecycleState,
 } from '@/lib/lifecycle'
+import { parseSequence, nextStep } from '@/lib/emailSequence'
 import { buildMarketingTree } from '@/lib/marketingTree'
 import { ARC_LEVELS, CHANNEL_KEYS, LANGUAGES } from '@/lib/marketingConstants'
 import { logPieceCreated, logPieceDiff, logPieceEvent } from '@/lib/contentEvents'
@@ -557,6 +559,83 @@ function buildServer() {
       })
       if (events.length === 0) return { content: [{ type: 'text', text: 'Nincs életciklus-esemény ehhez a céghez.' }] }
       return { content: [{ type: 'text', text: JSON.stringify(events, null, 2) }] }
+    }
+  )
+
+  // ─── MELEG LEAD EMAIL-SOROZAT (kézi küldés, Arthur segít megírni) ──────────
+
+  server.tool(
+    'list_due_lead_emails',
+    'A meleg leadek (warm_lead) kézi email-sorozatának SORON KÖVETKEZŐ, még ki nem küldött levele — kinek kell most írni. Alapból csak az esedékeseket adja (ma vagy korábban). A leveleket NEM küldi ki (a küldés kézi), csak megmutatja, mit kell megírni, kinek, milyen megszólítással és nyelven. A megírás után jelöld kimentnek: mark_lead_email_sent.',
+    {
+      includeUpcoming: z.boolean().optional().describe('true = a jövőben esedékes következő leveleket is add vissza (nem csak a ma/korábban esedékeseket)'),
+    },
+    async ({ includeUpcoming }) => {
+      const today = localDay()
+      const leads = await prisma.company.findMany({
+        where: { lifecycle: 'warm_lead' },
+        select: {
+          id: true, name: true, city: true, partnerType: true, language: true, emailSequence: true,
+          contacts: {
+            where: { archivedAt: null },
+            orderBy: { createdAt: 'asc' },
+            take: 1,
+            select: { id: true, salutation: true, firstName: true, lastName: true, email: true },
+          },
+        },
+        orderBy: { name: 'asc' },
+      })
+
+      const rows = leads.map((c) => {
+        const seq = parseSequence(c.emailSequence)
+        const next = nextStep(seq)
+        if (!next) return null // minden levél kiment — nincs teendő
+        const overdue = !!(next.dueAt && next.dueAt < today)
+        const dueNow = !next.dueAt || next.dueAt <= today
+        if (!includeUpcoming && !dueNow) return null // csak az esedékesek
+        const ct = c.contacts[0] ?? null
+        return {
+          companyId: c.id,
+          company: c.name,
+          city: c.city,
+          partnerType: c.partnerType,
+          language: c.language, // DE / EN / HU — ezen a nyelven írj
+          contact: ct
+            ? { id: ct.id, salutation: ct.salutation, firstName: ct.firstName, lastName: ct.lastName, email: ct.email }
+            : null,
+          nextEmail: { stepId: next.id, label: next.label, dueAt: next.dueAt, overdue },
+          sequence: (seq?.steps ?? []).map((s) => ({ label: s.label, dueAt: s.dueAt, sent: !!s.sentAt })),
+        }
+      }).filter((r): r is NonNullable<typeof r> => r !== null)
+
+      if (rows.length === 0) {
+        return { content: [{ type: 'text', text: includeUpcoming ? 'Nincs meleg lead kiküldendő levéllel.' : 'Ma nincs esedékes meleg lead levél. (includeUpcoming=true a jövőbeliekhez.)' }] }
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(rows, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'mark_lead_email_sent',
+    'Egy meleg lead sorozat-lépését KIMENTKÉNT jelöli (miután megírtad/elküldted a levelet). A sorozatban a következő levél lép a helyére. A stepId a list_due_lead_emails nextEmail.stepId értéke.',
+    {
+      companyId: z.string().describe('Cég ID'),
+      stepId:    z.string().describe('A kimentnek jelölendő lépés ID-ja (nextEmail.stepId)'),
+    },
+    async ({ companyId, stepId }) => {
+      const company = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true, emailSequence: true } })
+      if (!company) return { content: [{ type: 'text', text: 'Cég nem található.' }], isError: true }
+      const seq = parseSequence(company.emailSequence) ?? { steps: [] }
+      const step = seq.steps.find((s) => s.id === stepId)
+      if (!step) return { content: [{ type: 'text', text: 'A megadott lépés nem található a sorozatban.' }], isError: true }
+      const updated = { steps: seq.steps.map((s) => (s.id === stepId && !s.sentAt ? { ...s, sentAt: new Date().toISOString() } : s)) }
+      await prisma.company.update({
+        where: { id: companyId },
+        data: { emailSequence: updated as unknown as Prisma.InputJsonValue },
+      })
+      const upcoming = nextStep(parseSequence(updated))
+      const nextTxt = upcoming ? `A következő levél: „${upcoming.label}" (esedékes: ${upcoming.dueAt ?? '—'}).` : 'Ezzel a sorozat összes levele kiment.'
+      return { content: [{ type: 'text', text: `Kimentnek jelölve: „${step.label}" — ${company.name}.\n${nextTxt}` }] }
     }
   )
 
