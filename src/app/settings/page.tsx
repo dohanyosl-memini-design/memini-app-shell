@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { KeyRound, CheckCircle2, AlertCircle, Trash2, Plus, Edit2, ChevronUp, ChevronDown, X, Check } from 'lucide-react'
+import EmailSequenceTemplateSection from '@/components/EmailSequenceTemplateSection'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -776,6 +777,10 @@ function KommunikacioTab() {
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
         <TemplatesSection />
+      </div>
+
+      <div id="email-sorozat" className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <EmailSequenceTemplateSection />
       </div>
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-2">

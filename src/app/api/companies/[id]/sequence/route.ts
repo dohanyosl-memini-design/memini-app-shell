@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { parseSequence, buildSequenceFromTemplate } from '@/lib/emailSequence'
+import { parseSequence } from '@/lib/emailSequence'
+import { buildSequenceFromTemplate } from '@/lib/emailTemplate'
 import type { Prisma } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -27,7 +28,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
   let sequence
   if (body.reset) {
-    sequence = buildSequenceFromTemplate()
+    sequence = await buildSequenceFromTemplate()
   } else if (body.markSent) {
     // Egy lépés kimentként jelölése (a Fókusz „kiment" gombjáról) — a meglévő
     // sorozatot töltjük be és csak az érintett lépést állítjuk.

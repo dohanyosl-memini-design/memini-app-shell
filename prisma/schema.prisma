@@ -130,6 +130,24 @@ model LifecycleEvent {
   @@index([toState, createdAt])
 }
 
+// A meleg lead email-sorozat KÖZPONTI sablonja (mindenkinek ugyanaz). A
+// beállításokban szerkeszthető. Amikor egy cég meleg leaddé válik, ezekből a
+// lépésekből másolódik a saját sorozata (a brief + minta + tárgy vele utazik),
+// így az ügynök CSAK személyre szab, nem talál ki új dolgokat.
+model EmailTemplateStep {
+  id         String   @id @default(cuid())
+  order      Int      @default(0) // sorrend / esedékesség szerinti helye
+  label      String              // a levél neve (pl. "Bemutatkozó")
+  offsetDays Int      @default(0) // hány nappal a becsatlakozás után esedékes
+  subject    String?             // alap tárgy
+  brief      String?             // "miről szóljon" — útmutató az ügynöknek
+  sampleBody String?             // sablon levélminta, amit az ügynök személyre szab
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([order])
+}
+
 model Deal {
   id          String     @id @default(cuid())
   title       String

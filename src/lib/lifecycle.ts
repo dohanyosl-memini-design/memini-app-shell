@@ -1,7 +1,8 @@
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
 import { createBrainNote } from '@/lib/brain'
-import { buildSequenceFromTemplate, parseSequence } from '@/lib/emailSequence'
+import { parseSequence } from '@/lib/emailSequence'
+import { buildSequenceFromTemplate } from '@/lib/emailTemplate'
 
 // ─────────────────────────────────────────────────────────────────────────
 // A cég-életciklus egyetlen forrása. Se az API, se az MCP nem írja kézzel a
@@ -172,7 +173,7 @@ export async function transitionCompany(input: TransitionInput) {
       try {
         await prisma.company.update({
           where: { id: companyId },
-          data: { emailSequence: buildSequenceFromTemplate() as unknown as Prisma.InputJsonValue },
+          data: { emailSequence: (await buildSequenceFromTemplate()) as unknown as Prisma.InputJsonValue },
         })
       } catch { /* a sorozat-kiosztás hibája nem érinti a léptetést */ }
     }
