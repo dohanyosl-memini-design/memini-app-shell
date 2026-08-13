@@ -3701,36 +3701,48 @@ function buildServer() {
       })).optional().describe('A nap érdemi levelei kivonatolva'),
       emailSource: z.enum(['agent', 'crm']).optional().describe('A levelek a saját postafiókodból (agent) vagy a CRM szinkronjából (crm) jöttek'),
       priorities:  z.array(z.string()).optional().describe('A következő nap fő fókuszai (max 3) — a záró futásnál'),
-      facts:       z.record(z.string(), z.unknown()).optional().describe('A get_daily_facts pillanatképe, ha el akarod tárolni a naplóval'),
+      facts:       z.string().optional().describe('A get_daily_facts pillanatképe JSON-SZÖVEGKÉNT (JSON.stringify), ha el akarod tárolni a naplóval. Sima szöveg is lehet.'),
       checkpointLabel: z.string().optional().describe('Ennek a futásnak a neve, pl. "12:00 állapotmentés"'),
       checkpointNote:  z.string().optional().describe('Rövid megjegyzés a futásról'),
       closeDay:    z.boolean().optional().describe('true = a nap lezárása (a 20:30-as futásnál)'),
     },
     async (i) => {
-      if (i.day && !isValidDay(i.day)) {
-        return { content: [{ type: 'text', text: `Érvénytelen dátum: "${i.day}". Formátum: YYYY-MM-DD` }] }
-      }
-      const journal = await saveJournal({
-        day:           i.day,
-        narrative:     i.narrative,
-        narrativeMode: i.narrativeMode,
-        emailDigest:   i.emailDigest as EmailDigestItem[] | undefined,
-        emailSource:   i.emailSource,
-        priorities:    i.priorities,
-        facts:         i.facts,
-        checkpoint:    i.checkpointLabel ? { label: i.checkpointLabel, note: i.checkpointNote } : undefined,
-        closeDay:      i.closeDay,
-      })
-      const digest = (journal.emailDigest as unknown[]).length
-      const marks = (journal.checkpoints as unknown[]).length
-      const state = journal.closedAt ? 'LEZÁRVA' : 'nyitott'
-      return {
-        content: [{
-          type: 'text',
-          text: `Napló mentve — ${i.day ?? localDay()} (${state})\n`
-              + `Mentések száma: ${marks} | Levélkivonatok: ${digest}\n`
-              + `Következő futásnál használd: since = "${journal.lastSavedAt?.toISOString()}"`,
-        }],
+      try {
+        if (i.day && !isValidDay(i.day)) {
+          return { content: [{ type: 'text', text: `Érvénytelen dátum: "${i.day}". Formátum: YYYY-MM-DD` }], isError: true }
+        }
+        // A facts JSON-szövegként érkezik; ha érvényes JSON, objektumként tároljuk,
+        // különben nyers szövegként. Így a szabad formájú objektum-paraméter már
+        // nem akasztja meg a connector hívás-formátumát.
+        let facts: unknown = undefined
+        if (i.facts !== undefined && i.facts !== '') {
+          try { facts = JSON.parse(i.facts) } catch { facts = i.facts }
+        }
+        const journal = await saveJournal({
+          day:           i.day,
+          narrative:     i.narrative,
+          narrativeMode: i.narrativeMode,
+          emailDigest:   i.emailDigest as EmailDigestItem[] | undefined,
+          emailSource:   i.emailSource,
+          priorities:    i.priorities,
+          facts,
+          checkpoint:    i.checkpointLabel ? { label: i.checkpointLabel, note: i.checkpointNote } : undefined,
+          closeDay:      i.closeDay,
+        })
+        const digest = (journal.emailDigest as unknown[]).length
+        const marks = (journal.checkpoints as unknown[]).length
+        const state = journal.closedAt ? 'LEZÁRVA' : 'nyitott'
+        return {
+          content: [{
+            type: 'text',
+            text: `Napló mentve — ${i.day ?? localDay()} (${state})\n`
+                + `Mentések száma: ${marks} | Levélkivonatok: ${digest}\n`
+                + `Következő futásnál használd: since = "${journal.lastSavedAt?.toISOString()}"`,
+          }],
+        }
+      } catch (e) {
+        // A valódi hibát adjuk vissza, ne "blokkolva" legyen belőle.
+        return { content: [{ type: 'text', text: `A napló mentése nem sikerült: ${e instanceof Error ? e.message : String(e)}` }], isError: true }
       }
     }
   )
