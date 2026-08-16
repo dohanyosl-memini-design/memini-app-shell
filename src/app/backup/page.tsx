@@ -32,7 +32,14 @@ type RestoreResult = {
   total: number
 }
 
-type PinAction = 'download' | 'restore'
+type PinAction = 'download' | 'restore' | 'probe'
+
+/** Emberi méret: 1234567 → „1,2 MB”. */
+function humanSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} kB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
 
 export default function BackupPage() {
   const [lastBackup, setLastBackup] = useState<string | null>(null)
@@ -45,6 +52,8 @@ export default function BackupPage() {
 
   // Download state
   const [downloading, setDownloading] = useState(false)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
+  const [probeResult, setProbeResult] = useState<{ bytes: number; total: number } | null>(null)
 
   // Restore state
   const [restoreFile, setRestoreFile] = useState<File | null>(null)
@@ -77,34 +86,53 @@ export default function BackupPage() {
     setPinError(null)
     if (pinAction === 'download') {
       await executeDownload(pin)
+    } else if (pinAction === 'probe') {
+      await executeProbe(pin)
     } else if (pinAction === 'restore') {
       await executeRestore(pin)
     }
   }
 
+  // Közös hívás a /api/backup felé; a hibát megkülönböztethető szöveggé alakítja.
+  async function callBackup(pin: string, probe: boolean): Promise<Response> {
+    return fetch('/api/backup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin, probe }),
+      // A teljes export tovább tarthat, mint egy próba; adjunk neki bőven időt.
+      signal: AbortSignal.timeout(probe ? 60000 : 120000),
+    })
+  }
+
+  function describeError(err: unknown): string {
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      return 'Időtúllépés — az export túl sokáig tartott. Próbáld a „Méret ellenőrzése” gombot, vagy használd a Neon mentést.'
+    }
+    if (err instanceof Error) return err.message
+    return 'Ismeretlen hiba.'
+  }
+
   async function executeDownload(pin: string) {
     setDownloading(true)
+    setDownloadError(null)
     try {
-      const res = await fetch('/api/backup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin }),
-        signal: AbortSignal.timeout(55000),
-      })
-      const data = await res.json()
+      const res = await callBackup(pin, false)
       if (!res.ok) {
-        setPinError(data.error ?? 'Hiba történt.')
-        setPinLoading(false)
-        setDownloading(false)
-        return
+        // A szerver hibái JSON-ban jönnek; ne dobjuk el a valódi okot.
+        let msg = `Szerverhiba (${res.status}).`
+        try { const d = await res.json(); if (d?.error) msg = d.error } catch { /* nem JSON */ }
+        if (res.status === 401 || res.status === 503) {
+          setPinError(msg); setPinLoading(false); setDownloading(false); return
+        }
+        setDownloadError(msg); closePin(); setDownloading(false); return
       }
 
-      setCounts(data.counts)
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      // A választ közvetlenül blobként mentjük — nincs kliensoldali újra-stringify.
+      const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `memini-backup-${format(new Date(), 'yyyy-MM-dd')}.json`
+      a.download = `memini-backup-${format(new Date(), 'yyyy-MM-dd-HHmm')}.json`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -114,8 +142,35 @@ export default function BackupPage() {
       localStorage.setItem('lastBackup', ts)
       setLastBackup(ts)
       closePin()
-    } catch {
-      setPinError('Hálózati hiba. Próbáld újra.')
+    } catch (err) {
+      setPinError(describeError(err))
+      setPinLoading(false)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  // Próba mód: csak a darabszámok és a méret jönnek le. Így elkülöníthető, hogy
+  // a letöltés a lekérdezés lassúsága vagy a fájlméret miatt bukik-e.
+  async function executeProbe(pin: string) {
+    setDownloading(true)
+    setDownloadError(null)
+    setProbeResult(null)
+    try {
+      const res = await callBackup(pin, true)
+      const data = await res.json()
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 503) {
+          setPinError(data.error ?? 'Helytelen PIN kód.'); setPinLoading(false); setDownloading(false); return
+        }
+        setDownloadError(data.error ?? 'Hiba történt.'); closePin(); setDownloading(false); return
+      }
+      setCounts(data.counts)
+      const total = Object.values(data.counts as Record<string, number>).reduce((a, b) => a + b, 0)
+      setProbeResult({ bytes: data.bytes, total })
+      closePin()
+    } catch (err) {
+      setPinError(describeError(err))
       setPinLoading(false)
     } finally {
       setDownloading(false)
@@ -199,10 +254,16 @@ export default function BackupPage() {
     <>
       {pinAction && (
         <PinModal
-          title={pinAction === 'download' ? 'Mentés letöltése' : 'Visszaállítás megerősítése'}
+          title={
+            pinAction === 'download' ? 'Mentés letöltése'
+            : pinAction === 'probe' ? 'Méret ellenőrzése'
+            : 'Visszaállítás megerősítése'
+          }
           description={
             pinAction === 'download'
               ? 'Add meg a 6 jegyű PIN kódot a letöltés engedélyezéséhez.'
+              : pinAction === 'probe'
+              ? 'Add meg a PIN kódot. Ez csak a darabszámokat és a méretet kéri le, fájl nélkül.'
               : restoreMode === 'full'
               ? 'Add meg a PIN kódot. Ez törli az összes adatot és visszatölti a backupból!'
               : 'Add meg a PIN kódot a visszaállítás engedélyezéséhez.'
@@ -259,6 +320,31 @@ export default function BackupPage() {
             </div>
           )}
 
+          {downloadError && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
+              <XCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-red-800 text-sm">A letöltés nem sikerült</p>
+                <p className="text-sm text-red-700 mt-1">{downloadError}</p>
+                <p className="text-xs text-red-600 mt-2">
+                  Tipp: a Neon adatbázis-branch (pillanatkép) a legmegbízhatóbb mentés, és nem függ ettől.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {probeResult && (
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3">
+              <CheckCircle size={18} className="text-blue-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-blue-800 text-sm">Az export elérhető és összeáll</p>
+                <p className="text-sm text-blue-700 mt-1">
+                  Összesen {probeResult.total} rekord · a fájl mérete kb. {humanSize(probeResult.bytes)}. Most már letöltheted.
+                </p>
+              </div>
+            </div>
+          )}
+
           <button
             onClick={() => openPin('download')}
             disabled={downloading}
@@ -266,6 +352,15 @@ export default function BackupPage() {
           >
             <Download size={18} />
             {downloading ? 'Exportálás folyamatban...' : 'Mentés letöltése most'}
+          </button>
+
+          <button
+            onClick={() => openPin('probe')}
+            disabled={downloading}
+            className="w-full mt-2 flex items-center justify-center gap-2 px-5 py-2.5 bg-gray-50 text-gray-600 rounded-xl hover:bg-gray-100 transition-colors font-medium disabled:opacity-60 text-sm border border-gray-200"
+          >
+            <Database size={16} />
+            Méret ellenőrzése (letöltés nélkül)
           </button>
         </div>
 
