@@ -115,10 +115,19 @@ export async function exportAllData(): Promise<BackupFile> {
   const data: Record<string, unknown[]> = {}
   const counts: Record<string, number> = {}
 
-  for (const m of models) {
-    const rows = await delegate(prisma, m.name).findMany()
-    data[m.name] = rows
-    counts[m.name] = rows.length
+  // Kötegelt párhuzamosítás: egyenként lekérdezve 50+ tábla × hálózati késleltetés
+  // könnyen 20+ másodperc. Ötösével párhuzamosan ez töredékére csökken, de nem
+  // meríti ki a kapcsolat-készletet (ami sorozatos hibákhoz vezetne).
+  const BATCH = 5
+  for (let i = 0; i < models.length; i += BATCH) {
+    const batch = models.slice(i, i + BATCH)
+    const results = await Promise.all(
+      batch.map(async (m) => ({ name: m.name, rows: await delegate(prisma, m.name).findMany() }))
+    )
+    for (const r of results) {
+      data[r.name] = r.rows
+      counts[r.name] = r.rows.length
+    }
   }
 
   return {
