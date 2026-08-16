@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { format } from 'date-fns'
-import { exportAllData } from '@/lib/backup'
+import { exportAllData, serializeBackup } from '@/lib/backup'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
     // Próba mód: csak a darabszámok és a méret jönnek vissza. Ha ez lefut,
     // de a teljes letöltés nem, akkor a méret a gond, nem a lekérdezés.
-    const json = JSON.stringify(backup)
+    const json = serializeBackup(backup)
     if (probe) {
       return NextResponse.json({
         ok: true,

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
 import { format } from 'date-fns'
 import { Resend } from 'resend'
-import { exportAllData } from '@/lib/backup'
+import { exportAllData, serializeBackup } from '@/lib/backup'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   // hozzáadottak is, automatikusan. A napi mentés így nem tud elcsúszni.
   const backup = await exportAllData()
 
-  const json = JSON.stringify(backup)
+  const json = serializeBackup(backup)
   const today = format(new Date(), 'yyyy-MM-dd')
   const filename = `backups/memini-backup-${today}.json`
 

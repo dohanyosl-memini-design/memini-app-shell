@@ -28,7 +28,7 @@ function delegate(db: any, modelName: string) {
   return db[clientKey(modelName)]
 }
 
-interface FieldMeta { name: string; isDate: boolean }
+interface FieldMeta { name: string; isDate: boolean; isBigInt: boolean }
 interface ModelMeta {
   name: string
   scalarFields: FieldMeta[]
@@ -42,7 +42,7 @@ function buildMeta(): ModelMeta[] {
   return models.map((m) => {
     const scalarFields: FieldMeta[] = m.fields
       .filter((f) => f.kind === 'scalar')
-      .map((f) => ({ name: f.name, isDate: f.type === 'DateTime' }))
+      .map((f) => ({ name: f.name, isDate: f.type === 'DateTime', isBigInt: f.type === 'BigInt' }))
 
     const selfFkFields: string[] = []
     const crossDeps = new Set<string>()
@@ -94,7 +94,12 @@ function coerceRow(row: Record<string, unknown>, fields: FieldMeta[]): Record<st
   for (const f of fields) {
     const v = row[f.name]
     if (v === undefined) continue
-    out[f.name] = f.isDate && v !== null ? new Date(v as string) : v
+    if (v === null) { out[f.name] = null; continue }
+    if (f.isDate) out[f.name] = new Date(v as string)
+    // A BigInt a mentésben szövegként szerepel (a JSON nem ismeri) — itt
+    // alakítjuk vissza, hogy a Prisma megkapja a helyes típust.
+    else if (f.isBigInt) out[f.name] = BigInt(v as string | number)
+    else out[f.name] = v
   }
   return out
 }
@@ -140,6 +145,18 @@ export async function exportAllData(): Promise<BackupFile> {
     counts,
     data,
   }
+}
+
+/**
+ * A mentés JSON-szöveggé alakítása. A JSON nem ismeri a BigInt-et (e-mail
+ * UID-k, fájlméretek), ezért szövegként írjuk ki — a visszaállítás a coerceRow-ban
+ * alakítja vissza. Minden fogyasztó (kézi letöltés, napi cron) EZT használja,
+ * nem a nyers JSON.stringify-t, így a BigInt-hiba egy helyen van megoldva.
+ */
+export function serializeBackup(backup: BackupFile): string {
+  return JSON.stringify(backup, (_key, value) =>
+    typeof value === 'bigint' ? value.toString() : value
+  )
 }
 
 // ─── VISSZAÁLLÍTÁS ───────────────────────────────────────────────────────
