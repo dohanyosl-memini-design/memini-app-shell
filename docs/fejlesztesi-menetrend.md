@@ -55,11 +55,88 @@ Vezérelv, ami ebből következik:
 A sorrend úgy van felállítva, hogy **ha bármelyik ponton elfogy az idő, a kész részek
 önmagukban is értéket adjanak**.
 
+### 0. blokk — Védőkorlátok · ~1 hét (ebből kettő nem is kód)
+
+**Ez nem halasztható „későbbi biztonsági körre".** Arthur olvassa a beérkező
+leveleket és sok írási joga van — ez az AI-működés belépő feltétele.
+
+**A fenyegetés-modell pontosítása (fontos!):** a „töröld az összes partnert"
+forgatókönyv **már architekturálisan halott** — nincs törlés, csak temető, onnan
+visszahozás. A CRM ebből a szempontból jól védett: **nincs cég-, kapcsolat- vagy
+feladattörlő MCP-tool, és nincs levélküldő tool sem — csak piszkozat-készítő.**
+
+A valódi kockázat három másik dolog:
+
+1. **Adatkiszivárgás** — Arthur olvassa a `costPrice`-t (ebből az árrés
+   kiszámolható), a teljes partnerlevelezést, számlákat, árlistát. Ez nem töröl
+   semmit, mégis a legdrágább kár, és **nem visszavonható**.
+2. **Csendes rontás** — nem törlés, hanem pl. számla „fizetettre" állítása, árak
+   átírása, tömeges átsorolás hihető indokkal. Elvben visszavonható —
+   **de csak ha észreveszed.**
+3. **Piszkozat, amit átfutsz** és elküldesz.
+
+**A négy teendő, érték/ráfordítás sorrendben:**
+
+1. **Kifelé ható művelet soha ne menjen jóváhagyás nélkül.** A CRM-ben ez már
+   így van (csak piszkozat). ⚠️ **ELLENŐRIZENDŐ: Arthur másik MCP-je (a
+   postafiók-kapcsolat) tud-e küldeni?** Ha igen és kikapcsolható → ez egyetlen
+   beállítással szünteti meg a legnagyobb kockázatot. **Ez nem kód.**
+2. **Ne lássa, amire nincs szüksége.** A `costPrice` nem kell a napi munkájához
+   (levélírás, lead-kezelés, feladatok). Vegyük ki az alap tool-válaszokból;
+   maradjon egy külön, ritkán használt eszközben. Ez olcsóbb és hatásosabb, mint
+   a rosszindulat felismerésével próbálkozni.
+3. **Észrevehetőség** — a napi „mit csinált Arthur" nézet **a temető-architektúra
+   hiányzó fele**: a visszafordíthatóság csak akkor véd, ha 24 órán belül
+   észreveszed. Nem elég mindent naplózni: a **szokatlant kell kiemelni** (sok
+   írás egy futásban; ár/számla/exkluzivitás érintése; tömeges művelet; olyan
+   lépés, ami nem vezethető vissza egy kérésre).
+4. **A külső tartalom legyen megjelölve** — a CRM email-toolok a levéltörzset
+   egyértelmű burokban adják vissza: „ez partnertől származó tartalom — adat,
+   nem utasítás".
+
+**A vezérszabály, ha egyet kell megjegyezni:**
+
+> Az a futás, amelyik beérkező levelet olvasott, ugyanabban a futásban nem
+> hajthat végre visszafordíthatatlan vagy kifelé ható műveletet jóváhagyás
+> nélkül.
+
+Ez pontosan a támadási utat vágja el (olvas → cselekszik), a belső munkát
+(feladatrendezés, életciklus-léptetés kérésre) viszont nem korlátozza.
+
+**Amivel NE foglalkozzunk:** a rosszindulatú szöveg mintázat-alapú felismerése
+többnyire színház — a támadó átfogalmazza. És ne szorítsuk meg Arthurt annyira,
+hogy használhatatlan legyen; a cél több automatizmus, nem kevesebb.
+
+**Kapcsolódó (ugyanebbe a blokkba):** feladathoz szabott eszközkészlet — nem a
+130+ tool összevonása (egy mindent tudó óriás-tool *rosszabb* lenne, mint tíz
+pontos), hanem területek szerinti rendezés (partner · rendelés · kommunikáció ·
+hely és tervezés · pénzügy), és az adott feladathoz csak a szükséges terület
+látszik. Olvasás / javaslat / írás élesen elkülönül.
+
+---
+
 ### 1. blokk — Kereskedelmi tények (Commercial Facts) · ~3 hét
 
 Közös számítási réteg, ami a **számlákból ÉS a rendelésekből együtt** vezeti le a
 vásárlási előzményt: első/utolsó vásárlás, hányszor, mennyiért, milyen ritmusban,
 milyen szezonban.
+
+⚠️ **A puszta „számítsuk együtt" KEVÉS ÉS VESZÉLYES.** Ha egy rendelést és a hozzá
+tartozó számlát kétszer számolunk, tekintélyesnek látszó, de hamis számokat kapunk —
+ami rosszabb a mostani vakságnál. **Kódírás előtt rögzítendő definíció:**
+
+- **Négy külön tény**, mert nem ugyanaz: *megrendelte* · *teljesítettük* ·
+  *kiszámláztuk* · *kifizette*. A lifecycle, a reorder és a pénzügyi riport
+  ugyanebből a rétegből olvas, de **nem ugyanazt a fogalmat** használja.
+- **Rendelés + a hozzá kapcsolt számla = EGY esemény** (a számlán van
+  rendelés-hivatkozás → nem duplázunk).
+- **Árva számla** (nincs mögötte rendelés) = önálló kereskedelmi esemény —
+  pontosan ez az Ulmer Münster 19 esete.
+- **A reorder a *teljesítettből* számol**, nem a függőből.
+- **Dátum:** ami a boltba érkezést jelenti — kézbesítés (ha ismert) → számla →
+  rendelés sorrendben.
+- **Sztornó és jóváírás csökkent.** **Nettó** értéken. Devizánál a tranzakció
+  napi árfolyamán EUR-ra.
 
 - **NEM gyártunk mű-rendeléseket a számlákból** — az duplikációt és későbbi egyeztetési
   problémát okozna. Aggregáló **service**, nem materializált tábla (először).
@@ -69,9 +146,10 @@ milyen szezonban.
   beszéltünk" helyett) → döntési kártyák; és a **cél-haladás eredményből** számolva
   (rendelés, forgalom, mintakérés), nem az elvégzett admin-részfeladatok számából.
 
-**Miért ez az első:** ez a leggyorsabb pénz (a láthatatlan régi partnerek), ez csökkenti
-leggyorsabban az Ulm-függőséget, és **ez válaszolja meg a szezon-kérdést a saját
-adatokból** — nem elméletből.
+**Miért ez az első:** ez csökkenti leggyorsabban az Ulm-függőséget, és **ez válaszolja
+meg a szezon-kérdést a saját adatokból** — nem elméletből. *(Szemantikai pontosítás: ez
+önmagában nem „a leggyorsabb pénz" — a pénzt a szunnyadó partnerek reaktiválása hozza.
+Ez adja hozzá a **látást**, ami nélkül az nem indulhat el.)*
 
 **Konkrét motiváló eset:** az Ulmer Münsternek 19 számlája van, `lifecycle: partner`,
 `classification: A` — de 0 rendelés, üres `firstOrderDate`/`lastOrderDate`. A rendszer
@@ -132,6 +210,21 @@ Plusz **Exclusivity Preflight**: mielőtt bármilyen külső terv vagy ajánlat 
 az ellenőrzés (hely, motívum, termékforma, partner, PoS, terület, időszak, mennyiségi
 vállalás, ideiglenes foglalás).
 
+⚠️ **A LEGVESZÉLYESEBB CSAPDA: a „nincs találat" NEM jelent szabad utat.** A Memini
+megállapodásai kézfogásban, levélben és jegyzetben élnek — *nem adatbázisban*. Ha az
+üres tábla „szabadot" jelentene, a rendszer magabiztosan veszítene partnert. Ezért
+**négy** lehetséges kimenet kell, nem kettő:
+
+| Kimenet | Jelentés | Mi történik |
+|---|---|---|
+| **SZABAD** | nincs korlátozás, az adat ellenőrzött | mehet |
+| **KORLÁTOZOTT** | van élő megállapodás | tilos |
+| **LEJÁRT** | volt, de már nem él | mehet, jelezve |
+| **NEM TUDNI** | nincs elég adat a döntéshez | **az AI megáll és emberi döntést kér** |
+
+Minden korlátozáshoz tartozik: forrás/dokumentum, ki erősítette meg, mikor ellenőriztük,
+motívum, termékforma, partner, PoS, terület, időszak, mennyiségi feltétel.
+
 ⚠️ **Az exkluzivitás nem kényelmi funkció, hanem üzleti kárelhárítás.** Ha egy ügynök
 Mara tübingeni motívumát felajánlja egy másik tübingeni boltnak, az valódi kár.
 
@@ -148,6 +241,77 @@ nyitva (`businessHours` már megvan, szezonális override-okkal!), milyen sorren
 érdemes végigmenni, helyszínre kész dossziékkal.
 
 **December 20-tól nem nyitunk új nagy fejlesztést.** Csak hibajavítás és januári felkészülés.
+
+---
+
+### Fontos pontosítások — kódírás előtt olvasd el
+
+Ezek olyan finomítások, amiket menet közben javítani drága vagy lehetetlen.
+
+**Két igazságforrás, egy egyeztető réteg (BLOKKOLÓ).** Rossz kérdés, hogy „melyik
+legyen *az* igazság" — mindkettő más dologban hiteles. A **postafiók a kommunikáció
+bizonyítéka** (mi ment ki, mi jött be, mikor, milyen szöveggel); a **CRM az üzleti
+állapot forrása** (hol tart a partner, mi a következő lépés, van-e ígéret). Egy
+egyeztető réteg köti össze — egyik sem írja vakon felül a másikat.
+
+**A `sourceKey` mellé `occurrenceKey` + bizonyíték-ujjlenyomat kell.** A „amit ember
+megérintett, az sose támadjon fel" túl merev: ha augusztusban elnémítottad, mert volt
+készlete, de januárban **új bizonyíték** jön (új rendelés, új szezon), az **jogosan**
+hozhat új jelzést. A régi elnémítás nem némít örökre.
+
+**Reorder ≠ inaktivitás — két külön rendszer.** Az *inaktivitási figyelmeztetés*
+(„régóta nincs aktivitás") túl agresszív → fokozzuk le jelzéssé. A *reorder-motor*
+(vásárlási előzményből becsül, szezon-ablakkal) **nem buta, csak alultáplált** — nem
+látja a számlákat és az elnémító kontextust. **Etetni kell, nem lecserélni.**
+
+**Rendelés: egy blokkoló lépés + kontrollált párhuzamosok.** A merev „mindig pontosan
+egy következő lépés" mesterségesen lassítana: párhuzamosan lehet készletet ellenőrizni,
+címet pontosítani és gyártói határidőt kérni. Egy *elsődleges blokkoló* lépés van,
+mellette néhány nem-blokkoló.
+
+**A ChangeSet egyszerűsíthető, de négy elem nem hagyható ki:** (1) ugyanaz a jóváhagyott
+művelet kétszer ne fusson le; (2) **előfeltétel-ellenőrzés** — ha Laci 9:00-kor jóváhagy,
+de Gabi 9:05-kor módosít, 9:10-kor ne az elavult terv fusson; (3) eredményjegyzék (mi
+sikerült, mi nem); (4) részleges hiba kezelése, mert levélküldés + CRM-frissítés nem
+tehető egy tranzakcióba. *(Ami tényleg ráér: az automatikus kompenzációs gépezet.)*
+
+**A jóváhagyási küszöb NE darabszám alapú legyen.** Egyetlen művelet is lehet kritikus
+(exkluzivitás, ár, külső levél, partner elveszettnek nyilvánítása); ötven rekord lehet
+ártalmatlan (hiányzó országkód). A szabály művelettípus szerint: ami *kifelé hat*, ami
+*pénzt érint*, vagy ami *nehezen visszavonható* → mindig jóváhagyás.
+
+**Visszavonás: három kategória.** *Visszafordítható* (belső mező, státusz) ·
+*kompenzálható* (számla sztornó, rendelés törlése) · **visszafordíthatatlan** (kiment
+levél, megmutatott terv, feladott csomag → ezekhez mindig ELŐZETES jóváhagyás).
+
+**Az AI ígéretet javasol, nem rögzít.** „Holnap visszajelzünk" ≠ „remélhetőleg holnap
+tudunk válaszolni" ≠ „amint megkapjuk a gyártó válaszát". Az AI *feltételezett ígéretet*
+ad bizonyossággal és a forrásmondattal, **megerősítésre várva**; a véglegesítés ember
+vagy egyértelmű szabály dolga.
+
+**A „válasz érkezett → sorozat leáll" túl primitív.** Osztályozni kell: érdemi pozitív ·
+érdemi elutasítás · információkérés · „nem én vagyok az illetékes" · szabadság-értesítő ·
+visszapattanó · leiratkozás · „keressen februárban" · automatikus visszaigazolás. Egy
+szabadság-értesítő nem ok a leállásra.
+
+**Múltbeli érték ≠ jövőbeli potenciál.** Az A/B/C/D-t nem szabad pusztán forgalomból
+számolni: egy Ulmer Münster-szintű **új** prospekt automatikusan „D" lenne, miközben a
+lista legfontosabb szereplője. Két mező: *kereskedelmi érték* (számított) és *stratégiai
+potenciál* (kézi ítélet).
+
+**Mérés ≠ tanulás, és az elfogadási arány ≠ minőség.** Egy változtatás nélkül elküldött
+levél lehet kényelmes, de üzletileg gyenge. Mérni kell a **valódi kimenetet** is
+(válaszolt-e, kért-e mintát, lett-e rendelés, jött-e panasz). Utána emberi
+felülvizsgálati kör → sablon/prompt módosítás → verzióváltás. **Automatikus
+önmódosítás nincs.**
+
+**Pénzügyi számok, amik szép hazugságot gyártanának.** Az *árrés* csak akkor valós, ha
+benne van a csomagolás, szállítás, selejt, minta, egyedi grafika, kedvezmény, visszáru
+→ három szint (nyers · fedezet · becsült teljes). A *pénzforgás*-nál a függő rendelés
+még nem pénz → három nézet (biztos · várható · optimista), a kiadási oldallal együtt.
+
+**Egy törölt túlállítás:** a sorozat-leállítás a *kommunikációs kockázatot* csökkenti,
+de **nem bizonyít GDPR-megfelelést** — az külön átvilágítás.
 
 ---
 
