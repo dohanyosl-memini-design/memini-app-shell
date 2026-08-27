@@ -39,11 +39,13 @@ const DEFAULT_CARRIERS = [
 
 export async function GET() {
   const existing = await prisma.carrier.findMany({ orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] })
-  const existingNames = new Set(existing.map(c => c.name))
-  const missing = DEFAULT_CARRIERS.filter(c => !existingNames.has(c.name))
 
-  if (missing.length > 0) {
-    await prisma.carrier.createMany({ data: missing })
+  // Csak akkor seedeljük az alapértelmezett hordozókat, ha a tábla teljesen üres
+  // (első indítás). Korábban minden GET névre összevetett a DEFAULT_CARRIERS-szel,
+  // ezért egy hordozó átnevezése vagy törlése után a régi nevű példány újra
+  // létrejött (duplikáció / "nem törölhető" hiba).
+  if (existing.length === 0) {
+    await prisma.carrier.createMany({ data: DEFAULT_CARRIERS })
     return NextResponse.json(
       await prisma.carrier.findMany({ orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] })
     )
