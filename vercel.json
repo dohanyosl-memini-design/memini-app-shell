@@ -1,5 +1,5 @@
 {
-  "buildCommand": "(prisma db push || (sleep 15 && prisma db push) || (sleep 30 && prisma db push)) && next build",
+  "buildCommand": "prisma db execute --schema prisma/schema.prisma --file prisma/maintenance/drop-neon-sample.sql || true; (prisma db push || (sleep 15 && prisma db push) || (sleep 30 && prisma db push)) && next build",
   "crons": [
     { "path": "/api/cron/daily",   "schedule": "0 6 * * *"   },
     { "path": "/api/cron/weekly",  "schedule": "0 6 * * 1"   },
