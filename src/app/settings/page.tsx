@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { KeyRound, CheckCircle2, AlertCircle, Trash2, Plus, Edit2, ChevronUp, ChevronDown, X, Check } from 'lucide-react'
 import EmailSequenceTemplateSection from '@/components/EmailSequenceTemplateSection'
 import AssetCatalogSection from '@/components/AssetCatalogSection'
+import AssetContractTemplateSection from '@/components/AssetContractTemplateSection'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -801,6 +802,9 @@ function EszkozokTab() {
       </p>
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
         <AssetCatalogSection />
+      </div>
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <AssetContractTemplateSection />
       </div>
     </div>
   )

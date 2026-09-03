@@ -1185,3 +1185,16 @@ model AssetEvent {
 
   @@index([placementId, createdAt])
 }
+
+// A német alap-szerződéssablon (Leihvertrag) — EGYETLEN, szerkeszthető rekord,
+// a CommTemplate mintájára. A bodyDe fix szöveg tokenekkel ({{Firmenname}},
+// {{Geräteliste}} stb.); generáláskor a partner adataival töltődik ki. A
+// szerkesztés a JÖVŐBELI szerződésekre hat — a már kiment/aláírt példányok
+// pillanatképként zároltak (AssetPlacement.contractSnapshot).
+model AssetContractTemplate {
+  id        String   @id @default("default") // egyetlen sor, fix id
+  titleDe   String   @default("Leihvertrag")
+  bodyDe    String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
