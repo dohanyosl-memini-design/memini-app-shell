@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, X, Check, Trash2, PackageCheck, PackageOpen, Undo2, AlertTriangle, Bot, History } from 'lucide-react'
+import { Plus, X, Check, Trash2, PackageCheck, PackageOpen, Undo2, AlertTriangle, Bot, History, FileDown } from 'lucide-react'
 import { format } from 'date-fns'
 import { hu } from 'date-fns/locale'
 import {
@@ -20,6 +20,7 @@ interface PItem {
 interface PEvent { id: string; actor: string; action: string; createdAt: string }
 interface Placement {
   id: string; status: string; source: string
+  contractNumber: string | null; contractStatus: string
   issuedAt: string | null; confirmedAt: string | null; closedAt: string | null; notes: string | null
   issuedBy: { id: string; name: string } | null
   closedBy: { id: string; name: string } | null
@@ -159,6 +160,26 @@ function PlacementCard({ p, onChange, draftMode, compact }: { p: Placement; onCh
     await fetch(`/api/asset-placements/${p.id}`, { method: 'DELETE' })
     setBusy(false); onChange()
   }
+  // A szerződés generálása + letöltése egy lépésben. A GET végpont kitölti a
+  // sablont, összerakja a DOCX-et, kiosztja a sorszámot és „generated"-re állítja.
+  async function downloadContract() {
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/asset-placements/${p.id}/contract/docx`)
+      if (!res.ok) { alert('Hiba a szerződés generálásakor.'); return }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const cd = res.headers.get('Content-Disposition') || ''
+      const m = cd.match(/filename="(.+?)"/)
+      a.download = m ? m[1] : 'Leihvertrag.docx'
+      document.body.appendChild(a); a.click(); a.remove()
+      URL.revokeObjectURL(url)
+    } finally {
+      setBusy(false); onChange()
+    }
+  }
 
   return (
     <div className={`bg-white rounded-xl border ${p.status === 'closed_with_loss' ? 'border-red-100' : 'border-gray-100'} shadow-sm overflow-hidden`}>
@@ -170,6 +191,7 @@ function PlacementCard({ p, onChange, draftMode, compact }: { p: Placement; onCh
             </span>
             {p.source === 'agent' && <span className="text-xs bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded flex items-center gap-1"><Bot size={10} />Arthur</span>}
             {p.source === 'migration' && <span className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">Excel-import</span>}
+            {p.contractStatus !== 'none' && p.contractNumber && <span className="text-xs bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">📄 {p.contractNumber}</span>}
             <span className="text-xs text-gray-400">
               {draftMode ? 'előkészítve' : `kiadva: ${fmtDate(p.issuedAt)}`}
               {p.issuedBy && ` · ${p.issuedBy.name}`}
@@ -219,11 +241,14 @@ function PlacementCard({ p, onChange, draftMode, compact }: { p: Placement; onCh
                   <Trash2 size={12} />Elvetem
                 </button>
               </>
-            ) : isOutStatus(p.status) && (
+            ) : isOutStatus(p.status) ? (
               <button onClick={() => setReturning(v => !v)} className="flex items-center gap-1 px-2.5 py-1 border border-gray-200 text-gray-700 text-xs rounded-lg hover:bg-gray-50">
                 <Undo2 size={12} />Visszavétel
               </button>
-            )}
+            ) : null}
+            <button onClick={downloadContract} disabled={busy} className="flex items-center gap-1 px-2.5 py-1 border border-gray-200 text-gray-700 text-xs rounded-lg hover:bg-gray-50 disabled:opacity-50">
+              <FileDown size={12} />{draftMode ? 'Szerződés (előnézet)' : 'Szerződés'}
+            </button>
           </div>
         )}
       </div>
