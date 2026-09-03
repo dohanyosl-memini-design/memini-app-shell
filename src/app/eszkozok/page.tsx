@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
-import { PackageOpen, PackageCheck, AlertTriangle, Bot, FileWarning, Building2, FileDown, Filter } from 'lucide-react'
+import { PackageOpen, PackageCheck, AlertTriangle, Bot, FileWarning, Building2, FileDown, Printer, Filter } from 'lucide-react'
 import { format } from 'date-fns'
 import { hu } from 'date-fns/locale'
 import { PLACEMENT_STATUS_LABEL, isOutStatus, type PlacementStatus } from '@/lib/assetConstants'
@@ -222,9 +222,14 @@ export default function EszkozokPage() {
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         {p.contractNumber && <span className="text-xs text-gray-400 mr-2">{p.contractNumber}</span>}
                         {p.items.length > 0 && (
-                          <button onClick={() => downloadContract(p.id)} className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 text-xs">
-                            <FileDown size={13} />{p.contractStatus === 'none' ? 'Generál' : 'Letölt'}
-                          </button>
+                          <span className="inline-flex items-center gap-2">
+                            <button onClick={() => downloadContract(p.id)} title="Word letöltése" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 text-xs">
+                              <FileDown size={13} />Word
+                            </button>
+                            <button onClick={() => window.open(`/eszkozok/${p.id}/print`, '_blank')} title="Nyomtatás / PDF" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 text-xs">
+                              <Printer size={13} />PDF
+                            </button>
+                          </span>
                         )}
                       </td>
                     </tr>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, X, Check, Trash2, PackageCheck, PackageOpen, Undo2, AlertTriangle, Bot, History, FileDown } from 'lucide-react'
+import { Plus, X, Check, Trash2, PackageCheck, PackageOpen, Undo2, AlertTriangle, Bot, History, FileDown, Printer } from 'lucide-react'
 import { format } from 'date-fns'
 import { hu } from 'date-fns/locale'
 import {
@@ -246,9 +246,14 @@ function PlacementCard({ p, onChange, draftMode, compact }: { p: Placement; onCh
                 <Undo2 size={12} />Visszavétel
               </button>
             ) : null}
-            <button onClick={downloadContract} disabled={busy} className="flex items-center gap-1 px-2.5 py-1 border border-gray-200 text-gray-700 text-xs rounded-lg hover:bg-gray-50 disabled:opacity-50">
-              <FileDown size={12} />{draftMode ? 'Szerződés (előnézet)' : 'Szerződés'}
-            </button>
+            <div className="flex gap-1">
+              <button onClick={downloadContract} disabled={busy} title="Szerződés letöltése Word-ben" className="flex items-center gap-1 px-2 py-1 border border-gray-200 text-gray-700 text-xs rounded-lg hover:bg-gray-50 disabled:opacity-50">
+                <FileDown size={12} />Word
+              </button>
+              <button onClick={() => window.open(`/eszkozok/${p.id}/print`, '_blank')} title="Nyomtatás / Mentés PDF-ként" className="flex items-center gap-1 px-2 py-1 border border-gray-200 text-gray-700 text-xs rounded-lg hover:bg-gray-50">
+                <Printer size={12} />PDF
+              </button>
+            </div>
           </div>
         )}
       </div>
