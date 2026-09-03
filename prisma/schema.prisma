@@ -22,6 +22,9 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   assignedTasks Task[]
+  // Kihelyezett eszközök: ki adta ki / ki vette vissza (ember, sosem Arthur)
+  assetIssued   AssetPlacement[] @relation("AssetIssued")
+  assetClosed   AssetPlacement[] @relation("AssetClosed")
 }
 
 model Contact {
@@ -53,6 +56,7 @@ model Contact {
   emailThreads      EmailThread[]
   emailParticipants EmailParticipant[]
   emailDrafts       EmailDraft[]
+  assetPlacements   AssetPlacement[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 }
@@ -105,6 +109,7 @@ model Company {
   emailThreads      EmailThread[]
   emailParticipants EmailParticipant[]
   emailDrafts       EmailDraft[]
+  assetPlacements   AssetPlacement[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 
@@ -1038,4 +1043,145 @@ model EmailDraft {
   @@index([status])
   @@index([threadId])
   @@index([companyId])
+}
+
+// ─── KIHELYEZETT ESZKÖZÖK ────────────────────────────────────────────────────
+// Partnereknek kiadott fizikai kellékek (állványok, karusszelek, tolltartók) és
+// alkatrészeik nyilvántartása. Teljes terv: docs/kihelyezett-eszkozok.md
+//
+// Alapszabály: a FIZIKAI TÉNYT (átadás, visszavétel) ember rögzíti. Arthur (MCP)
+// olvashat, piszkozatot készíthet és szerződést generálhat, de megerősíteni és
+// visszavételezni nem tud — a megerősítő / visszavevő ember kerül a naplóba.
+// A védelem szerkezeti: az emberhez kötött státusz-átmenetek nem léteznek MCP
+// toolként, és az Arthurnak adott író-műveletek a status mezőt nem írhatják.
+
+// Kellék: egy kiadható eszközfajta a katalógusban (pl. „Nagy álló karusszel").
+// A Beállításokban szerkeszthető; kivezetés = active:false (SOHA nem törlünk,
+// hogy a rá hivatkozó korábbi kihelyezések és szerződések épek maradjanak).
+model AssetType {
+  id                 String               @id @default(cuid())
+  name               String               // magyar név
+  nameDE             String?              // német név — a szerződés németül megy
+  category           String?              // stand | carousel | penholder | other
+  defaultValue       Float                @default(0) // alapérték €-ban (szerződés + kárszámítás)
+  imageUrl           String?
+  contractAddendumDe String?              @db.Text // kellékspecifikus szerződés-kiegészítés (német)
+  active             Boolean              @default(true) // soft-delete
+  sortOrder          Int                  @default(0)
+  components         AssetComponent[]
+  placementItems     AssetPlacementItem[]
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@index([active])
+}
+
+// Alkatrész: egy kellékhez tartozó rész (pl. „felső tábla", „gyűrűk"), képpel és
+// alapdarabszámmal. Átadáskor alkatrész-szinten pipáljuk, mi megy ténylegesen.
+model AssetComponent {
+  id              String               @id @default(cuid())
+  assetTypeId     String
+  assetType       AssetType            @relation(fields: [assetTypeId], references: [id], onDelete: Cascade)
+  name            String
+  nameDE          String?
+  imageUrl        String?
+  defaultValue    Float                @default(0) // alkatrész-érték €-ban (hiány számítása)
+  defaultQuantity Int                  @default(1)
+  active          Boolean              @default(true) // soft-delete
+  sortOrder       Int                  @default(0)
+  placementItems  AssetPlacementItem[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([assetTypeId])
+}
+
+// Átadás: egy átadási esemény egy partnernél. Az állapot a tételekből számítódik
+// minden visszavételi művelet után (lib/assets deriveStatus), kézzel nem állítjuk.
+// A draft állapot NEM számít bele a „kint van" készletbe — ez a védelem lényege:
+// amit Arthur létrehoz, az addig nem szennyezi a nyilvántartást, amíg ember rá
+// nem bólint (confirmedAt + issuedById).
+model AssetPlacement {
+  id               String               @id @default(cuid())
+  companyId        String
+  company          Company              @relation(fields: [companyId], references: [id])
+  contactId        String?
+  contact          Contact?             @relation(fields: [contactId], references: [id])
+  // draft | out | partially_returned | returned | closed_with_loss | discarded
+  status           String               @default("draft")
+  source           String               @default("human") // human | agent | migration
+  issuedAt         DateTime?            // az átadás napja — csak megerősítéskor íródik
+  issuedById       String?             // KI adta ki — a megerősítő ember, sosem Arthur
+  issuedBy         User?                @relation("AssetIssued", fields: [issuedById], references: [id])
+  confirmedAt      DateTime?           // mikor lett a piszkozatból „kint"
+  closedById       String?
+  closedBy         User?                @relation("AssetClosed", fields: [closedById], references: [id])
+  closedAt         DateTime?
+  notes            String?
+  amendmentOfId    String?             // ha egy korábbi átadás kiegészítése
+  amendmentOf      AssetPlacement?      @relation("AssetAmendment", fields: [amendmentOfId], references: [id])
+  amendments       AssetPlacement[]     @relation("AssetAmendment")
+  // ── Szerződés ──────────────────────────────────────────────────────────────
+  contractNumber   String?              @unique
+  contractStatus   String               @default("none") // none | generated | sent | signed
+  contractSnapshot Json?               // pillanatkép a tételekről a generálás pillanatában
+  contractFileUrl  String?             // generált DOCX (Vercel Blob)
+  signedFileUrl    String?             // a visszakapott, aláírt példány
+  signedAt         DateTime?
+  items            AssetPlacementItem[]
+  events           AssetEvent[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([companyId])
+  @@index([status])
+}
+
+// Tétel: egy sor az átadásban. A kellék-sor a szülő, az alkatrész-sorok a
+// gyerekei (parentItemId önhivatkozás, mint a Goal/MarketingArc fában).
+// A nameSnapshot + unitValueSnapshot a történeti IGAZSÁG: a katalógus későbbi
+// módosítása nem írja át. A returnedQty/lostQty adja a részleges visszavételt,
+// a lostQty * unitValueSnapshot a pénzben kifejezett veszteséget.
+model AssetPlacementItem {
+  id                String               @id @default(cuid())
+  placementId       String
+  placement         AssetPlacement       @relation(fields: [placementId], references: [id], onDelete: Cascade)
+  parentItemId      String?
+  parentItem        AssetPlacementItem?  @relation("AssetItemTree", fields: [parentItemId], references: [id])
+  childItems        AssetPlacementItem[] @relation("AssetItemTree")
+  kind              String               // asset | component
+  assetTypeId       String?
+  assetType         AssetType?           @relation(fields: [assetTypeId], references: [id])
+  componentId       String?
+  component         AssetComponent?      @relation(fields: [componentId], references: [id])
+  nameSnapshot      String               // név-pillanatkép kiadáskor
+  unitValueSnapshot Float                @default(0) // érték-pillanatkép kiadáskor
+  quantity          Int                  @default(1)
+  returnedQty       Int                  @default(0)
+  lostQty           Int                  @default(0)
+  returnedAt        DateTime?
+  sortOrder         Int                  @default(0)
+  createdAt         DateTime             @default(now())
+
+  @@index([placementId])
+  @@index([parentItemId])
+}
+
+// Append-only napló a kihelyezésről — a TaskEvent / ContentEvent mintájára.
+// Ez válaszolja meg örökre a „ki adta ki és mikor" kérdést; Arthur műveletei is
+// ide kerülnek `actor: 'Arthur'` néven, tehát utólag mindig elkülöníthető.
+model AssetEvent {
+  id          String         @id @default(cuid())
+  placementId String
+  placement   AssetPlacement @relation(fields: [placementId], references: [id], onDelete: Cascade)
+  actor       String
+  // created | updated | handover_confirmed | contract_generated | contract_sent
+  // | contract_signed | returned | marked_lost | discarded
+  action      String
+  field       String?
+  before      Json?
+  after       Json?
+  createdAt   DateTime       @default(now())
+
+  @@index([placementId, createdAt])
 }

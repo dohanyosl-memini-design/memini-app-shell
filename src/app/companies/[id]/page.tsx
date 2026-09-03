@@ -20,6 +20,7 @@ import TaskForm from '@/components/TaskForm'
 import InvoicePreview from '@/components/InvoicePreview'
 import MemoryTab from '@/components/MemoryTab'
 import TemplatesTab from '@/components/TemplatesTab'
+import AssetsTab from '@/components/AssetsTab'
 import CompanyEmails from '@/components/email/CompanyEmails'
 import { DEAL_STAGE_LABELS } from '@/lib/dealStages'
 
@@ -292,7 +293,7 @@ export default function CompanyDetailPage() {
   const [editActivity, setEditActivity] = useState<Activity | null>(null)
   const [showNewContactModal, setShowNewContactModal] = useState(false)
   const [showNewTaskModal, setShowNewTaskModal] = useState(false)
-  const [activeTab, setActiveTab] = useState<'timeline' | 'levelezes' | 'contacts' | 'tasks' | 'memory' | 'templates' | 'deals' | 'quotes' | 'orders' | 'invoices'>('timeline')
+  const [activeTab, setActiveTab] = useState<'timeline' | 'levelezes' | 'contacts' | 'tasks' | 'memory' | 'templates' | 'deals' | 'quotes' | 'orders' | 'invoices' | 'assets'>('timeline')
   const [previewInvoiceFull, setPreviewInvoiceFull] = useState<null | Record<string, unknown>>(null)
   const [previewOrderData, setPreviewOrderData] = useState<null | Record<string, unknown>>(null)
   const [autoTaskCreated, setAutoTaskCreated] = useState(false)
@@ -594,6 +595,7 @@ export default function CompanyDetailPage() {
               { key: 'quotes', label: 'Ajánlatok', count: company.quotes.length },
               { key: 'orders', label: 'Rendelések', count: company.orders.length },
               { key: 'invoices', label: 'Számlák', count: company.invoices.length },
+              { key: 'assets', label: 'Eszközök', count: 0 },
             ] as const).map(({ key, label, count }) => (
               <button
                 key={key}
@@ -800,6 +802,14 @@ export default function CompanyDetailPage() {
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
               <h2 className="font-semibold text-gray-900 mb-4">Memória</h2>
               <MemoryTab companyId={id} />
+            </div>
+          )}
+
+          {/* Kihelyezett eszközök */}
+          {activeTab === 'assets' && (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+              <h2 className="font-semibold text-gray-900 mb-4">Kihelyezett eszközök</h2>
+              <AssetsTab companyId={id} />
             </div>
           )}
 

@@ -59,9 +59,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 // rendelés-előzményből vezetjük le.
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   let reason = ''
+  let forceArchive = false
   try {
     const body = await request.json()
     reason = (body?.reason || '').trim()
+    forceArchive = !!body?.forceArchive
   } catch {
     // üres/hiányzó body — a lifecycle réteg úgyis elutasítja indok nélkül
   }
@@ -71,6 +73,22 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     select: { firstOrderDate: true, lifecycle: true },
   })
   if (!company) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // 4. alapszabály: kint lévő eszközzel partnert nem archiválunk csendben. A
+  // temetőbe rakás nem tüntetheti el, hogy fizikailag még nálunk van kint eszköz.
+  // Tudatos felülírással (forceArchive) átléphető, de alapból tiltunk.
+  if (!forceArchive) {
+    const outPlacements = await prisma.assetPlacement.count({
+      where: { companyId: params.id, status: { in: ['out', 'partially_returned'] } },
+    })
+    if (outPlacements > 0) {
+      return NextResponse.json({
+        error: `Ennél a partnernél még ${outPlacements} kihelyezés van kint. Előbb vedd vissza az eszközöket, vagy erősítsd meg az archiválást.`,
+        code: 'assets_out',
+        outPlacements,
+      }, { status: 409 })
+    }
+  }
 
   // Volt-e valaha rendelés → elvesztett partner, különben elvesztett lead.
   const wasPartner = !!company.firstOrderDate || company.lifecycle === 'partner' || company.lifecycle === 'inactive'

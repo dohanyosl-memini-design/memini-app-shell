@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { KeyRound, CheckCircle2, AlertCircle, Trash2, Plus, Edit2, ChevronUp, ChevronDown, X, Check } from 'lucide-react'
 import EmailSequenceTemplateSection from '@/components/EmailSequenceTemplateSection'
+import AssetCatalogSection from '@/components/AssetCatalogSection'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -790,9 +791,24 @@ function KommunikacioTab() {
   )
 }
 
+// ─── Eszközök Tab ──────────────────────────────────────────────────────────────
+
+function EszkozokTab() {
+  return (
+    <div className="max-w-3xl space-y-8">
+      <p className="text-sm text-gray-500">
+        A partnereknek kiadható kellékek és alkatrészeik katalógusa. Ezekből választasz átadáskor a partner oldalán.
+      </p>
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <AssetCatalogSection />
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Settings Page ────────────────────────────────────────────────────────
 
-type SettingsTab = 'password' | 'kommunikacio'
+type SettingsTab = 'password' | 'kommunikacio' | 'eszkozok'
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('password')
@@ -805,6 +821,7 @@ export default function SettingsPage() {
         {([
           { key: 'password', label: '🔑 Fiók' },
           { key: 'kommunikacio', label: '✉️ Kommunikáció' },
+          { key: 'eszkozok', label: '📦 Eszközök' },
         ] as const).map(({ key, label }) => (
           <button
             key={key}
@@ -820,6 +837,7 @@ export default function SettingsPage() {
 
       {activeTab === 'password' && <PasswordTab />}
       {activeTab === 'kommunikacio' && <KommunikacioTab />}
+      {activeTab === 'eszkozok' && <EszkozokTab />}
     </div>
   )
 }
