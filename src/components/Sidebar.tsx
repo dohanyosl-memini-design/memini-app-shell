@@ -11,6 +11,7 @@ import {
   ClipboardList, ShoppingCart, LogOut, Euro, Menu, X,
   GitMerge, BookOpen, Calculator, HelpCircle, Shield,
   Sun, Moon, Bot, Factory, RefreshCw, CalendarDays, Megaphone, Mail, Brain,
+  PackageOpen,
 } from 'lucide-react'
 import { useTheme } from '@/components/ThemeProvider'
 
@@ -53,6 +54,7 @@ const navGroups = [
     label: 'Raktár',
     items: [
       { href: '/warehouse', label: 'Termékek & Készlet', icon: Package },
+      { href: '/eszkozok', label: 'Kihelyezett eszközök', icon: PackageOpen },
       { href: '/pricelist', label: 'Ártáblázat', icon: Euro },
     ],
   },
