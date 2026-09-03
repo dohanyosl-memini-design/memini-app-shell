@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, Trash2, Edit2, Check, X, ChevronDown, ChevronRight, Package, RotateCcw } from 'lucide-react'
-import { ASSET_CATEGORIES, ASSET_CATEGORY_LABEL } from '@/lib/assetConstants'
 
 interface AssetComponent {
   id: string
@@ -28,7 +27,7 @@ interface AssetType {
   components: AssetComponent[]
 }
 
-const emptyType = { name: '', nameDE: '', category: 'stand', defaultValue: '', imageUrl: '', contractAddendumDe: '' }
+const emptyType = { name: '', nameDE: '', defaultValue: '', imageUrl: '', contractAddendumDe: '' }
 const emptyComp = { name: '', nameDE: '', defaultValue: '', defaultQuantity: '1', imageUrl: '' }
 
 function euro(n: number) {
@@ -116,10 +115,6 @@ export default function AssetCatalogSection() {
               placeholder="Név (magyar)" className="px-2 py-1.5 border border-gray-200 rounded-lg text-sm" />
             <input value={newType.nameDE} onChange={e => setNewType(n => ({ ...n, nameDE: e.target.value }))}
               placeholder="Név (német) — ez megy a szerződésbe" className="px-2 py-1.5 border border-gray-200 rounded-lg text-sm" />
-            <select value={newType.category} onChange={e => setNewType(n => ({ ...n, category: e.target.value }))}
-              className="px-2 py-1.5 border border-gray-200 rounded-lg text-sm bg-white">
-              {ASSET_CATEGORIES.map(c => <option key={c} value={c}>{ASSET_CATEGORY_LABEL[c]}</option>)}
-            </select>
             <input type="number" step="0.01" value={newType.defaultValue} onChange={e => setNewType(n => ({ ...n, defaultValue: e.target.value }))}
               placeholder="Érték (€)" className="px-2 py-1.5 border border-gray-200 rounded-lg text-sm" />
           </div>
@@ -147,7 +142,6 @@ export default function AssetCatalogSection() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className={`text-sm font-medium ${t.active ? 'text-gray-900' : 'text-gray-400 line-through'}`}>{t.name}</span>
-                  {t.category && <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{ASSET_CATEGORY_LABEL[t.category] ?? t.category}</span>}
                   {!t.active && <span className="text-xs bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded">kivezetve</span>}
                 </div>
                 {t.nameDE && <span className="text-xs text-gray-400">{t.nameDE}</span>}
@@ -156,7 +150,7 @@ export default function AssetCatalogSection() {
               <span className="text-sm text-gray-600 tabular-nums">{euro(t.defaultValue)}</span>
               {t.active ? (
                 <>
-                  <button onClick={() => { setEditId(t.id); setEditData({ name: t.name, nameDE: t.nameDE ?? '', category: t.category ?? 'other', defaultValue: String(t.defaultValue), imageUrl: t.imageUrl ?? '', contractAddendumDe: t.contractAddendumDe ?? '' }); setExpanded(p => new Set(p).add(t.id)) }}
+                  <button onClick={() => { setEditId(t.id); setEditData({ name: t.name, nameDE: t.nameDE ?? '', defaultValue: String(t.defaultValue), imageUrl: t.imageUrl ?? '', contractAddendumDe: t.contractAddendumDe ?? '' }); setExpanded(p => new Set(p).add(t.id)) }}
                     className="text-gray-300 hover:text-blue-500"><Edit2 size={13} /></button>
                   <button onClick={() => setTypeActive(t.id, false)} className="text-gray-300 hover:text-red-500"><Trash2 size={13} /></button>
                 </>
@@ -173,9 +167,6 @@ export default function AssetCatalogSection() {
                     <div className="grid grid-cols-2 gap-2">
                       <input value={editData.name} onChange={e => setEditData(d => ({ ...d, name: e.target.value }))} placeholder="Név (magyar)" className="px-2 py-1.5 border border-gray-200 rounded-lg text-sm" />
                       <input value={editData.nameDE} onChange={e => setEditData(d => ({ ...d, nameDE: e.target.value }))} placeholder="Név (német)" className="px-2 py-1.5 border border-gray-200 rounded-lg text-sm" />
-                      <select value={editData.category} onChange={e => setEditData(d => ({ ...d, category: e.target.value }))} className="px-2 py-1.5 border border-gray-200 rounded-lg text-sm bg-white">
-                        {ASSET_CATEGORIES.map(c => <option key={c} value={c}>{ASSET_CATEGORY_LABEL[c]}</option>)}
-                      </select>
                       <input type="number" step="0.01" value={editData.defaultValue} onChange={e => setEditData(d => ({ ...d, defaultValue: e.target.value }))} placeholder="Érték (€)" className="px-2 py-1.5 border border-gray-200 rounded-lg text-sm" />
                     </div>
                     <input value={editData.imageUrl} onChange={e => setEditData(d => ({ ...d, imageUrl: e.target.value }))} placeholder="Kép URL (opcionális)" className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm" />

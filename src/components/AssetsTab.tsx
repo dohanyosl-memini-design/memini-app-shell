@@ -5,7 +5,7 @@ import { Plus, X, Check, Trash2, PackageCheck, PackageOpen, Undo2, AlertTriangle
 import { format } from 'date-fns'
 import { hu } from 'date-fns/locale'
 import {
-  PLACEMENT_STATUS_LABEL, ASSET_CATEGORY_LABEL, isOutStatus,
+  PLACEMENT_STATUS_LABEL, isOutStatus,
   type PlacementStatus,
 } from '@/lib/assetConstants'
 
@@ -349,7 +349,7 @@ function HandoverBuilder({ catalog, companyId, onDone }: { catalog: CatType[]; c
       <div className="flex items-center gap-2">
         <select value={pick} onChange={e => { if (e.target.value) addAsset(e.target.value) }} className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-sm bg-white">
           <option value="">+ Kellék hozzáadása…</option>
-          {catalog.map(t => <option key={t.id} value={t.id}>{t.name}{t.category ? ` — ${ASSET_CATEGORY_LABEL[t.category] ?? t.category}` : ''}</option>)}
+          {catalog.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
       </div>
       {catalog.length === 0 && <p className="text-xs text-amber-600">Előbb vegyél fel kellékeket a Beállítások → Eszközök fülön.</p>}
