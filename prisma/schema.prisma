@@ -1251,6 +1251,11 @@ model FinancialDocument {
   // Mikor igazolta a SZERVER, hogy a feltöltött fájl SHA-256-ja egyezik a megadottal.
   // Amíg null, a hash csak a hívó (ChatGPT) állítása.
   hashVerifiedAt   DateTime?
+  // Ha az eredeti fájl nincs a rendszerben, de a jóváhagyás mégis megtörtént: miért.
+  originalWaivedAt     DateTime?
+  originalWaivedReason String?
+  // Delegált jóváhagyásnál melyik felhatalmazás alapján történt.
+  approvalGrantId      String?
   source           String  @default("upload") // upload | zip | chatgpt | mcp
 
   // ── Típus ──
@@ -1321,4 +1326,26 @@ model FinancialDocumentEvent {
   createdAt  DateTime          @default(now())
 
   @@index([documentId, createdAt])
+}
+
+// Felhatalmazás: az EMBER (a webes felületen) engedélyezi, hogy az ügynök (MCP) egy
+// importcsomag hibátlan tételeit jóváhagyja. A szerver ellenőrzi — az ügynök NEM
+// hozhat létre ilyet, és egy számlába ágyazott szöveg sem tud „engedélyt kitalálni".
+// Visszavonható (nem törlődik), lejár, összeghatárhoz kötött, és naplózott.
+model ApprovalGrant {
+  id                 String    @id @default(cuid())
+  scope              String    // batch | window (bármely import a lejáratig)
+  batchId            String?   // scope=batch esetén az ImportBatch azonosítója (FK nélkül)
+  createdBy          String    // a bejelentkezett ember, aki engedélyezte
+  expiresAt          DateTime
+  maxGrossCents      Int       @default(200000) // ennél nagyobb tétel csak emberi jóváhagyással
+  allowWaiveOriginal Boolean   @default(false)  // az ügynök indoklással mellőzheti az eredeti PDF-et
+  note               String?
+  usedCount          Int       @default(0)
+  revokedAt          DateTime?
+  revokedBy          String?
+  createdAt          DateTime  @default(now())
+
+  @@index([expiresAt])
+  @@index([batchId])
 }

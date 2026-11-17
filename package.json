@@ -19,7 +19,7 @@
     "email:sync": "tsx scripts/email-sync.ts",
     "email:seed": "tsx scripts/seed-emails.ts",
     "test": "tsx --test src/lib/finance/finance.test.ts src/lib/finance/prepare.test.ts",
-    "test:db": "tsx --test --test-concurrency=1 src/lib/finance/documents.integration.test.ts src/lib/finance/review.integration.test.ts"
+    "test:db": "tsx --test --test-concurrency=1 src/lib/finance/documents.integration.test.ts src/lib/finance/review.integration.test.ts src/lib/finance/grants.integration.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.1",

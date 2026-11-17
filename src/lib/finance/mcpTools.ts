@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { DOC_KINDS } from './prepare'
 import type { RawDocInput } from './prepare'
 import { recordDocuments, getDocument, listDocuments, getBatchStatus, listImportErrors } from './documents'
+import { approveDocumentDelegated, approveBatchDelegated, listGrants } from './grants'
+import { correctDocument, type Patch } from './review'
 
 const ACTOR = 'Arthur'
 
@@ -16,8 +18,10 @@ const fail = (what: string, e: unknown) =>
 
 /**
  * Pénzügyi dokumentumtár MCP-eszközei. A jóváhagyás/rögzítés SZÁNDÉKOSAN nincs
- * köztük: az ügynök importál és olvas, a jóváhagyás a webes felületen, emberi
- * jogosultsággal történik — így a saját importját nem hagyhatja jóvá.
+ * köztük: az ügynök importál és olvas. Jóváhagyni CSAK az ember által a webes
+ * felületen létrehozott, lejáró, összeghatáros felhatalmazás keretében tud — a
+ * felhatalmazás létrehozására szándékosan NINCS MCP-eszköz, így egy számlába
+ * ágyazott szöveg sem tud engedélyt kitalálni.
  */
 export function registerFinanceTools(server: McpServer) {
   server.tool(
@@ -109,6 +113,79 @@ export function registerFinanceTools(server: McpServer) {
         const s = await getBatchStatus(batch_id_or_sha256)
         return s ? text(s) : text({ status: 'failed', error: 'Nincs ilyen köteg.' }, true)
       } catch (e) { return fail('A státusz lekérdezése nem sikerült', e) }
+    },
+  )
+
+  server.tool(
+    'list_approval_grants',
+    'Az érvényes felhatalmazások listája: melyik csomagra / időszakra, mekkora összeghatárig, meddig hagyhatsz jóvá, és mellőzheted-e az eredeti PDF-et. A felhatalmazást a CRM-ben az emberi felhasználó adja meg; te nem hozhatod létre, és nem is kérheted a chatben.',
+    {},
+    async () => {
+      try {
+        const grants = await listGrants({ activeOnly: true })
+        return text({
+          count: grants.length,
+          grants: grants.map((g) => ({
+            id: g.id, scope: g.scope, batchId: g.batchId, grantedBy: g.createdBy, expiresAt: g.expiresAt,
+            maxGross: g.maxGrossCents / 100, mayWaiveOriginalPdf: g.allowWaiveOriginal, usedCount: g.usedCount, note: g.note,
+          })),
+        })
+      } catch (e) { return fail('A lekérdezés nem sikerült', e) }
+    },
+  )
+
+  server.tool(
+    'approve_financial_document',
+    'Egy dokumentum jóváhagyása az ember által adott felhatalmazás alapján. Csak akkor megy át, ha van érvényes felhatalmazás (list_approval_grants), és a tétel hibátlan: nincs rajta jelzés, nincs duplikáció-gyanú, bejövő/kimenő számla vagy nyugta, az összeg a határ alatt van, és TE nem javítottad. Ami nem felel meg, az emberi döntésre marad (left_for_human) — ezt add vissza a felhasználónak, ne kerüld meg. Ha az eredeti PDF nincs feltöltve, csak engedélyezett felhatalmazásnál és indoklással (waive_original_reason, legalább 10 karakter) hagyható jóvá. A jóváhagyás nem állítja, hogy a számla ki van fizetve, és nem ír át adatot.',
+    {
+      document_id: z.string(),
+      waive_original_reason: z.string().optional().describe('Miért nem kell az eredeti PDF a rendszerben (pl. "már lekönyvelt csomag, az eredeti a könyvelőnél van"). Csak ha a felhatalmazás engedi.'),
+    },
+    async ({ document_id, waive_original_reason }) => {
+      try {
+        const r = await approveDocumentDelegated(document_id, { actor: ACTOR, waiveReason: waive_original_reason })
+        return text(r, !r.ok)
+      } catch (e) { return fail('A jóváhagyás nem sikerült', e) }
+    },
+  )
+
+  server.tool(
+    'approve_financial_batch',
+    'Egy importcsomag minden "needs_review" tételének jóváhagyási kísérlete az ember által adott felhatalmazás alapján. Tételenként adja vissza az eredményt: approved / left_for_human / error, az indokkal. A hibás, gyanús, túl nagy összegű, vagy általad javított tétel emberi döntésre marad. A válasz summary-ját add vissza a felhasználónak: hány jóváhagyva, hánynál mellőzve az eredeti PDF, hány maradt emberi döntésre és miért.',
+    {
+      batch_id: z.string(),
+      waive_original_reason: z.string().optional().describe('Az eredeti PDF mellőzésének indoklása azokra a tételekre, amelyekhez nincs feltöltött eredeti. Csak ha a felhatalmazás engedi.'),
+    },
+    async ({ batch_id, waive_original_reason }) => {
+      try {
+        const r = await approveBatchDelegated(batch_id, { actor: ACTOR, waiveReason: waive_original_reason })
+        return text(r, !r.ok)
+      } catch (e) { return fail('A jóváhagyás nem sikerült', e) }
+    },
+  )
+
+  server.tool(
+    'update_financial_document',
+    'Egy "needs_review" állapotú dokumentum kinyert adatának javítása vagy pótlása (az eredeti fájl nem módosul, a változás naplózódik, az ellenőrzés újra lefut). FIGYELEM: amit te javítasz, azt nem hagyhatod jóvá — az emberi jóváhagyásra kerül. Csak akkor javíts, ha a dokumentumon láthatóan más áll, mint amit kiolvastál; hiányzó adatot ne találj ki.',
+    {
+      document_id: z.string(),
+      external_number: z.string().optional(), issue_date: z.string().optional().describe('YYYY-MM-DD'),
+      supply_date: z.string().optional(), due_date: z.string().optional(),
+      issuer_name: z.string().optional(), issuer_vat_id: z.string().optional(),
+      recipient_name: z.string().optional(), currency: z.string().optional(),
+      net: z.number().optional(), vat: z.number().optional(), gross: z.number().optional(),
+      related_number: z.string().optional(), kind: z.enum(DOC_KINDS).optional(),
+      clear_fields: z.array(z.enum(['external_number', 'issue_date', 'supply_date', 'due_date', 'issuer_name', 'issuer_vat_id', 'recipient_name', 'currency', 'net', 'vat', 'gross', 'related_number'])).optional().describe('Törlendő mezők'),
+    },
+    async ({ document_id, clear_fields, ...fields }) => {
+      try {
+        const patch: Record<string, string | number | null> = {}
+        for (const [k, v] of Object.entries(fields)) if (v !== undefined) patch[k] = v as string | number
+        for (const k of clear_fields ?? []) patch[k] = null
+        if (Object.keys(patch).length === 0) return text({ status: 'failed', error: 'Nincs megadott módosítás.' }, true)
+        const r = await correctDocument(document_id, patch as Patch, ACTOR)
+        return r.ok ? text({ status: 'success', changed: r.changed, document: r.document, note: 'A javított tétel emberi jóváhagyásra vár.' }) : text({ status: 'failed', code: r.code, error: r.message }, true)
+      } catch (e) { return fail('A javítás nem sikerült', e) }
     },
   )
 

@@ -39,7 +39,12 @@ function expenseAmounts(d: FinancialDocument): { net: number; vat: number; gross
   return null
 }
 
-export async function reviewDocument(id: string, input: ReviewInput, actor: string, db: PrismaClient = prisma): Promise<ReviewResult> {
+export interface Delegation { grantId: string; grantedBy: string }
+
+export async function reviewDocument(
+  id: string, input: ReviewInput, actor: string, db: PrismaClient = prisma, opts: { delegation?: Delegation } = {},
+): Promise<ReviewResult> {
+  const delegation = opts.delegation
   const doc = await db.financialDocument.findUnique({ where: { id } })
   if (!doc) return bad('not_found', 'A dokumentum nem található.')
   if (doc.status !== 'needs_review') {
@@ -95,6 +100,21 @@ export async function reviewDocument(id: string, input: ReviewInput, actor: stri
       if (!amts) missing.push('összegek (legalább a bruttó és a nettó vagy az ÁFA)')
       if (missing.length || !amts) return bad('blocked', `A költség rögzítéséhez hiányzik: ${missing.join(', ')}. Javítsd az adatot a szerkesztésnél.`)
       if (amts.derived) notes.push(amts.derived)
+      // A Könyvelésben már szereplő hasonló költség (pl. korábban kézzel rögzítve) dupla tételt okozna.
+      if (!(input as { confirmDistinct?: boolean }).confirmDistinct) {
+        const vendor = { equals: doc.issuerName as string, mode: 'insensitive' as const }
+        const similar = await db.expense.findMany({
+          where: { OR: [
+            ...(doc.externalNumber ? [{ vendor, reference: doc.externalNumber }] : []),
+            { vendor, date: doc.issueDate as Date, totalAmount: amts.gross / 100 },
+          ] },
+          select: { id: true, date: true, vendor: true, totalAmount: true, reference: true }, take: 3,
+        })
+        if (similar.length) {
+          const list = similar.map((e) => `${e.vendor} ${e.reference ?? ''} ${e.totalAmount} (${e.date.toISOString().slice(0, 10)})`).join('; ')
+          return bad('needs_confirmation', `A Könyvelésben már van hasonló költség: ${list}. Jóváhagyáshoz igazold, hogy különálló tétel, különben dupla tétel keletkezne.`)
+        }
+      }
       expenseData = {
         date: doc.issueDate as Date,
         vendor: doc.issuerName as string,
@@ -111,12 +131,27 @@ export async function reviewDocument(id: string, input: ReviewInput, actor: stri
 
   const result = await db.$transaction(async (tx) => {
     const exp = expenseData ? await tx.expense.create({ data: expenseData }) : null
+    const waived = !doc.hashVerifiedAt
     const u = await tx.financialDocument.update({
       where: { id },
-      data: { status: 'recorded', reviewedBy: actor, reviewedAt: new Date(), reviewNote: note || null, ...(exp ? { expenseId: exp.id } : {}) },
+      data: {
+        status: 'recorded', reviewedAt: new Date(), reviewNote: note || null,
+        reviewedBy: delegation ? `${actor} (delegálta: ${delegation.grantedBy})` : actor,
+        ...(delegation ? { approvalGrantId: delegation.grantId } : {}),
+        ...(waived ? { originalWaivedAt: new Date(), originalWaivedReason: note } : {}),
+        ...(exp ? { expenseId: exp.id } : {}),
+      },
     })
     await tx.financialDocumentEvent.create({
-      data: { documentId: id, actor, action: 'reviewed', detail: asJson({ decision: 'approved', note, overrideNoOriginal: !doc.hashVerifiedAt, confirmedDistinct: !!doc.duplicateClass, expenseId: exp?.id ?? null }) },
+      data: {
+        documentId: id, actor, action: 'reviewed',
+        detail: asJson({
+          decision: 'approved', note, overrideNoOriginal: waived, confirmedDistinct: !!doc.duplicateClass, expenseId: exp?.id ?? null,
+          // Ki kezdeményezte, ki hajtotta végre, milyen felhatalmazás alapján, és miért mellőzhető az eredeti.
+          initiatedBy: delegation?.grantedBy ?? actor, executedBy: actor, grantId: delegation?.grantId ?? null,
+          originalWaivedReason: waived ? note : null,
+        }),
+      },
     })
     return { u, exp }
   })

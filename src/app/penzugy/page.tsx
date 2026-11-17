@@ -189,6 +189,8 @@ export default function FinanceDocumentsPage() {
         )}
       </div>
 
+      <DelegationPanel onChanged={load} />
+
       {/* Fülek */}
       <div className="flex flex-wrap gap-1 mb-3">
         {TABS.map((t) => {
@@ -404,5 +406,84 @@ function DetailModal({ id, onClose, onOpen, onChanged }: { id: string; onClose: 
         </div>
       </div>
     </Modal>
+  )
+}
+
+// ─── Felhatalmazás az ügynöknek ───────────────────────────────────────────
+
+interface Grant { id: string; scope: string; batchId: string | null; createdBy: string; expiresAt: string; maxGrossCents: number; allowWaiveOriginal: boolean; usedCount: number; revokedAt: string | null; active: boolean; note: string | null }
+interface BatchRow { id: string; filename: string; status: string; byStatus: Record<string, number> }
+
+function DelegationPanel({ onChanged }: { onChanged: () => void }) {
+  const [grants, setGrants] = useState<Grant[]>([])
+  const [batches, setBatches] = useState<BatchRow[]>([])
+  const [scope, setScope] = useState('window')
+  const [hours, setHours] = useState('24')
+  const [maxGross, setMaxGross] = useState('2000')
+  const [waive, setWaive] = useState(false)
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const load = useCallback(async () => {
+    const [g, b] = await Promise.all([fetch('/api/finance/grants').then((r) => r.json()).catch(() => ({})), fetch('/api/finance/batches').then((r) => r.json()).catch(() => ({}))])
+    setGrants(Array.isArray(g.grants) ? g.grants : []); setBatches(Array.isArray(b.batches) ? b.batches : [])
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  async function create() {
+    setBusy(true); setMsg(null)
+    const body = { scope: scope === 'window' ? 'window' : 'batch', batchId: scope === 'window' ? null : scope, hours: Number(hours), maxGross: Number(maxGross.replace(',', '.')), allowWaiveOriginal: waive, note }
+    const res = await fetch('/api/finance/grants', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const j = await res.json().catch(() => ({}))
+    setBusy(false)
+    if (!res.ok) { setMsg({ ok: false, text: j.error ?? `Hiba (${res.status})` }); return }
+    setMsg({ ok: true, text: 'Felhatalmazás megadva. Mostantól szólhatsz Arthurnak.' }); setNote(''); load(); onChanged()
+  }
+  async function revoke(id: string) { await fetch(`/api/finance/grants/${id}/revoke`, { method: 'POST' }); load() }
+
+  const active = grants.filter((g) => g.active)
+  const label = (g: Grant) => g.scope === 'window' ? 'Bármely import' : `Csomag: ${batches.find((b) => b.id === g.batchId)?.filename ?? g.batchId}`
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 mb-5">
+      <h2 className="font-semibold text-gray-900">Felhatalmazás Arthurnak (ChatGPT)</h2>
+      <p className="text-sm text-gray-500 mt-1">
+        Ezzel engedélyezed, hogy Arthur a <strong>hibátlan</strong> tételeket helyetted jóváhagyja. A hibás, gyanús, a határt meghaladó, és az általa javított tétel mindig emberi döntésre marad. Az engedélyt csak itt, a CRM-ben adhatod meg; a chatben mondott engedély nem számít.
+      </p>
+      <div className="mt-3 grid grid-cols-1 sm:grid-cols-4 gap-3 text-sm">
+        <label className="block sm:col-span-2"><span className="text-xs text-gray-500">Mire vonatkozik</span>
+          <select value={scope} onChange={(e) => setScope(e.target.value)} className="mt-0.5 w-full px-3 py-1.5 border border-gray-200 rounded-lg">
+            <option value="window">Bármely új import, a lejáratig</option>
+            {batches.map((b) => <option key={b.id} value={b.id}>Csomag: {b.filename} ({b.byStatus.needs_review ?? 0} vár)</option>)}
+          </select></label>
+        <label className="block"><span className="text-xs text-gray-500">Meddig érvényes</span>
+          <select value={hours} onChange={(e) => setHours(e.target.value)} className="mt-0.5 w-full px-3 py-1.5 border border-gray-200 rounded-lg">
+            <option value="1">1 óra</option><option value="24">24 óra</option><option value="72">3 nap</option><option value="168">7 nap</option>
+          </select></label>
+        <label className="block"><span className="text-xs text-gray-500">Összeghatár tételenként (bruttó)</span>
+          <input value={maxGross} onChange={(e) => setMaxGross(e.target.value)} inputMode="decimal" className="mt-0.5 w-full px-3 py-1.5 border border-gray-200 rounded-lg" /></label>
+      </div>
+      <label className="mt-3 flex items-start gap-2 text-sm text-gray-700"><input type="checkbox" checked={waive} onChange={(e) => setWaive(e.target.checked)} className="mt-0.5" />
+        Arthur indoklással mellőzheti az eredeti PDF-et (pl. már lekönyvelt csomag). Az indoklás tételenként naplózódik.</label>
+      <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Megjegyzés (pl. augusztusi könyvelési csomag)" className="mt-3 w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
+      <button onClick={create} disabled={busy} className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-60">Felhatalmazás megadása</button>
+      {msg && <div className={`mt-3 px-3 py-2 rounded-lg text-sm ${msg.ok ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'}`}>{msg.text}</div>}
+
+      {active.length > 0 && (
+        <ul className="mt-4 divide-y divide-gray-100 border border-gray-100 rounded-lg text-sm">
+          {active.map((g) => (
+            <li key={g.id} className="px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="font-medium text-gray-800">{label(g)}</span>
+              <span className="text-gray-500">lejár: {new Date(g.expiresAt).toLocaleString('hu-HU')}</span>
+              <span className="text-gray-500">határ: {(g.maxGrossCents / 100).toLocaleString('hu-HU')} EUR</span>
+              {g.allowWaiveOriginal && <span className="text-amber-700">PDF mellőzhető</span>}
+              <span className="text-gray-400">{g.usedCount} jóváhagyás</span>
+              <button onClick={() => revoke(g.id)} className="ml-auto text-red-600 hover:underline">Visszavonás</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
