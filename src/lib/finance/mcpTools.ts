@@ -87,7 +87,7 @@ export function registerFinanceTools(server: McpServer) {
     'list_financial_documents',
     'Pénzügyi dokumentumok listázása. Szűrhető állapot, típus, irány és köteg szerint. A válasz a teljes találatszámot is megadja.',
     {
-      status: z.enum(['received', 'extracted', 'needs_review', 'recorded', 'duplicate', 'error']).optional(),
+      status: z.enum(['received', 'extracted', 'needs_review', 'recorded', 'duplicate', 'rejected', 'error']).optional(),
       kind: z.enum(DOC_KINDS).optional(),
       direction: z.enum(['outgoing', 'incoming']).optional(),
       batch_id: z.string().optional(),

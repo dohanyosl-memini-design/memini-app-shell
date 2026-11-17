@@ -1248,6 +1248,9 @@ model FinancialDocument {
   mimeType         String?
   sizeBytes        Int     @default(0)
   storageUrl       String? // privát tárolóban lévő eredeti (Vercel Blob)
+  // Mikor igazolta a SZERVER, hogy a feltöltött fájl SHA-256-ja egyezik a megadottal.
+  // Amíg null, a hash csak a hívó (ChatGPT) állítása.
+  hashVerifiedAt   DateTime?
   source           String  @default("upload") // upload | zip | chatgpt | mcp
 
   // ── Típus ──

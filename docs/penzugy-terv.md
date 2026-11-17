@@ -41,12 +41,16 @@ Laci döntése: külön tesztkörnyezet nem kell, a CRM tesztfázisban van (vár
 | Új táblák (ImportBatch, FinancialDocument, FinancialDocumentEvent) | kész |
 | Pénz-kerekítés, összeg-ellenőrzés, duplikáció-osztályozás | kész, tesztelt |
 | Szolgáltatás (`src/lib/finance/documents.ts`) és MCP-eszközök | kész, tesztelt |
-| Webes jóváhagyási felület (ellenőrzési sor) | **következik** |
-| Anyagiasítás: jóváhagyott tételből Expense / Invoice rekord | következik |
-| Az eredeti fájl tárolása (Vercel Blob) és szerver-oldali hash-ellenőrzés | következik; addig a hash a hívó állítása, ezt a válasz `originalFileStored: false` mutatja |
+| Webes jóváhagyási felület: `/penzugy` (ellenőrzési sor, javítás, jóváhagyás, elutasítás) | kész, böngészőben kipróbálva |
+| Jóváhagyás kapui (szerver kényszeríti ki): hibás adat blokkol, duplikátum-gyanúnál külön igazolás, eredeti nélkül csak indokolt kivétel | kész, tesztelt |
+| Anyagiasítás: jóváhagyott bejövő EUR számla/nyugta → Expense a Könyvelésbe | kész, tesztelt |
+| Eredeti fájl feltöltése, szerver-oldali SHA-256, hash-javítás emberi jóváhagyással | kész; helyi tárolóval tesztelve, **a privát Vercel Blob útvonal éles környezetben még nem próbált** |
+| Kimenő számla / jóváírás / sztornó / külföldi pénznem átvezetése a Számlák/Könyvelés táblákba | **nincs**: csak a dokumentumtárban rögzül (külön döntés kell: számlaszám-egyeztetés a CRM-tesztszámokkal) |
 
 MCP-eszközök: `import_financial_batch`, `get_financial_document`, `list_financial_documents`, `get_import_status`, `list_import_errors`.
-A jóváhagyás szándékosan **nincs** MCP-n: az ügynök a saját importját nem hagyhatja jóvá.
+A jóváhagyás, a javítás és az eredeti feltöltése szándékosan **nincs** MCP-n (csak bejelentkezett emberi felhasználó teheti, a naplóban a neve szerepel): az ügynök a saját importját nem hagyhatja jóvá.
+
+Helyi tároló: a `FINANCE_LOCAL_ORIGINALS_DIR` változó csak fejlesztéshez/teszthez való, éles környezetben NE legyen beállítva (az ideiglenes lemezen az eredeti elveszne). Nélküle mindig a privát Blob az alapértelmezett.
 
 Tesztek: `npm test` (tiszta logika, mindig fut) és `npm run test:db` (valódi adatbázison, csak helyi DB-n: `FINANCE_TEST_DATABASE_URL=postgresql://…@localhost:5432/…`; éles adatbázison megtagadja a futást).
 

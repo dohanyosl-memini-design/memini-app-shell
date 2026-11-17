@@ -99,11 +99,11 @@ t('sztornó az eredeti számlára hivatkozva → correction, nem duplikátum', a
 })
 
 t('az eredeti és a CRM-számlaszám eltérhet: az eredeti marad, a CRM-számla táblához nem nyúlunk', async () => {
-  const before = await db.invoice.count()
+  const before = await db.invoice.count(); const beforeExp = await db.expense.count()
   const r = await run([doc('0001', { kind: 'outgoing_invoice', external_number: '2026-08-GABI-17' })])
   const d = await svc.getDocument(r.results[0].documentId as string, db)
   assert.equal(d?.externalNumber, '2026-08-GABI-17'); assert.equal(d?.direction, 'outgoing')
-  assert.equal(await db.invoice.count(), before); assert.equal(await db.expense.count(), 0)
+  assert.equal(await db.invoice.count(), before); assert.equal(await db.expense.count(), beforeExp)
 })
 
 t('azonos adószám+szám+összeg másik fájlból → duplicate; eltérő szám, azonos esemény → same_event', async () => {
