@@ -71,7 +71,7 @@ const str = (v?: string | null): string | null => {
 }
 
 /** Szigorú YYYY-MM-DD; a 2026-02-31-et elutasítja (a Date magától átgörgetné). */
-function parseDay(v: string | undefined, label: string): { value: Date | null; error?: string } {
+export function parseDay(v: string | undefined, label: string): { value: Date | null; error?: string } {
   const s = str(v)
   if (!s) return { value: null }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return { value: null, error: `${label}: érvénytelen dátum „${s}" (YYYY-MM-DD kell)` }
@@ -82,7 +82,7 @@ function parseDay(v: string | undefined, label: string): { value: Date | null; e
   return { value: d }
 }
 
-function parseAmount(v: number | undefined, label: string): { value: number | null; error?: string } {
+export function parseAmount(v: number | undefined, label: string): { value: number | null; error?: string } {
   if (v === undefined || v === null) return { value: null }
   if (typeof v !== 'number' || !Number.isFinite(v)) return { value: null, error: `${label}: érvénytelen összeg` }
   const c = toCents(v)

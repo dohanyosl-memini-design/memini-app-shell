@@ -238,7 +238,7 @@ const iso = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null)
 export function presentDocument(d: FinancialDocument) {
   return {
     id: d.id, batchId: d.batchId, originalFilename: d.originalFilename, sha256: d.sha256,
-    originalFileStored: !!d.storageUrl,
+    originalFileStored: !!d.storageUrl, hashVerifiedAt: d.hashVerifiedAt,
     kind: d.kind, direction: d.direction, status: d.status,
     externalNumber: d.externalNumber, relatedNumber: d.relatedNumber,
     issueDate: iso(d.issueDate), supplyDate: iso(d.supplyDate), dueDate: iso(d.dueDate),

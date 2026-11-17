@@ -11,7 +11,7 @@ import {
   ClipboardList, ShoppingCart, LogOut, Euro, Menu, X,
   GitMerge, BookOpen, Calculator, HelpCircle, Shield,
   Sun, Moon, Bot, Factory, RefreshCw, CalendarDays, Megaphone, Mail, Brain,
-  PackageOpen,
+  PackageOpen, FileCheck,
 } from 'lucide-react'
 import { useTheme } from '@/components/ThemeProvider'
 
@@ -63,6 +63,7 @@ const navGroups = [
     items: [
       { href: '/finance', label: 'Cashflow', icon: Wallet },
       { href: '/bookkeeping', label: 'Könyvelés', icon: Calculator },
+      { href: '/penzugy', label: 'Bizonylatok', icon: FileCheck },
       { href: '/reports', label: 'Riportok', icon: BarChart3 },
       { href: '/kpi', label: 'KPI Monitor', icon: TrendingUp },
       { href: '/currency', label: 'Árfolyam', icon: Euro },
