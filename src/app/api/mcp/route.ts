@@ -36,6 +36,7 @@ import { buildFocus } from '@/lib/focus'
 import { convertQuoteToOrder, nextOrderNumber, nextQuoteNumber } from '@/lib/quoteToOrder'
 import { markQuoteSent } from '@/lib/quoteSend'
 import { priceForQuantity, checkItemsAgainstPriceList, type PriceDeviation } from '@/lib/pricing'
+import { registerFinanceTools } from '@/lib/finance/mcpTools'
 
 export const dynamic = 'force-dynamic'
 
@@ -3795,6 +3796,9 @@ function buildServer() {
       return { content: [{ type: 'text', text: `Összefoglaló mentve: ${report.title} (ID: ${report.id})` }] }
     }
   )
+
+  // ─── PÉNZÜGYI DOKUMENTUMTÁR ──────────────────────────────────────────────
+  registerFinanceTools(server)
 
   return server
 }
