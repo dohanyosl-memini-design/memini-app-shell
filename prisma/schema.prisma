@@ -1198,3 +1198,124 @@ model AssetContractTemplate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PÉNZÜGYI DOKUMENTUMTÁR (docs/penzugy-terv.md)
+//
+// Csak HOZZÁADÁS: a meglévő Invoice/Expense/Transaction táblákhoz nem nyúl, és
+// azok Float mezőit nem alakítja át. Az új táblákban minden összeg EGÉSZ CENT.
+// A kapcsolatok (invoiceId, expenseId, supplierId, companyId) szándékosan sima
+// szöveges azonosítók, FK nélkül — így a meglévő modellek változatlanok maradnak.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Egy feltöltött csomag (ZIP). Az sha256 egyedi: ugyanaz a ZIP kétszer nem hoz
+// létre új tételeket (idempotens import).
+model ImportBatch {
+  id          String              @id @default(cuid())
+  filename    String
+  sha256      String              @unique
+  sizeBytes   Int                 @default(0)
+  source      String              @default("upload") // upload | chatgpt | mcp
+  // received | processing | completed | partial | failed
+  status      String              @default("received")
+  // Elszámolás: minden dokumentum pontosan egy kategóriába esik.
+  totalFiles  Int                 @default(0)
+  recorded    Int                 @default(0) // feldolgozva, rögzítve
+  duplicates  Int                 @default(0)
+  needsReview Int                 @default(0)
+  failed      Int                 @default(0)
+  skipped     Int                 @default(0) // nem támogatott fájltípus
+  actor       String? // ki indította (Arthur / felhasználó)
+  note        String?
+  startedAt   DateTime            @default(now())
+  finishedAt  DateTime?
+  documents   FinancialDocument[]
+
+  @@index([status])
+}
+
+// Egy eredeti bizonylat. Az eredeti fájl SOHA nem módosul; a kinyert adat
+// (sourceData) és a rendszer által számított/következtetett adat (inferredData)
+// külön marad. A dokumentumtípus (kind) és az irány (direction) külön mező.
+model FinancialDocument {
+  id      String       @id @default(cuid())
+  batchId String?
+  batch   ImportBatch? @relation(fields: [batchId], references: [id])
+
+  // ── Eredeti fájl ──
+  originalFilename String
+  sha256           String  @unique
+  mimeType         String?
+  sizeBytes        Int     @default(0)
+  storageUrl       String? // privát tárolóban lévő eredeti (Vercel Blob)
+  source           String  @default("upload") // upload | zip | chatgpt | mcp
+
+  // ── Típus ──
+  // kind: outgoing_invoice | incoming_invoice | credit_note | storno | correction
+  //     | receipt | advance_invoice | final_invoice | bank_statement
+  //     | payment_confirmation | other
+  kind      String  @default("other")
+  direction String? // outgoing | incoming
+
+  // ── Kinyert adat (a dokumentumból, nem kitalált) ──
+  externalNumber String? // az EREDETI számlaszám, nem a CRM-é
+  issueDate      DateTime?
+  supplyDate     DateTime?
+  dueDate        DateTime?
+  issuerName     String?
+  issuerVatId    String?
+  recipientName  String?
+  recipientVatId String?
+  currency       String?
+  netCents       Int?
+  vatCents       Int?
+  grossCents     Int?
+  relatedNumber  String? // sztornó/helyesbítő: az eredeti számla száma
+  sourceData     Json? // a teljes kinyert adat, ahogy a dokumentumból jött
+  inferredData   Json? // amit a rendszer következtetett — külön tartva
+
+  // ── Állapot és ellenőrzés ──
+  // received | extracted | needs_review | recorded | duplicate | error
+  status         String    @default("received")
+  issues         Json? // validációs megjegyzések [{code,severity,message}]
+  // Duplikáció: certain | probable | same_event | correction
+  duplicateClass String?
+  duplicateOfId  String?
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  reviewNote     String?
+
+  // ── Kapcsolódó CRM-rekordok (FK nélkül, szándékosan) ──
+  invoiceId  String?
+  expenseId  String?
+  supplierId String?
+  companyId  String?
+
+  importedBy String?
+  createdAt  DateTime                 @default(now())
+  updatedAt  DateTime                 @updatedAt
+  events     FinancialDocumentEvent[]
+
+  @@index([batchId])
+  @@index([status])
+  @@index([kind, direction])
+  @@index([externalNumber])
+  @@index([issuerVatId])
+  @@index([invoiceId])
+  @@index([expenseId])
+}
+
+// Append-only napló: ki, mikor, mit tett a dokumentummal. Nem módosítható.
+model FinancialDocumentEvent {
+  id         String            @id @default(cuid())
+  documentId String
+  document   FinancialDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  actor      String
+  // received | extracted | validated | flagged | recorded | linked | duplicate
+  // | reviewed | corrected | error
+  action     String
+  detail     Json?
+  createdAt  DateTime          @default(now())
+
+  @@index([documentId, createdAt])
+}
