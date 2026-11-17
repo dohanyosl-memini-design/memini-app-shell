@@ -56,6 +56,48 @@ interface Invoice {
   total: number
   status: string
   date: string
+  billingName?: string | null
+  billingAddress?: string | null
+  billingZip?: string | null
+  billingCity?: string | null
+  billingCountry?: string | null
+}
+
+interface PostalAddress {
+  name?: string | null
+  street?: string | null
+  zip?: string | null
+  city?: string | null
+  country?: string | null
+}
+
+/** Összehasonlításhoz: kisbetű, felesleges szóköz és írásjel nélkül. */
+const normAddr = (s?: string | null) => (s ?? '').toLowerCase().replace(/[\s.,]+/g, ' ').trim()
+
+/**
+ * A számlázási cím csak akkor „más", ha tényleg eltér a postázásitól. Az üres
+ * mezőt nem tekintjük eltérésnek (egy hiányzó ország még nem külön cím).
+ */
+function addressesDiffer(a: PostalAddress, b: PostalAddress): boolean {
+  const pairs: [string, string][] = [
+    [normAddr(a.street), normAddr(b.street)],
+    [normAddr(a.zip), normAddr(b.zip)],
+    [normAddr(a.city), normAddr(b.city)],
+    [normAddr(a.country), normAddr(b.country)],
+  ]
+  return pairs.some(([x, y]) => x && y && x !== y)
+}
+
+function AddressLines({ a }: { a: PostalAddress }) {
+  const cityLine = [a.zip, a.city].filter(Boolean).join(' ')
+  return (
+    <div className="leading-snug">
+      {a.name && <div className="font-medium text-gray-700">{a.name}</div>}
+      {a.street && <div>{a.street}</div>}
+      {cityLine && <div>{cityLine}</div>}
+      {a.country && <div>{a.country}</div>}
+    </div>
+  )
 }
 
 interface Quote {
@@ -91,6 +133,7 @@ interface Company {
   website: string | null
   phone: string | null
   address: string | null
+  zip?: string | null
   city: string | null
   country: string | null
   vatId: string | null
@@ -448,14 +491,45 @@ export default function CompanyDetailPage() {
                   <span className="truncate">{company.website.replace(/^https?:\/\//, '')}</span>
                 </a>
               )}
-              {(company.address || company.city) && (
-                <div className="flex items-start gap-2.5 text-sm text-gray-600">
-                  <div className="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
-                    <MapPin size={13} className="text-gray-500" />
-                  </div>
-                  <span>{[company.address, company.city, company.country].filter(Boolean).join(', ')}</span>
-                </div>
-              )}
+              {(() => {
+                const postal: PostalAddress = {
+                  street: company.address, zip: company.zip, city: company.city, country: company.country,
+                }
+                // A legutóbbi számla számlázási címe — csak ha van benne cím, és eltér a postázásitól.
+                const inv = company.invoices.find((i) => i.billingAddress || i.billingCity)
+                const billing: PostalAddress | null = inv
+                  ? { name: inv.billingName, street: inv.billingAddress, zip: inv.billingZip, city: inv.billingCity, country: inv.billingCountry }
+                  : null
+                const showBilling = !!billing && addressesDiffer(postal, billing)
+                const hasPostal = !!(postal.street || postal.city)
+                if (!hasPostal && !showBilling) return null
+                return (
+                  <>
+                    {hasPostal && (
+                      <div className="flex items-start gap-2.5 text-sm text-gray-600">
+                        <div className="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                          <MapPin size={13} className="text-gray-500" />
+                        </div>
+                        <div>
+                          {showBilling && <div className="text-[11px] uppercase tracking-wide text-gray-400 mb-0.5">Postázási cím</div>}
+                          <AddressLines a={postal} />
+                        </div>
+                      </div>
+                    )}
+                    {showBilling && billing && (
+                      <div className="flex items-start gap-2.5 text-sm text-gray-600">
+                        <div className="w-7 h-7 bg-amber-50 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                          <FileText size={13} className="text-amber-600" />
+                        </div>
+                        <div>
+                          <div className="text-[11px] uppercase tracking-wide text-gray-400 mb-0.5">Számlázási cím</div>
+                          <AddressLines a={billing} />
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
               {company.vatId && (
                 <div className="text-xs text-gray-400 font-mono">MwSt-Nr.: {company.vatId}</div>
               )}
@@ -549,9 +623,22 @@ export default function CompanyDetailPage() {
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">Összesítés</h3>
             <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Kapcsolattartók</span>
-                <span className="font-medium">{company.contacts.length} fő</span>
+              <div className="text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Kapcsolattartók</span>
+                  <span className="font-medium">{company.contacts.length} fő</span>
+                </div>
+                {company.contacts.length > 0 && (
+                  <ul className="mt-1.5 space-y-1">
+                    {company.contacts.map((c) => (
+                      <li key={c.id}>
+                        <Link href={`/contacts/${c.id}`} className="text-blue-600 hover:text-blue-700 hover:underline">
+                          {c.firstName} {c.lastName}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Kommunikáció</span>
