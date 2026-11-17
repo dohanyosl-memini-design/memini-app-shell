@@ -34,6 +34,22 @@ Laci döntése: külön tesztkörnyezet nem kell, a CRM tesztfázisban van (vár
 - **Actor-modell (későbbre):** külön kulcs és név ügynökönként. Most csak Arthur van; a pénzügyi rekordokba a szerző neve (Arthur / webes felhasználó) bekerül. A Gabi-féle GPT bekötésekor jön a teljes modell. A meglévő `MCP_SECRET` változatlanul „Arthur"-ként működik.
 - **Pénzügyi szabályok a szerveren:** nettó + ÁFA = bruttó ellenőrzés, véglegesítés külön jogosultság.
 
+## Állapot
+
+| Szelet | Állapot |
+|---|---|
+| Új táblák (ImportBatch, FinancialDocument, FinancialDocumentEvent) | kész |
+| Pénz-kerekítés, összeg-ellenőrzés, duplikáció-osztályozás | kész, tesztelt |
+| Szolgáltatás (`src/lib/finance/documents.ts`) és MCP-eszközök | kész, tesztelt |
+| Webes jóváhagyási felület (ellenőrzési sor) | **következik** |
+| Anyagiasítás: jóváhagyott tételből Expense / Invoice rekord | következik |
+| Az eredeti fájl tárolása (Vercel Blob) és szerver-oldali hash-ellenőrzés | következik; addig a hash a hívó állítása, ezt a válasz `originalFileStored: false` mutatja |
+
+MCP-eszközök: `import_financial_batch`, `get_financial_document`, `list_financial_documents`, `get_import_status`, `list_import_errors`.
+A jóváhagyás szándékosan **nincs** MCP-n: az ügynök a saját importját nem hagyhatja jóvá.
+
+Tesztek: `npm test` (tiszta logika, mindig fut) és `npm run test:db` (valódi adatbázison, csak helyi DB-n: `FINANCE_TEST_DATABASE_URL=postgresql://…@localhost:5432/…`; éles adatbázison megtagadja a futást).
+
 ## 1. fázis — feltöltési kísérlet
 A két útvonal (A és B) valódi kipróbálása, **Laci végzi ChatGPT-ből**, mert a ChatGPT oldali viselkedést innen nem tudom tesztelni. Eredmény: melyik fájlátadás működik ténylegesen, mekkora méretig, és hova kerül az eredeti fájl.
 Technikai korlát, amivel számolni kell: a Vercel függvény kérés-mérete és futásideje korlátos, nagyobb ZIP-hez közvetlen Blob-feltöltés és aszinkron feldolgozás kell.

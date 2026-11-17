@@ -18,7 +18,8 @@
     "backtest:score": "tsx scripts/backtest/score.ts",
     "email:sync": "tsx scripts/email-sync.ts",
     "email:seed": "tsx scripts/seed-emails.ts",
-    "test": "tsx --test src/lib/finance/finance.test.ts"
+    "test": "tsx --test src/lib/finance/finance.test.ts src/lib/finance/prepare.test.ts",
+    "test:db": "tsx --test src/lib/finance/documents.integration.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.1",
