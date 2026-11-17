@@ -47,8 +47,20 @@ Laci döntése: külön tesztkörnyezet nem kell, a CRM tesztfázisban van (vár
 | Eredeti fájl feltöltése, szerver-oldali SHA-256, hash-javítás emberi jóváhagyással | kész; helyi tárolóval tesztelve, **a privát Vercel Blob útvonal éles környezetben még nem próbált** |
 | Kimenő számla / jóváírás / sztornó / külföldi pénznem átvezetése a Számlák/Könyvelés táblákba | **nincs**: csak a dokumentumtárban rögzül (külön döntés kell: számlaszám-egyeztetés a CRM-tesztszámokkal) |
 
-MCP-eszközök: `import_financial_batch`, `get_financial_document`, `list_financial_documents`, `get_import_status`, `list_import_errors`.
-A jóváhagyás, a javítás és az eredeti feltöltése szándékosan **nincs** MCP-n (csak bejelentkezett emberi felhasználó teheti, a naplóban a neve szerepel): az ügynök a saját importját nem hagyhatja jóvá.
+| Delegált jóváhagyás: az ember a felületen ad lejáró, összeghatáros felhatalmazást; az ügynök csak ezen belül hagyhat jóvá (tétel / csomag) | kész, tesztelt |
+| Az eredeti PDF mellőzése indoklással (csak engedélyezett felhatalmazással), tételenként naplózva | kész, tesztelt |
+| A Könyvelésben már szereplő hasonló költség ellenőrzése jóváhagyás előtt (dupla tétel ellen) | kész, tesztelt |
+
+MCP-eszközök: `import_financial_batch`, `get_financial_document`, `list_financial_documents`, `get_import_status`, `list_import_errors`, `list_approval_grants`, `approve_financial_document`, `approve_financial_batch`, `update_financial_document`.
+
+### Delegált jóváhagyás: szabályok
+- A felhatalmazást **csak bejelentkezett ember** hozhatja létre a CRM-ben (`/penzugy`). **Nincs MCP-eszköz a létrehozására**, és a chatben mondott engedély nem számít: egy számlába ágyazott szöveg így nem tud engedélyt kitalálni.
+- Lejár (legfeljebb 7 nap), összeghatárhoz kötött (alap: 2 000 EUR bruttó/tétel), visszavonható, **nem törlődik**.
+- Az ügynök csak a **hibátlan** tételt hagyhatja jóvá: nincs rajta jelzés, nincs duplikáció-gyanú, típus: bejövő/kimenő számla vagy nyugta (jóváírás, sztornó, helyesbítő, bankkivonat mindig emberi döntés), az összeg a határ alatt van.
+- **Amit az ügynök javított, azt nem hagyhatja jóvá** (javítás és jóváhagyás nem ugyanazon félé).
+- Mindig naplózva: ki kezdeményezte (a felhatalmazó), ki hajtotta végre, mikor, melyik felhatalmazás alapján, és miért mellőzhető az eredeti.
+- A jóváhagyás nem ír át adatot, és nem állít „kifizetve" státuszt.
+- Az eredeti fájl **MCP-n nem tölthető fel** (a bájtok átadása a ChatGPT-ből nem járható); helyette az indokolt mellőzés vagy az emberi feltöltés a `/penzugy` oldalon.
 
 Helyi tároló: a `FINANCE_LOCAL_ORIGINALS_DIR` változó csak fejlesztéshez/teszthez való, éles környezetben NE legyen beállítva (az ideiglenes lemezen az eredeti elveszne). Nélküle mindig a privát Blob az alapértelmezett.
 

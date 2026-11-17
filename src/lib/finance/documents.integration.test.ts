@@ -156,7 +156,10 @@ t('MCP: a pénzügyi eszközök listázva vannak, olvasó/író jelöléssel', a
   for (const n of ['import_financial_batch', 'get_financial_document', 'list_financial_documents', 'get_import_status', 'list_import_errors']) assert.ok(by[n], `hiányzik: ${n}`)
   assert.equal(by.import_financial_batch.annotations.readOnlyHint, false); assert.equal(by.import_financial_batch.annotations.destructiveHint, false)
   assert.equal(by.get_financial_document.annotations.readOnlyHint, true)
-  assert.ok(!tools.some((x) => /approve|verify_financial|finalize/.test(x.name) && /financial/.test(x.name)), 'MCP-n nem lehet jóváhagyni')
+  // Jóváhagyni csak felhatalmazással lehet; felhatalmazást létrehozni/módosítani MCP-n SEM lehet.
+  for (const n of ['approve_financial_document', 'approve_financial_batch', 'update_financial_document', 'list_approval_grants']) assert.ok(by[n], `hiányzik: ${n}`)
+  assert.equal(by.list_approval_grants.annotations.readOnlyHint, true)
+  assert.ok(!tools.some((x) => /grant/.test(x.name) && !/^list_/.test(x.name)), 'felhatalmazást MCP-n nem lehet létrehozni')
 })
 
 t('MCP: teljes folyamat — import, visszaolvasás, ismétlés, hibás tétel jelzése', async () => {
