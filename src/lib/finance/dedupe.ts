@@ -70,6 +70,13 @@ function classifyOne(c: Fingerprint, e: Fingerprint): DuplicateMatch | null {
     return { cls: 'correction', existingId: e.id, reasons: [`az eredeti számlára (${e.externalNumber}) hivatkozik`] }
   }
 
+  // A saját számlaszámot használó jóváírás/sztornó nem ugyanaz a dokumentum,
+  // mint az ugyanilyen számú kimenő/bejövő számla. A kapcsolódást kizárólag
+  // a relatedNumber alapján (fent) állapítjuk meg. Azonos SHA továbbra is duplikáció.
+  if (CORRECTION_KINDS.has(String(c.kind)) !== CORRECTION_KINDS.has(String(e.kind))) {
+    return null
+  }
+
   const issuer = sameIssuer(c, e)
   const cn = normalizeNumber(c.externalNumber), en = normalizeNumber(e.externalNumber)
   const sameCurrency = !!c.currency && !!e.currency && c.currency === e.currency
