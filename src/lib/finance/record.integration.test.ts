@@ -27,7 +27,8 @@ const clean = async () => {
   await db.financialDocumentEvent.deleteMany(); await db.financialDocument.deleteMany(); await db.importBatch.deleteMany(); await db.approvalGrant.deleteMany()
   await db.expense.deleteMany({ where: { OR: [{ notes: { startsWith: 'Importált bizonylat' } }, { vendor: { startsWith: 'TESTLIEF' } }] } })
   await db.invoice.deleteMany({ where: { OR: [{ notes: { startsWith: 'Importált bizonylat' } }, { number: { startsWith: 'TESTNUM' } }] } })
-  await db.company.deleteMany({ where: { name: { startsWith: 'TESTCO' } } })
+  // A teszt adószámait más (pl. kézi próbából maradt) cég se használja, különben az egyezés kétértelmű lenne.
+  await db.company.deleteMany({ where: { OR: [{ name: { startsWith: 'TESTCO' } }, { vatId: { in: ['DE811111111', 'DE 811 111 111', 'DE822222222'] } }] } })
 }
 before(async () => {
   if (!enabled) return
