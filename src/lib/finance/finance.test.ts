@@ -174,3 +174,17 @@ test('dedupe: a saját számozású jóváírás nem ugyanaz, mint egy azonos sz
   assert.equal(classifyDuplicate(credit, [issued]), 'distinct')
   assert.equal(classifyDuplicate({ ...issued, sha256: 'hash-credit' }, [credit]), 'certain')
 })
+
+test('validate: a bankkivonatnak és az egyéb dokumentumnak nem kell összeg; a számlának igen', () => {
+  assert.deepEqual(validateAmounts({ kind: 'bank_statement' }), [])
+  assert.deepEqual(validateAmounts({ kind: 'other' }), [])
+  assert.ok(validateAmounts({ kind: 'incoming_invoice', currency: 'EUR' }).some((i) => i.code === 'AMOUNTS_MISSING'))
+})
+
+test('dedupe: kimenő számlánál a vevő számít — más vevő nem azonos esemény, ugyanaz igen', () => {
+  const base: Fingerprint = { id: 'o1', kind: 'outgoing_invoice', externalNumber: '2026-1', issuerVatId: 'HU1', issuerName: 'Memini', recipientVatId: 'DE111', recipientName: 'A GmbH', issueDate: '2026-08-12', grossCents: 20000, currency: 'EUR' }
+  const other: Fingerprint = { ...base, id: undefined, externalNumber: '2026-2', recipientVatId: 'DE222', recipientName: 'B GmbH' }
+  assert.equal(classifyDuplicate(other, [base]), 'distinct')
+  assert.equal(classifyDuplicate({ ...other, recipientVatId: 'de 111', recipientName: 'A GmbH' }, [base]), 'same_event')
+  assert.equal(classifyDuplicate({ ...other, recipientVatId: null, recipientName: null }, [base]), 'distinct')   // vevő nélkül nem gyanúsítunk
+})

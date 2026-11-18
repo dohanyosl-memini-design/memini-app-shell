@@ -41,7 +41,7 @@ interface UploadResult {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  needs_review: 'Ellenőrzésre vár', recorded: 'Jóváhagyott', duplicate: 'Duplikátum', rejected: 'Elutasított', error: 'Hiba', received: 'Beérkezett',
+  needs_review: 'Ellenőrzésre vár', recorded: 'Rögzítve', duplicate: 'Duplikátum', rejected: 'Elutasított', error: 'Hiba', received: 'Beérkezett',
 }
 const STATUS_COLOR: Record<string, string> = {
   needs_review: 'bg-amber-100 text-amber-700', recorded: 'bg-green-100 text-green-700', duplicate: 'bg-gray-100 text-gray-600',
@@ -57,7 +57,7 @@ const DUP_LABEL: Record<string, string> = {
 }
 const NEEDS_CONFIRM = ['probable', 'same_event', 'correction']
 const TABS: { key: string; label: string }[] = [
-  { key: 'needs_review', label: 'Ellenőrzésre vár' }, { key: 'recorded', label: 'Jóváhagyott' },
+  { key: 'needs_review', label: 'Ellenőrzésre vár' }, { key: 'recorded', label: 'Rögzítve' },
   { key: 'duplicate', label: 'Duplikátum' }, { key: 'rejected', label: 'Elutasított' }, { key: '', label: 'Mind' },
 ]
 
@@ -125,7 +125,7 @@ export default function FinanceDocumentsPage() {
         <FileCheck size={24} className="text-blue-600" />
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Bizonylatok</h1>
-          <p className="text-gray-500 mt-0.5">Az ügynök által importált számlák és bizonylatok ellenőrzése és jóváhagyása</p>
+          <p className="text-gray-500 mt-0.5">Az ügynök által rögzített számlák és bizonylatok. A hibátlanok egyből rögzülnek, itt csak a kivételek várnak rád.</p>
         </div>
       </div>
 
@@ -189,7 +189,10 @@ export default function FinanceDocumentsPage() {
         )}
       </div>
 
-      <DelegationPanel onChanged={load} />
+      <details className="mb-5 group">
+        <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700 select-none">Ritkán kell: felhatalmazás Arthurnak a kivételes tételek jóváhagyására</summary>
+        <div className="mt-3"><DelegationPanel onChanged={load} /></div>
+      </details>
       <BulkReviewPanel onChanged={load} />
 
       {/* Fülek */}

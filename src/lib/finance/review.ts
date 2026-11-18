@@ -10,34 +10,23 @@ import { findDuplicates, type Fingerprint } from './dedupe'
 import { decide } from './decide'
 import { prepareDocument, type RawDocInput, type Direction } from './prepare'
 import { presentDocument } from './documents'
+import { planMaterialization, executePlan } from './materialize'
 
 export const MIN_NOTE = 10
 const NEEDS_CONFIRM = new Set(['probable', 'same_event', 'correction'])
-/** Ezekből lesz Expense (bejövő költség); a többi csak dokumentumként rögzül. */
-const EXPENSE_KINDS = new Set(['incoming_invoice', 'receipt'])
-
 export type ReviewInput =
   | { action: 'approve'; note?: string; confirmDistinct?: boolean; overrideNoOriginal?: boolean }
   | { action: 'reject'; note?: string }
   | { action: 'confirm_duplicate'; note?: string }
 
 export type ReviewResult =
-  | { ok: true; document: ReturnType<typeof presentDocument>; expenseId: string | null; notes: string[] }
+  | { ok: true; document: ReturnType<typeof presentDocument>; expenseId: string | null; invoiceId: string | null; notes: string[] }
   | { ok: false; code: 'not_found' | 'conflict' | 'blocked' | 'needs_confirmation' | 'invalid'; message: string }
 
 const bad = (code: Exclude<ReviewResult, { ok: true }>['code'], message: string): ReviewResult => ({ ok: false, code, message })
 
 const issuesOf = (d: FinancialDocument) => ((d.issues as unknown as Issue[] | null) ?? [])
 const asJson = (v: unknown) => v as Prisma.InputJsonValue
-
-/** Az Expense-hez szükséges három összeg; csak pontos számtannal pótol, találgatás nélkül. */
-function expenseAmounts(d: FinancialDocument): { net: number; vat: number; gross: number; derived: string | null } | null {
-  const { netCents: n, vatCents: v, grossCents: g } = d
-  if (n != null && v != null && g != null) return { net: n, vat: v, gross: g, derived: null }
-  if (n != null && g != null) return { net: n, vat: g - n, gross: g, derived: 'ÁFA = bruttó − nettó (a dokumentumon nem szerepelt külön)' }
-  if (v != null && g != null) return { net: g - v, vat: v, gross: g, derived: 'nettó = bruttó − ÁFA (a dokumentumon nem szerepelt külön)' }
-  return null
-}
 
 export interface Delegation { grantId: string; grantedBy: string }
 
@@ -59,7 +48,7 @@ export async function reviewDocument(
       await tx.financialDocumentEvent.create({ data: { documentId: id, actor, action: 'reviewed', detail: { decision: 'rejected', note } } })
       return u
     })
-    return { ok: true, document: presentDocument(r), expenseId: null, notes: [] }
+    return { ok: true, document: presentDocument(r), expenseId: null, invoiceId: null, notes: [] }
   }
 
   if (input.action === 'confirm_duplicate') {
@@ -69,7 +58,7 @@ export async function reviewDocument(
       await tx.financialDocumentEvent.create({ data: { documentId: id, actor, action: 'reviewed', detail: { decision: 'confirmed_duplicate', of: doc.duplicateOfId, note } } })
       return u
     })
-    return { ok: true, document: presentDocument(r), expenseId: null, notes: [] }
+    return { ok: true, document: presentDocument(r), expenseId: null, invoiceId: null, notes: [] }
   }
 
   // ── Jóváhagyás: a kapuk ──
@@ -86,51 +75,16 @@ export async function reviewDocument(
     if (note.length < MIN_NOTE) return bad('invalid', `Az eredeti nélküli jóváhagyáshoz indok kell (legalább ${MIN_NOTE} karakter).`)
   }
 
-  // ── Anyagiasítás: bejövő költségből Expense, a meglévő könyvelési oldalra ──
-  const notes: string[] = []
-  const expenseLike = EXPENSE_KINDS.has(doc.kind) && doc.direction !== 'outgoing'
-  let expenseData: Prisma.ExpenseCreateInput | null = null
-
-  if (expenseLike && !doc.expenseId) {
-    if (doc.currency !== 'EUR') {
-      notes.push(`A pénznem ${doc.currency ?? 'ismeretlen'}, nem EUR: a költség nem került át a Könyvelésbe, mert az EUR-érték számítását nem találgatjuk. Rögzítsd kézzel a Könyvelés oldalon.`)
-    } else {
-      const missing = [!doc.issueDate && 'kiállítás dátuma', !doc.issuerName && 'kibocsátó neve'].filter(Boolean)
-      const amts = expenseAmounts(doc)
-      if (!amts) missing.push('összegek (legalább a bruttó és a nettó vagy az ÁFA)')
-      if (missing.length || !amts) return bad('blocked', `A költség rögzítéséhez hiányzik: ${missing.join(', ')}. Javítsd az adatot a szerkesztésnél.`)
-      if (amts.derived) notes.push(amts.derived)
-      // A Könyvelésben már szereplő hasonló költség (pl. korábban kézzel rögzítve) dupla tételt okozna.
-      if (!(input as { confirmDistinct?: boolean }).confirmDistinct) {
-        const vendor = { equals: doc.issuerName as string, mode: 'insensitive' as const }
-        const similar = await db.expense.findMany({
-          where: { OR: [
-            ...(doc.externalNumber ? [{ vendor, reference: doc.externalNumber }] : []),
-            { vendor, date: doc.issueDate as Date, totalAmount: amts.gross / 100 },
-          ] },
-          select: { id: true, date: true, vendor: true, totalAmount: true, reference: true }, take: 3,
-        })
-        if (similar.length) {
-          const list = similar.map((e) => `${e.vendor} ${e.reference ?? ''} ${e.totalAmount} (${e.date.toISOString().slice(0, 10)})`).join('; ')
-          return bad('needs_confirmation', `A Könyvelésben már van hasonló költség: ${list}. Jóváhagyáshoz igazold, hogy különálló tétel, különben dupla tétel keletkezne.`)
-        }
-      }
-      expenseData = {
-        date: doc.issueDate as Date,
-        vendor: doc.issuerName as string,
-        description: `${doc.kind === 'receipt' ? 'Nyugta' : 'Számla'} ${doc.externalNumber ?? doc.originalFilename}`,
-        amount: amts.net / 100, vatAmount: amts.vat / 100, totalAmount: amts.gross / 100,
-        currency: 'EUR', reference: doc.externalNumber, status: 'verified',
-        receiptUrl: doc.storageUrl ? `/api/finance/documents/${doc.id}/original` : null,
-        notes: `Importált bizonylat (${doc.id}), jóváhagyta: ${actor}${amts.derived ? `; ${amts.derived}` : ''}`,
-      }
-    }
-  } else if (!expenseLike) {
-    notes.push('Ez a típus (kimenő számla, jóváírás, sztornó, bankkivonat stb.) csak a dokumentumtárban rögzül, a Könyvelés/Számlák táblákba nem kerül át automatikusan.')
-  }
+  // ── Rögzítés: bejövő költségből Expense, kimenő számlából Invoice (közös réteg) ──
+  const plan = await planMaterialization(doc, db, {
+    confirmDistinct: (input as { confirmDistinct?: boolean }).confirmDistinct === true,
+    who: `jóváhagyta: ${actor}`,
+  })
+  if (plan.type === 'blocked') return bad(plan.code === 'SIMILAR_EXPENSE' ? 'needs_confirmation' : 'blocked', plan.reason)
+  const notes = plan.notes
 
   const result = await db.$transaction(async (tx) => {
-    const exp = expenseData ? await tx.expense.create({ data: expenseData }) : null
+    const made = await executePlan(tx, plan)
     const waived = !doc.hashVerifiedAt
     const u = await tx.financialDocument.update({
       where: { id },
@@ -139,23 +93,25 @@ export async function reviewDocument(
         reviewedBy: delegation ? `${actor} (delegálta: ${delegation.grantedBy})` : actor,
         ...(delegation ? { approvalGrantId: delegation.grantId } : {}),
         ...(waived ? { originalWaivedAt: new Date(), originalWaivedReason: note } : {}),
-        ...(exp ? { expenseId: exp.id } : {}),
+        ...(made.expenseId ? { expenseId: made.expenseId } : {}),
+        ...(made.invoiceId ? { invoiceId: made.invoiceId } : {}),
       },
     })
     await tx.financialDocumentEvent.create({
       data: {
         documentId: id, actor, action: 'reviewed',
         detail: asJson({
-          decision: 'approved', note, overrideNoOriginal: waived, confirmedDistinct: !!doc.duplicateClass, expenseId: exp?.id ?? null,
+          decision: 'approved', note, overrideNoOriginal: waived, confirmedDistinct: !!doc.duplicateClass,
+          expenseId: made.expenseId, invoiceId: made.invoiceId,
           // Ki kezdeményezte, ki hajtotta végre, milyen felhatalmazás alapján, és miért mellőzhető az eredeti.
           initiatedBy: delegation?.grantedBy ?? actor, executedBy: actor, grantId: delegation?.grantId ?? null,
           originalWaivedReason: waived ? note : null,
         }),
       },
     })
-    return { u, exp }
+    return { u, made }
   })
-  return { ok: true, document: presentDocument(result.u), expenseId: result.exp?.id ?? null, notes }
+  return { ok: true, document: presentDocument(result.u), expenseId: result.made.expenseId, invoiceId: result.made.invoiceId, notes }
 }
 
 // ─── Javítás ──────────────────────────────────────────────────────────────
@@ -213,10 +169,10 @@ export async function correctDocument(
   const issues = validateAmounts({ kind: next.kind as DocKind, currency: next.currency, netCents: next.netCents, vatCents: next.vatCents, grossCents: next.grossCents })
   const others = await db.financialDocument.findMany({
     where: { id: { not: id } },
-    select: { id: true, sha256: true, kind: true, externalNumber: true, relatedNumber: true, issuerVatId: true, issuerName: true, issueDate: true, grossCents: true, currency: true },
+    select: { id: true, sha256: true, kind: true, externalNumber: true, relatedNumber: true, issuerVatId: true, issuerName: true, recipientVatId: true, recipientName: true, issueDate: true, grossCents: true, currency: true },
     take: 20000,
   })
-  const fp: Fingerprint = { id, sha256: doc.sha256, kind: next.kind, externalNumber: next.externalNumber, relatedNumber: next.relatedNumber, issuerVatId: next.issuerVatId, issuerName: next.issuerName, issueDate: next.issueDate, grossCents: next.grossCents, currency: next.currency }
+  const fp: Fingerprint = { id, sha256: doc.sha256, kind: next.kind, externalNumber: next.externalNumber, relatedNumber: next.relatedNumber, issuerVatId: next.issuerVatId, issuerName: next.issuerName, recipientVatId: next.recipientVatId, recipientName: next.recipientName, issueDate: next.issueDate, grossCents: next.grossCents, currency: next.currency }
   const decision = decide(issues, findDuplicates(fp, others as Fingerprint[]))
 
   const updated = await db.$transaction(async (tx) => {

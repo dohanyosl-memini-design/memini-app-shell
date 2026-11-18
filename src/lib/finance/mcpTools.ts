@@ -26,13 +26,15 @@ const fail = (what: string, e: unknown) =>
 export function registerFinanceTools(server: McpServer) {
   server.tool(
     'import_financial_batch',
-    'Pénzügyi bizonylatok (számlák, sztornók, jóváírások, nyugták) kötegelt rögzítése a dokumentumtárba. '
-    + 'Egy hívásban legfeljebb 50 dokumentum. IDEMPOTENS: ugyanaz az eredeti fájl (sha256) kétszer nem hoz létre új tételt, '
-    + 'a hívás biztonsággal újraindítható. NEM ír a meglévő számla/kiadás táblákba, és NEM hagy jóvá semmit: minden tétel '
-    + '"needs_review" állapotba kerül, a jóváhagyás emberi, a webes felületen történik. '
+    'Pénzügyi bizonylatok (számlák, sztornók, jóváírások, nyugták) kötegelt rögzítése — jellemzően a könyvelőnek már átadott havi ZIP-ből. '
+    + 'Egy hívásban legfeljebb 50 dokumentum; több hívásra bontható, ugyanazt a batch-et megadva. IDEMPOTENS: ugyanaz az eredeti fájl (sha256) kétszer nem hoz létre új tételt, a hívás biztonsággal újraindítható. '
+    + 'ALAPÉRTELMEZÉS: a hibátlan tétel EGYBŐL RÖGZÜL, külön jóváhagyás nélkül: a bejövő számla/nyugta (EUR) költségként a Könyvelésbe, a kimenő számla a Számlák közé (a vevőhöz kötve, ha a CRM ismeri; különben partner nélkül, jelzéssel). '
+    + 'Ami nem biztos, az NEM rögzül, hanem kivételként emberre vár: összeghiba, hiányzó adat, duplikáció-gyanú, foglalt számlaszám, a Könyvelésben már szereplő hasonló költség. A kivételeket ne kerüld meg, add vissza a felhasználónak. '
+    + 'Ha a csomagot óvatosan, ellenőrzéssel szeretnéd kezelni, adj review_first: true-t: ekkor minden tétel az ellenőrzési sorba kerül. '
     + 'SZABÁLYOK: (1) az sha256 az ORIGINAL fájl bájtjaiból számolt legyen, ne találd ki; (2) a hiányzó adatot HAGYD KI, ne tippeld; '
     + '(3) az összegek tizedes számok ponttal (1097.18, nem "1.097,18"), sztornónál/jóváírásnál NEGATÍV; (4) a dátum YYYY-MM-DD; '
-    + '(5) a válasz tételenként megmondja: created / already_known / rejected / error, és mi vár emberi döntésre — ezt add vissza a felhasználónak.',
+    + '(5) a kimenő számlánál add meg a vevőt (recipient_name, recipient_vat_id) és a számlaszámot; (6) payment_status: "paid"-et CSAK akkor adj, ha maga a dokumentum jelzi (bezahlt, fizetve, fizetési dátum); különben hagyd ki, nyitott marad; '
+    + '(7) a válasz tételenként megmondja: created / already_known / rejected / error, hogy mivé lett (recordedAs: expense / invoice / document_only), a recordedTotals a rögzített összegeket irány és pénznem szerint; ezt vesd össze a csomag tartalmával, és add vissza a felhasználónak a kivételekkel együtt. Ne állíts sikert, ha a status nem success.',
     {
       documents: z.array(z.object({
         original_filename: z.string().describe('Az eredeti fájlnév, ahogy a csomagban volt'),
@@ -55,6 +57,8 @@ export function registerFinanceTools(server: McpServer) {
         gross: z.number().optional().describe('Bruttó végösszeg, tizedes szám'),
         line_nets: z.array(z.number()).optional().describe('A sorok nettó összegei, ha olvashatók (soronkénti ellenőrzéshez)'),
         related_number: z.string().optional().describe('Sztornó/jóváírás/helyesbítő esetén az ELTÉRŐ eredeti számla száma'),
+        payment_status: z.enum(['paid', 'open']).optional().describe('CSAK ha a dokumentum maga jelzi, hogy kifizették. Különben hagyd ki.'),
+        paid_date: z.string().optional().describe('A fizetés dátuma YYYY-MM-DD, ha a dokumentumon szerepel'),
         source_json: z.string().optional().describe('A kinyert adat teljes részletei JSON-SZÖVEGKÉNT (JSON.stringify): tételsorok, fizetési hivatkozás stb.'),
       })).min(1).max(50),
       batch: z.object({
@@ -64,10 +68,11 @@ export function registerFinanceTools(server: McpServer) {
         total_files: z.number().int().optional().describe('Hány fájl van a csomagban ÖSSZESEN — így látszik, ha valami nem került be'),
         final: z.boolean().optional().describe('true = ez a köteg utolsó hívása (lezárja a kötegelt feldolgozást)'),
       }).optional().describe('Ha egy ZIP részeként küldöd, add meg — több hívásra bontva is egy köteg marad'),
+      review_first: z.boolean().optional().describe('true = minden tétel az emberi ellenőrzési sorba kerül, nem rögzül egyből. Alapértelmezett: false.'),
     },
     async (i) => {
       try {
-        const report = await recordDocuments(i.documents as RawDocInput[], { actor: ACTOR, batch: i.batch ?? null })
+        const report = await recordDocuments(i.documents as RawDocInput[], { actor: ACTOR, batch: i.batch ?? null, autoRecord: i.review_first !== true })
         return text(report, report.status === 'failed')
       } catch (e) {
         return fail('Az import nem sikerült', e)

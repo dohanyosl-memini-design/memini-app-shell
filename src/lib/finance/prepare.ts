@@ -33,6 +33,9 @@ export interface RawDocInput {
   line_nets?: number[]
   related_number?: string
   source_json?: string
+  /** Csak ha maga a dokumentum jelzi (pl. „bezahlt", „fizetve", fizetési dátum). Különben ne add meg: nyitott marad. */
+  payment_status?: 'paid' | 'open'
+  paid_date?: string
 }
 
 export interface PreparedDoc {
@@ -128,6 +131,9 @@ export function prepareDocument(raw: RawDocInput): Prepared {
     }
   }
 
+  const paidDay = parseDay(raw.paid_date, 'Fizetés dátuma')
+  if (paidDay.error) errors.push(paidDay.error)
+
   const currency = str(raw.currency)?.toUpperCase() ?? null
   if (currency && !/^[A-Z]{3}$/.test(currency)) errors.push(`Pénznem: érvénytelen kód „${currency}" (3 betűs kód kell, pl. EUR)`)
 
@@ -135,6 +141,13 @@ export function prepareDocument(raw: RawDocInput): Prepared {
   if (raw.source_json !== undefined && raw.source_json !== '') {
     if (raw.source_json.length > MAX_SOURCE_JSON) errors.push('A source_json túl nagy.')
     else { try { sourceData = JSON.parse(raw.source_json) } catch { sourceData = { raw: raw.source_json } } }
+  }
+
+  // A fizetési állapot a dokumentumból kinyert adat: a sourceData-ba kerül, a rögzítés innen olvassa.
+  const paid = raw.payment_status === 'paid' || (raw.payment_status === undefined && paidDay.value != null)
+  if (paid || raw.payment_status === 'open') {
+    const base = sourceData && typeof sourceData === 'object' && !Array.isArray(sourceData) ? (sourceData as Record<string, unknown>) : (sourceData == null ? {} : { raw: sourceData })
+    sourceData = { ...base, payment_status: paid ? 'paid' : 'open', ...(paid && raw.paid_date ? { paid_date: str(raw.paid_date) } : {}) }
   }
 
   if (errors.length) return { ok: false, reason: errors.join('; ') }

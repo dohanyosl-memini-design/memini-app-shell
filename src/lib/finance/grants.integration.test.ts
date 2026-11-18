@@ -30,13 +30,14 @@ before(async () => {
 const clean = async () => {
   await db.financialDocumentEvent.deleteMany(); await db.financialDocument.deleteMany(); await db.importBatch.deleteMany()
   await db.approvalGrant.deleteMany(); await db.expense.deleteMany({ where: { OR: [{ notes: { startsWith: 'Importált bizonylat' } }, { vendor: { startsWith: 'Lieferant' } }] } })
+  await db.invoice.deleteMany({ where: { notes: { startsWith: 'Importált bizonylat' } } })
 }
 beforeEach(async () => { if (enabled) await clean() })
 after(async () => { if (!db) return; await clean(); await db.$disconnect() })
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const imp = async (items: any[], b?: ReturnType<typeof batch>) => {
-  const r = await docs.recordDocuments(items, { actor: 'Arthur', batch: b ?? null, db })
+  const r = await docs.recordDocuments(items, { actor: 'Arthur', batch: b ?? null, db, autoRecord: false })
   const batchId = r.batch?.id as string
   return { ids: r.results.map((x) => x.documentId as string), batchId }
 }

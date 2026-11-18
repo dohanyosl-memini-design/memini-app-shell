@@ -39,7 +39,7 @@ after(async () => { if (db) await db.$disconnect() })
 
 const run = (docs: unknown[], batch?: unknown) =>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  svc.recordDocuments(docs as any, { actor: 'Arthur', batch: batch as any, db })
+  svc.recordDocuments(docs as any, { actor: 'Arthur', batch: batch as any, db, autoRecord: false })
 
 t('egy számla importálása → created, ellenőrzésre vár, visszaolvasható', async () => {
   const r = await run([doc('0001')])

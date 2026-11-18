@@ -20,6 +20,8 @@ export interface AmountInput {
 // de emberi ellenőrzést kap — az adójogi besorolást nem találgatjuk.
 const KNOWN_VAT_RATES = [0, 5, 7, 10, 13, 18, 19, 20, 27]
 const NEGATIVE_KINDS = new Set(['credit_note', 'storno'])
+// Ezeknek a dokumentumoknak nem kell számla-összeg és pénznem (bankkivonat, fizetési visszaigazolás, egyéb).
+const AMOUNTLESS_KINDS = new Set(['bank_statement', 'payment_confirmation', 'other'])
 
 /**
  * Egy dokumentum összegeinek ellenőrzése. A szabály: ami a dokumentumon áll,
@@ -29,6 +31,7 @@ const NEGATIVE_KINDS = new Set(['credit_note', 'storno'])
 export function validateAmounts(input: AmountInput): Issue[] {
   const issues: Issue[] = []
   const { netCents: net, vatCents: vat, grossCents: gross } = input
+  if (AMOUNTLESS_KINDS.has(String(input.kind)) && [net, vat, gross].every((v) => v == null)) return issues
 
   if (!input.currency) {
     issues.push({ code: 'CURRENCY_MISSING', severity: 'error', message: 'Hiányzik a pénznem.' })

@@ -13,6 +13,7 @@ import { validateAmounts, type Issue } from './validate'
 import { findDuplicates, type Fingerprint } from './dedupe'
 import { decide } from './decide'
 import { prepareDocument, type RawDocInput, type PreparedDoc } from './prepare'
+import { planMaterialization, executePlan } from './materialize'
 
 export interface BatchInput {
   filename: string
@@ -36,6 +37,15 @@ export interface DocResult {
   reasons: string[]
   needsHumanDecision: boolean
   error?: string
+  /** Mivé lett a rögzítéskor: Expense (Könyvelés), Invoice (Számlák), vagy csak a dokumentumtárba került. */
+  recordedAs?: 'expense' | 'invoice' | 'document_only'
+  expenseId?: string | null
+  invoiceId?: string | null
+  /** Tudnivalók a rögzítésről (pl. a vevő nem található a CRM-ben, így partner nélkül rögzült). */
+  notes?: string[]
+  gross?: number | null
+  currency?: string | null
+  direction?: string | null
 }
 
 export interface RecordReport {
@@ -47,7 +57,10 @@ export interface RecordReport {
     rejected: number
     error: number
     needs_human_decision: number
+    recorded: number
   }
+  /** A most rögzített tételek összege irány és pénznem szerint — a csomag tartalmával vethető össze. */
+  recordedTotals: Record<string, { count: number; gross: number }>
   batch: BatchState | null
   results: DocResult[]
 }
@@ -62,22 +75,22 @@ export interface BatchState {
 }
 
 const toFingerprint = (d: Pick<FinancialDocument,
-  'id' | 'sha256' | 'kind' | 'externalNumber' | 'relatedNumber' | 'issuerVatId' | 'issuerName' | 'issueDate' | 'grossCents' | 'currency'
+  'id' | 'sha256' | 'kind' | 'externalNumber' | 'relatedNumber' | 'issuerVatId' | 'issuerName' | 'recipientVatId' | 'recipientName' | 'issueDate' | 'grossCents' | 'currency'
 >): Fingerprint => ({
   id: d.id, sha256: d.sha256, kind: d.kind, externalNumber: d.externalNumber, relatedNumber: d.relatedNumber,
-  issuerVatId: d.issuerVatId, issuerName: d.issuerName, issueDate: d.issueDate, grossCents: d.grossCents, currency: d.currency,
+  issuerVatId: d.issuerVatId, issuerName: d.issuerName, recipientVatId: d.recipientVatId, recipientName: d.recipientName, issueDate: d.issueDate, grossCents: d.grossCents, currency: d.currency,
 })
 
 const FP_SELECT = {
   id: true, sha256: true, kind: true, externalNumber: true, relatedNumber: true,
-  issuerVatId: true, issuerName: true, issueDate: true, grossCents: true, currency: true,
+  issuerVatId: true, issuerName: true, recipientVatId: true, recipientName: true, issueDate: true, grossCents: true, currency: true,
 } as const
 
 const asJson = (v: unknown) => v as Prisma.InputJsonValue
 
 export async function recordDocuments(
   raws: RawDocInput[],
-  ctx: { actor: string; batch?: BatchInput | null; db?: PrismaClient },
+  ctx: { actor: string; batch?: BatchInput | null; db?: PrismaClient; /** alapértelmezett: igaz — a hibátlan tétel egyből rögzül; hamis = minden tétel az ellenőrzési sorba kerül */ autoRecord?: boolean },
 ): Promise<RecordReport> {
   const db = ctx.db ?? prisma
   const results: DocResult[] = []
@@ -123,13 +136,15 @@ export async function recordDocuments(
     }
 
     try {
-      const created = await createOne(db, doc, batchId, ctx.actor, known)
+      const created = await createOne(db, doc, batchId, ctx.actor, known, ctx.autoRecord !== false)
       bySha.set(doc.sha256, created.id)
       known.push(toFingerprint(created))
       results.push({
         index, filename, sha256: doc.sha256, outcome: 'created', documentId: created.id, status: created.status,
         duplicateClass: created.duplicateClass, duplicateOfId: created.duplicateOfId,
         issues: (created.issues as unknown as Issue[]) ?? [], reasons: created.reasons, needsHumanDecision: created.needsHumanDecision,
+        recordedAs: created.recordedAs, expenseId: created.expenseId, invoiceId: created.invoiceId, notes: created.notes,
+        gross: created.grossCents == null ? null : created.grossCents / 100, currency: created.currency, direction: created.direction,
       })
     } catch (e) {
       // Párhuzamos beküldés: az egyedi sha256 ütközése nem hiba, hanem „már megvan".
@@ -143,23 +158,24 @@ export async function recordDocuments(
   }
 
   const batch = batchId ? await refreshBatch(db, batchId, ctx.batch?.final === true, results) : null
-  return { status: overall(results), summary: summarize(results), batch, results }
+  return { status: overall(results), summary: summarize(results), recordedTotals: totalsOf(results), batch, results }
 }
 
-async function createOne(db: PrismaClient, d: PreparedDoc, batchId: string | null, actor: string, known: Fingerprint[]) {
-  const issues = validateAmounts({
+async function createOne(db: PrismaClient, d: PreparedDoc, batchId: string | null, actor: string, known: Fingerprint[], autoRecord: boolean) {
+  let issues: Issue[] = validateAmounts({
     kind: d.kind, currency: d.currency, netCents: d.netCents, vatCents: d.vatCents,
     grossCents: d.grossCents, lineNetCents: d.lineNetCents,
   })
   const fp: Fingerprint = {
     sha256: d.sha256, kind: d.kind, externalNumber: d.externalNumber, relatedNumber: d.relatedNumber,
-    issuerVatId: d.issuerVatId, issuerName: d.issuerName, issueDate: d.issueDate, grossCents: d.grossCents, currency: d.currency,
+    issuerVatId: d.issuerVatId, issuerName: d.issuerName, recipientVatId: d.recipientVatId, recipientName: d.recipientName, issueDate: d.issueDate, grossCents: d.grossCents, currency: d.currency,
   }
   const matches = findDuplicates(fp, known)
-  const decision = decide(issues, matches)
+  const decision = decide(issues, matches, autoRecord)
 
-  const row = await db.$transaction(async (tx) => {
-    const r = await tx.financialDocument.create({
+  return db.$transaction(async (tx) => {
+    let status: string = decision.status
+    let r = await tx.financialDocument.create({
       data: {
         batchId, originalFilename: d.originalFilename, sha256: d.sha256, mimeType: d.mimeType, sizeBytes: d.sizeBytes,
         source: d.source, kind: d.kind, direction: d.direction, externalNumber: d.externalNumber,
@@ -167,20 +183,47 @@ async function createOne(db: PrismaClient, d: PreparedDoc, batchId: string | nul
         issuerName: d.issuerName, issuerVatId: d.issuerVatId, recipientName: d.recipientName, recipientVatId: d.recipientVatId,
         currency: d.currency, netCents: d.netCents, vatCents: d.vatCents, grossCents: d.grossCents, relatedNumber: d.relatedNumber,
         sourceData: d.sourceData == null ? Prisma.DbNull : asJson(d.sourceData),
-        status: decision.status, issues: asJson(issues),
+        status, issues: asJson(issues),
         duplicateClass: decision.duplicateClass, duplicateOfId: decision.duplicateOfId,
         importedBy: actor,
       },
     })
     await tx.financialDocumentEvent.create({
-      data: {
-        documentId: r.id, actor, action: 'received',
-        detail: asJson({ status: decision.status, issues, matches, reasons: decision.reasons }),
-      },
+      data: { documentId: r.id, actor, action: 'received', detail: asJson({ status, issues, matches, reasons: decision.reasons }) },
     })
-    return r
+
+    let reasons = decision.reasons
+    let needsHumanDecision = decision.needsHumanDecision
+    let recordedAs: 'expense' | 'invoice' | 'document_only' | undefined
+    let notes: string[] = []
+    let expenseId: string | null = null
+    let invoiceId: string | null = null
+
+    // Közvetlen rögzítés: a hibátlan tételből egyből költség / számla lesz, jóváhagyás nélkül.
+    if (status === 'recorded') {
+      const plan = await planMaterialization(r, tx, { who: 'automatikus import' })
+      if (plan.type === 'blocked') {
+        // Amit nem tudunk biztosan rögzíteni (hiányzó adat, foglalt számlaszám, hasonló költség), az kivételként emberre vár.
+        issues = [...issues, { code: plan.code, severity: 'warning', message: plan.reason }]
+        status = 'needs_review'; reasons = [plan.reason]; needsHumanDecision = true
+        r = await tx.financialDocument.update({ where: { id: r.id }, data: { status, issues: asJson(issues) } })
+        await tx.financialDocumentEvent.create({ data: { documentId: r.id, actor, action: 'flagged', detail: asJson({ code: plan.code, reason: plan.reason }) } })
+      } else {
+        const made = await executePlan(tx, plan)
+        expenseId = made.expenseId; invoiceId = made.invoiceId; notes = plan.notes
+        recordedAs = made.expenseId ? 'expense' : made.invoiceId ? 'invoice' : 'document_only'
+        r = await tx.financialDocument.update({
+          where: { id: r.id },
+          data: {
+            reviewedBy: 'automatikus (import)', reviewedAt: new Date(), reviewNote: 'Közvetlen rögzítés: a hibátlan tétel a szabályok szerint automatikusan rögzült.',
+            ...(expenseId ? { expenseId } : {}), ...(invoiceId ? { invoiceId } : {}),
+          },
+        })
+        await tx.financialDocumentEvent.create({ data: { documentId: r.id, actor, action: 'recorded', detail: asJson({ recordedAs, expenseId, invoiceId, notes }) } })
+      }
+    }
+    return { ...r, reasons, needsHumanDecision, recordedAs, expenseId, invoiceId, notes }
   })
-  return { ...row, reasons: decision.reasons, needsHumanDecision: decision.needsHumanDecision }
 }
 
 function summarize(results: DocResult[]): RecordReport['summary'] {
@@ -189,7 +232,19 @@ function summarize(results: DocResult[]): RecordReport['summary'] {
     submitted: results.length,
     created: count('created'), already_known: count('already_known'), rejected: count('rejected'), error: count('error'),
     needs_human_decision: results.filter((r) => r.needsHumanDecision).length,
+    recorded: results.filter((r) => r.outcome === 'created' && r.status === 'recorded').length,
   }
+}
+
+function totalsOf(results: DocResult[]): RecordReport['recordedTotals'] {
+  const out: RecordReport['recordedTotals'] = {}
+  for (const r of results) {
+    if (r.outcome !== 'created' || r.status !== 'recorded' || r.gross == null) continue
+    const key = `${r.direction ?? 'ismeretlen'}:${r.currency ?? '?'}`
+    const cur = out[key] ?? { count: 0, gross: 0 }
+    out[key] = { count: cur.count + 1, gross: Math.round((cur.gross + r.gross) * 100) / 100 }
+  }
+  return out
 }
 
 /** Sikert csak akkor jelzünk, ha minden tétel elszámolva és hibátlan; részleges eredményt nem hívunk sikernek. */
@@ -205,7 +260,7 @@ function failedAll(raws: RawDocInput[], reason: string): RecordReport {
     index, filename: r?.original_filename ?? '(névtelen)', sha256: r?.sha256 ?? null, outcome: 'rejected',
     issues: [], reasons: [reason], needsHumanDecision: true, error: reason,
   }))
-  return { status: 'failed', summary: summarize(results), batch: null, results }
+  return { status: 'failed', summary: summarize(results), recordedTotals: {}, batch: null, results }
 }
 
 async function refreshBatch(db: PrismaClient, batchId: string, final: boolean, results: DocResult[]): Promise<BatchState> {

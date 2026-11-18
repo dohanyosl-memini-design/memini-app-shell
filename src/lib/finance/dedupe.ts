@@ -13,6 +13,8 @@ export interface Fingerprint {
   relatedNumber?: string | null
   issuerVatId?: string | null
   issuerName?: string | null
+  recipientVatId?: string | null
+  recipientName?: string | null
   issueDate?: Date | string | null
   grossCents?: number | null
   currency?: string | null
@@ -58,6 +60,14 @@ function sameIssuer(a: Fingerprint, b: Fingerprint): 'vat' | 'name' | null {
   return null
 }
 
+/** Ugyanaz a vevő? (kimenő számlánál a kibocsátó mindig mi vagyunk, ezért ez az azonosító jel) */
+function sameRecipient(a: Fingerprint, b: Fingerprint): boolean {
+  const va = normalizeVatId(a.recipientVatId), vb = normalizeVatId(b.recipientVatId)
+  if (va && vb) return va === vb
+  const na = normalizeName(a.recipientName), nb = normalizeName(b.recipientName)
+  return !!na && !!nb && na === nb
+}
+
 function classifyOne(c: Fingerprint, e: Fingerprint): DuplicateMatch | null {
   // 1) Ugyanaz a fájl — biztos.
   if (c.sha256 && e.sha256 && c.sha256 === e.sha256) {
@@ -97,6 +107,9 @@ function classifyOne(c: Fingerprint, e: Fingerprint): DuplicateMatch | null {
   // 4) Más/hiányzó számlaszám, de ugyanaz a gazdasági esemény: azonos kibocsátó,
   //    összeg, pénznem, közeli dátum. Nem szabad összevonni.
   if (issuer && sameGross && cn !== en) {
+    // Kimenő számlánál a kibocsátó mindig a Memini: két KÜLÖNBÖZŐ vevőnek kiállított, azonos összegű számla
+    // nem ugyanaz az esemény. Csak azonos vevőnél gyanús.
+    if ((c.kind === 'outgoing_invoice' || e.kind === 'outgoing_invoice') && !sameRecipient(c, e)) return null
     const dc = toDay(c.issueDate), de = toDay(e.issueDate)
     if (dc != null && de != null && Math.abs(dc - de) <= SAME_EVENT_WINDOW_DAYS) {
       return {

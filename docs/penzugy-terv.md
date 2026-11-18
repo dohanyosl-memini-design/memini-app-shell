@@ -34,6 +34,20 @@ Laci döntése: külön tesztkörnyezet nem kell, a CRM tesztfázisban van (vár
 - **Actor-modell (későbbre):** külön kulcs és név ügynökönként. Most csak Arthur van; a pénzügyi rekordokba a szerző neve (Arthur / webes felhasználó) bekerül. A Gabi-féle GPT bekötésekor jön a teljes modell. A meglévő `MCP_SECRET` változatlanul „Arthur"-ként működik.
 - **Pénzügyi szabályok a szerveren:** nettó + ÁFA = bruttó ellenőrzés, véglegesítés külön jogosultság.
 
+## Üzemmód: a hibátlan tétel egyből rögzül (2026-11-18)
+
+A CRM tesztfázisban van, a hiteles könyvelés a könyvelőnél. A ZIP, amit a könyvelőnek küldünk, az igazság; a CRM az abból levezetett nézet. Ezért az **alapértelmezés a közvetlen rögzítés**:
+
+- A ChatGPT az `import_financial_batch`-csel küldi a tételeket; a hibátlan **egyből rögzül**: a bejövő számla/nyugta (EUR) költségként a Könyvelésbe, a kimenő számla a Számlák közé (a vevőhöz kötve adószám, ennek híján név alapján; ismeretlen vevőnél partner nélkül, jelzéssel).
+- **Kivételként emberre vár**, és NEM rögzül: összeghiba, hiányzó adat/számlaszám, duplikáció-gyanú, foglalt számlaszám a Számlák között, a Könyvelésben már szereplő hasonló költség.
+- A válasz tételenként megmondja a végeredményt és a `recordedTotals`-ban a rögzített összegeket irány és pénznem szerint, ez vethető össze a csomag tartalmával.
+- Az eredeti fájl nem kötelező; később feltölthető az `/penzugy` oldalon (ekkor lesz „ellenőrzött" a hash).
+- `review_first: true` esetén minden tétel az ellenőrzési sorba kerül (óvatos mód).
+- A jóváhagyási sor, a tömeges emberi jóváhagyás és a felhatalmazás megmaradt, de csak a kivételekre és az óvatos módra kell.
+- Fizetési állapot: csak akkor `paid`, ha maga a dokumentum jelzi (`payment_status`); különben nyitott.
+- Kimenő számlánál az „azonos gazdasági esemény" gyanú csak azonos vevőnél áll fenn (a kibocsátó mindig a Memini).
+- Bankkivonatnak és egyéb dokumentumnak nem kell számla-összeg; csak a dokumentumtárba kerül.
+
 ## Állapot
 
 | Szelet | Állapot |

@@ -33,16 +33,18 @@ beforeEach(async () => {
   if (!enabled) return
   await db.financialDocumentEvent.deleteMany(); await db.financialDocument.deleteMany(); await db.importBatch.deleteMany()
   await db.expense.deleteMany({ where: { notes: { startsWith: 'Importált bizonylat' } } })
+  await db.invoice.deleteMany({ where: { notes: { startsWith: 'Importált bizonylat' } } })
 })
 after(async () => {
   if (!db) return
   await db.expense.deleteMany({ where: { notes: { startsWith: 'Importált bizonylat' } } })
+  await db.invoice.deleteMany({ where: { notes: { startsWith: 'Importált bizonylat' } } })
   await db.$disconnect()
 })
 
 const imp = async (d: unknown) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const r = await docs.recordDocuments([d as any], { actor: 'Arthur', db })
+  const r = await docs.recordDocuments([d as any], { actor: 'Arthur', db, autoRecord: false })
   return r.results[0].documentId as string
 }
 const attach = (n: string, store = memStore()) => orig.attachOriginal({ filename: `${n}.pdf`, bytes: pdf(n), actor: 'Laci' }, { db, store })
@@ -146,15 +148,17 @@ t('elutasítás indokkal; utána nem hagyható jóvá; megerősített duplikátu
   assert.ok(dup)                                                          // adószám+szám+összeg → biztos duplikátum, nem kerül sorba
 })
 
-t('kimenő számla és külföldi pénznem: rögzül, de nem megy a Könyvelésbe; a Számlák tábla érintetlen', async () => {
+t('kimenő számla jóváhagyása → Számla a Számlák között (eredeti számlaszámmal); külföldi pénznemű bejövő nem megy a Könyvelésbe', async () => {
   const inv = await db.invoice.count()
   const out = await imp(doc('F1', { kind: 'outgoing_invoice', issuer_vat_id: 'HU12345678' })); await attach('F1')
   const r = await rev.reviewDocument(out, { action: 'approve' }, 'Laci', db)
-  assert.ok(r.ok && r.expenseId === null && r.notes.length > 0)
+  assert.ok(r.ok && r.expenseId === null && !!r.invoiceId)
+  const created = await db.invoice.findUnique({ where: { number: 'RE-F1' }, include: { items: true } })
+  assert.equal(created.total, 119); assert.equal(created.status, 'open'); assert.equal(created.items.length, 1)
+  assert.equal(await db.invoice.count(), inv + 1)
   const huf = await imp(doc('F2', { currency: 'HUF', net: 10000, vat: 2700, gross: 12700 })); await attach('F2')
   const r2 = await rev.reviewDocument(huf, { action: 'approve' }, 'Laci', db)
-  assert.ok(r2.ok && r2.expenseId === null && /nem EUR/.test(r2.notes.join(' ')))
-  assert.equal(await db.invoice.count(), inv)
+  assert.ok(r2.ok && r2.expenseId === null && r2.invoiceId === null && /nem EUR/.test(r2.notes.join(' ')))
   assert.equal(await db.expense.count({ where: { notes: { startsWith: 'Importált bizonylat' } } }), 0)
 })
 

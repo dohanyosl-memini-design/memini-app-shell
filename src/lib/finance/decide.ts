@@ -19,6 +19,10 @@ export interface Decision {
  */
 export const AUTO_RECORD_CLEAN = false
 
+/** Közvetlen rögzítésnél ezek a jelzések nem tartják vissza a tételt (csak tájékoztatnak). A 0 ÁFA
+ *  az uniós B2B kimenő számláknál (fordított adózás) a szokásos eset, nem hiba. */
+const AUTO_TOLERATED = new Set(['ZERO_VAT'])
+
 export function decide(
   issues: Issue[],
   matches: DuplicateMatch[],
@@ -26,6 +30,7 @@ export function decide(
 ): Decision {
   const top = matches[0]
   const hasError = issues.some((i) => i.severity === 'error')
+  const blocking = autoRecordClean ? issues.filter((i) => !AUTO_TOLERATED.has(i.code)) : issues
   const reasons: string[] = []
 
   // Biztos duplikátum: nem keletkezik új pénzügyi tétel.
@@ -40,7 +45,7 @@ export function decide(
   if (issues.length) reasons.push(...issues.map((i) => i.message))
 
   // Valószínű duplikátum / azonos esemény / helyesbítés / bármilyen hiba → ember dönt.
-  if (top || hasError || issues.length) {
+  if (top || hasError || blocking.length) {
     return {
       status: 'needs_review', duplicateClass: top?.cls ?? null, duplicateOfId: top?.existingId ?? null,
       reasons, needsHumanDecision: true,
@@ -48,7 +53,7 @@ export function decide(
   }
 
   if (autoRecordClean) {
-    return { status: 'recorded', duplicateClass: null, duplicateOfId: null, reasons: [], needsHumanDecision: false }
+    return { status: 'recorded', duplicateClass: null, duplicateOfId: null, reasons: issues.map((i) => i.message), needsHumanDecision: false }
   }
   return {
     status: 'needs_review', duplicateClass: null, duplicateOfId: null,
