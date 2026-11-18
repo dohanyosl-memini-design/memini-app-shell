@@ -157,3 +157,20 @@ test('dedupe: a legerősebb találat elöl áll', () => {
   const res = findDuplicates(c, [sameEvent, existing])
   assert.equal(res[0].cls, 'certain')
 })
+
+test('dedupe: a saját számozású jóváírás nem ugyanaz, mint egy azonos számú kimenő számla', () => {
+  const issued: Fingerprint = {
+    id: 'invoice-01', sha256: 'hash-issued', kind: 'outgoing_invoice',
+    externalNumber: '01/2026', issuerName: 'Laszlo Arpad Dohanyos e.U.',
+    issueDate: '2026-01-21', grossCents: 332605, currency: 'EUR',
+  }
+  const credit: Fingerprint = {
+    id: 'credit-01', sha256: 'hash-credit', kind: 'credit_note',
+    externalNumber: '01/2026', relatedNumber: '03/2026',
+    issuerName: 'Laszlo Arpad Dohanyos e.U.',
+    issueDate: '2026-09-09', grossCents: -3227, currency: 'EUR',
+  }
+  assert.equal(classifyDuplicate(issued, [credit]), 'distinct')
+  assert.equal(classifyDuplicate(credit, [issued]), 'distinct')
+  assert.equal(classifyDuplicate({ ...issued, sha256: 'hash-credit' }, [credit]), 'certain')
+})

@@ -190,6 +190,7 @@ export default function FinanceDocumentsPage() {
       </div>
 
       <DelegationPanel onChanged={load} />
+      <BulkReviewPanel onChanged={load} />
 
       {/* Fülek */}
       <div className="flex flex-wrap gap-1 mb-3">
@@ -241,6 +242,155 @@ export default function FinanceDocumentsPage() {
       </div>
 
       {selected && <DetailModal id={selected} onClose={() => setSelected(null)} onOpen={setSelected} onChanged={load} />}
+    </div>
+  )
+}
+
+
+interface BulkItem {
+  id: string
+  originalFilename: string
+  kind: string
+  externalNumber: string | null
+  issuerName: string | null
+  issueDate: string | null
+  gross: number
+  originalVerified: boolean
+}
+interface BulkPreview {
+  items: BulkItem[]
+  count: number
+  missingOriginal: number
+  limitPerRequest: number
+  note: string
+}
+
+// The button is deliberately a HUMAN review action. ChatGPT/MCP has no access
+// to this endpoint. The server re-checks each document and never auto-confirms
+// warnings, duplicate suspicion or Expense collisions.
+function BulkReviewPanel({ onChanged }: { onChanged: () => void }) {
+  const [preview, setPreview] = useState<BulkPreview | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [waive, setWaive] = useState(false)
+  const [waiverReason, setWaiverReason] = useState(
+    'Korábban könyvelt dokumentum, az eredeti PDF az adóbevallási csomagban és a könyvelőnél megőrizve.',
+  )
+  const [confirmed, setConfirmed] = useState(false)
+  const [message, setMessage] = useState('')
+
+  async function refresh() {
+    setBusy(true)
+    setMessage('')
+    try {
+      const res = await fetch('/api/finance/documents/bulk-review', { cache: 'no-store' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Nem sikerült lekérni az ellenőrzési listát.')
+      setPreview(data)
+      setConfirmed(false)
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function approve() {
+    if (!preview || busy || !confirmed) return
+    const items = preview.items.filter((d) => waive || d.originalVerified)
+    if (items.length === 0) {
+      setMessage('Nincs szerver által ellenőrzött eredeti PDF. Töltsd fel a fájlokat, vagy indokold a mellőzésüket.')
+      return
+    }
+    if (waive && waiverReason.trim().length < 10) {
+      setMessage('Az eredeti PDF mellőzését indokolni kell.')
+      return
+    }
+    if (!window.confirm(`Jóváhagyod a ${items.length} kiválasztott, figyelmeztetésmentes tételt? A bejövő számlák/nyugták ekkor éles Expense rekordokat hozhatnak létre.`)) return
+
+    setBusy(true)
+    setMessage('Jóváhagyás folyamatban…')
+    let approved = 0, left = 0, errors = 0
+    try {
+      for (let i = 0; i < items.length; i += 10) {
+        const batch = items.slice(i, i + 10)
+        const res = await fetch('/api/finance/documents/bulk-review', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ids: batch.map((d) => d.id),
+            confirmReviewed: true,
+            waiveOriginal: waive,
+            note: waive ? waiverReason : 'Bizonylatok emberi tömeges ellenőrzése.',
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error ?? `Hiba a ${i + 1}. tételtől.`)
+        approved += data.approved ?? 0
+        left += data.leftForHuman ?? 0
+        errors += data.errors ?? 0
+        setMessage(`Feldolgozva: ${Math.min(i + 10, items.length)}/${items.length}. Jóváhagyva: ${approved}; függőben: ${left}; hiba: ${errors}.`)
+      }
+      onChanged()
+      const res = await fetch('/api/finance/documents/bulk-review', { cache: 'no-store' })
+      if (res.ok) setPreview(await res.json())
+      setConfirmed(false)
+    } catch (err) {
+      setMessage(`Részleges eredmény: ${approved} jóváhagyva, ${left} függőben, ${errors} hiba. ${err instanceof Error ? err.message : String(err)}`)
+      onChanged()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5 text-sm">
+      <h2 className="text-base font-semibold text-gray-900 mb-1">Tömeges emberi jóváhagyás</h2>
+      <p className="text-gray-600 mb-3">
+        Csak figyelmeztetésmentes, cent-pontosan egyező, nem duplikációgyanús számlák és nyugták.
+        A szerver a Könyvelésben már meglévő költséget is ellenőrzi; azt nem duplázza meg automatikusan.
+      </p>
+      <button type="button" onClick={refresh} disabled={busy}
+        className="px-3 py-2 bg-slate-700 text-white rounded-lg disabled:opacity-50">
+        Ellenőrizhető tételek előnézete
+      </button>
+      {preview && (
+        <div className="mt-3 space-y-3">
+          <p className="font-medium">Jelzésmentes: {preview.count} dokumentum · ebből eredeti PDF nélküli: {preview.missingOriginal}</p>
+          <details className="border rounded-lg p-3">
+            <summary className="cursor-pointer font-medium">A teljes jelöltlista megnyitása ({preview.count})</summary>
+            <div className="max-h-64 overflow-y-auto mt-2">
+              {preview.items.map((d) => (
+                <div key={d.id} className="py-1 border-t border-gray-100 flex gap-3 justify-between">
+                  <span>{d.externalNumber ?? d.originalFilename} · {d.issuerName ?? 'Ismeretlen'}</span>
+                  <span className="whitespace-nowrap">{money(d.gross, 'EUR')} {d.originalVerified ? '· PDF igazolt' : '· PDF nincs'}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+          {preview.missingOriginal > 0 && (
+            <label className="flex gap-2 items-start">
+              <input type="checkbox" checked={waive} onChange={(e) => setWaive(e.target.checked)} />
+              <span>Az eredeti PDF hiányát kifejezetten elfogadom ezeknél a tételeknél, és a döntés naplózását kérem.</span>
+            </label>
+          )}
+          {waive && (
+            <label className="block">
+              <span className="block mb-1">Indoklás a PDF mellőzéséhez</span>
+              <textarea value={waiverReason} onChange={(e) => setWaiverReason(e.target.value)}
+                className="w-full border border-gray-300 rounded-md p-2" rows={2} />
+            </label>
+          )}
+          <label className="flex items-start gap-2 font-medium">
+            <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
+            <span>Átnéztem a jelöltlistát, és jóváhagyom a tiszta tételek rögzítését. A problémás tételek külön maradnak.</span>
+          </label>
+          <button type="button" onClick={approve} disabled={busy || !confirmed || !preview.count}
+            className="px-4 py-2 bg-green-700 text-white rounded-lg disabled:opacity-40">
+            {busy ? 'Feldolgozás…' : 'Ellenőrzött tételek jóváhagyása'}
+          </button>
+        </div>
+      )}
+      {message && <p role="status" className="mt-2 text-gray-700">{message}</p>}
     </div>
   )
 }
