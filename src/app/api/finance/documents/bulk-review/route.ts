@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { FinancialDocument } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { sessionActor } from '@/lib/finance/actor'
 import { reviewDocument } from '@/lib/finance/review'
@@ -9,12 +10,10 @@ export const maxDuration = 30
 // Only clean financial records are eligible for the human bulk review.
 // All changes are still performed by the existing reviewDocument service,
 // which checks Expense duplicates and writes the financial audit trail.
-const MAX_PER_REQUEST = 25
+const MAX_PER_REQUEST = 10
 const FINANCIAL_KINDS = ['incoming_invoice', 'outgoing_invoice', 'receipt']
 
-type Candidate = Awaited<ReturnType<typeof prisma.financialDocument.findFirstOrThrow>>
-
-function ready(d: Candidate): boolean {
+function ready(d: FinancialDocument): boolean {
   if (d.status !== 'needs_review') return false
   if (!FINANCIAL_KINDS.includes(d.kind)) return false
   if (d.duplicateClass) return false
@@ -66,7 +65,7 @@ export async function POST(request: NextRequest) {
   if (!Array.isArray(ids) || ids.length < 1 || ids.length > MAX_PER_REQUEST ||
       ids.some((id) => typeof id !== 'string' || id.length > 128) ||
       new Set(ids).size !== ids.length) {
-    return NextResponse.json({ error: '1–25 különböző dokumentumazonosító szükséges.' }, { status: 400 })
+    return NextResponse.json({ error: '1–10 különböző dokumentumazonosító szükséges.' }, { status: 400 })
   }
   const waiveOriginal = body.waiveOriginal === true
   const note = typeof body.note === 'string' ? body.note.trim() : ''
