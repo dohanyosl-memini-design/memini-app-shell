@@ -311,8 +311,8 @@ function BulkReviewPanel({ onChanged }: { onChanged: () => void }) {
     setMessage('Jóváhagyás folyamatban…')
     let approved = 0, left = 0, errors = 0
     try {
-      for (let i = 0; i < items.length; i += 25) {
-        const batch = items.slice(i, i + 25)
+      for (let i = 0; i < items.length; i += 10) {
+        const batch = items.slice(i, i + 10)
         const res = await fetch('/api/finance/documents/bulk-review', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -328,7 +328,7 @@ function BulkReviewPanel({ onChanged }: { onChanged: () => void }) {
         approved += data.approved ?? 0
         left += data.leftForHuman ?? 0
         errors += data.errors ?? 0
-        setMessage(`Feldolgozva: ${Math.min(i + 25, items.length)}/${items.length}. Jóváhagyva: ${approved}; függőben: ${left}; hiba: ${errors}.`)
+        setMessage(`Feldolgozva: ${Math.min(i + 10, items.length)}/${items.length}. Jóváhagyva: ${approved}; függőben: ${left}; hiba: ${errors}.`)
       }
       onChanged()
       const res = await fetch('/api/finance/documents/bulk-review', { cache: 'no-store' })
